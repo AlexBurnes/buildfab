@@ -92,17 +92,17 @@ jobs:
 
       - name: Build for current platform
         run: |
-          cmake --build --preset conan-release --target pre-push
+          cmake --build --preset conan-release --target buildfab
 
-          # On Linux, the pre-push target creates bin/pre-push-linux-amd64-static
-          # We need to copy it to bin/pre-push for artifact upload
-          if [[ -f "bin/pre-push-linux-amd64-static" ]]; then
-            cp bin/pre-push-linux-amd64-static bin/pre-push
+          # On Linux, the buildfab target creates bin/buildfab-linux-amd64-static
+          # We need to copy it to bin/buildfab for artifact upload
+          if [[ -f "bin/buildfab-linux-amd64-static" ]]; then
+            cp bin/buildfab-linux-amd64-static bin/buildfab
           fi
 
       - name: Build for all platforms
         run: |
-          cmake --build --preset conan-release --target pre-push-all
+          cmake --build --preset conan-release --target buildfab-all
 
       - name: Create GoReleaser binary backup
         run: |
@@ -117,7 +117,7 @@ jobs:
           # Clean installers directory to remove old installers
           rm -rf installers/
 
-          VERSION=$(bin/pre-push --version 2>/dev/null | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")
+          VERSION=$(bin/buildfab --version 2>/dev/null | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")
 
           # Create simple installers in installers/ directory
           ./buildtools/create-all-installers.sh "${VERSION}" "installers"

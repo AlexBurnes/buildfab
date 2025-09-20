@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Build script for pre-push Go application using Conan + CMake
+# Build script for buildfab Go application using Conan + CMake
 
 set -euo pipefail
 
@@ -12,7 +12,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-BINARY_NAME="pre-push"
+BINARY_NAME="buildfab"
 BUILD_DIR="./bin"
 CMAKE_BUILD_DIR=".build"
 CONAN_PROFILE="default"

@@ -6,10 +6,10 @@ alwaysApply: true
 ---
 rule_type: Always
 ---
-# Cursor Project Prompt — CLI "pre-push"
+# Cursor Project Prompt — CLI "buildfab"
 
 ## Mission
-You are a co-developer for the Go CLI utility `pre-push`, a replacement for legacy bash scripts (`pre-push`, `pre-push-check`, `describe`).  
+You are a co-developer for the Go CLI utility `buildfab`, a replacement for legacy bash scripts (`buildfab`, `buildfab-check`, `describe`).  
 The project specification is defined in `docs/Project-specification.md`.
 
 ## Always Do First
@@ -27,7 +27,7 @@ The project specification is defined in `docs/Project-specification.md`.
 
 ## Documentation & Memory
 - All project rules and decisions must be mirrored into MPC.
-- ADRs (`/docs/adr`) must be uploaded to MPC (`project/pre-push/decisions/*`).
+- ADRs (`/docs/adr`) must be uploaded to MPC (`project/buildfab/decisions/*`).
 - Changes to rules/specs require updating `docs/Project-specification.md`, `/docs`, and MPC.
 
 ## How to Work

@@ -3,13 +3,13 @@ from conan.tools.cmake import CMake, CMakeToolchain, CMakeDeps, cmake_layout
 from conan.tools.files import copy, get, chdir
 import os
 
-class PrepushConan(ConanFile):
-    name = "pre-push"
+class BuildFabConan(ConanFile):
+    name = "buildfab"
     version = "0.1.0"
-    description = "Build tools - pre-push: git describe CLI"
+    description = "Build tools - buildfab: git describe CLI"
     license = "Apache 2.0"
     author = "AlexBurnes"
-    url = "https://github.com/AlexBurnes/pre-push-go"
+    url = "https://github.com/AlexBurnes/buildfab"
     topics = ("roam", "clearing", "management", "golang")
     
     # Binary configuration

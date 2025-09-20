@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Version checking script for pre-push hook
+# Version checking script for buildfab hook
 # Usage: version-check <version_tag>
 
 set -e

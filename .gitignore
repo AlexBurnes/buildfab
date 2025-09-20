@@ -12,6 +12,7 @@ dist
 installers
 scripts/version
 scripts/pre-push
+scripts/buildfab
 
 # environment and tockens
 .env

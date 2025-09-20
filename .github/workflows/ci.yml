@@ -89,12 +89,12 @@ jobs:
 
     - name: Build for current platform
       run: |
-        cmake --build --preset conan-release --target pre-push
+        cmake --build --preset conan-release --target buildfab
 
-        # On Linux, the pre-push target creates bin/pre-push-linux-amd64-static
-        # We need to copy it to bin/pre-push for artifact upload
-        if [[ -f "bin/pre-push-linux-amd64-static" ]]; then
-          cp bin/pre-push-linux-amd64-static bin/pre-push
+        # On Linux, the buildfab target creates bin/buildfab-linux-amd64-static
+        # We need to copy it to bin/buildfab for artifact upload
+        if [[ -f "bin/buildfab-linux-amd64-static" ]]; then
+          cp bin/buildfab-linux-amd64-static bin/buildfab
         fi
 
     - name: Get version
@@ -107,8 +107,8 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: pre-push-bin
-        path: bin/pre-push
+        name: buildfab-bin
+        path: bin/buildfab
         if-no-files-found: error
         retention-days: 1
 
@@ -144,14 +144,14 @@ jobs:
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: pre-push-bin
+        name: buildfab-bin
         path: bin
         
-    - name: Check bin/pre-push
+    - name: Check bin/buildfab
       run: |
-        chmod +x bin/pre-push
-        bin/pre-push --version
-        bin/pre-push --help
+        chmod +x bin/buildfab
+        bin/buildfab --version
+        bin/buildfab --help
 
     - name: Run tests
       run: go test ./... -v -race
@@ -249,18 +249,18 @@ jobs:
     - name: Download build artifacts
       uses: actions/download-artifact@v4
       with:
-        name: pre-push-bin
+        name: buildfab-bin
         path: bin
 
-    - name: Check bin/pre-push
+    - name: Check bin/buildfab
       run: |
-        chmod +x bin/pre-push
-        bin/pre-push --version
-        bin/pre-push --help
+        chmod +x bin/buildfab
+        bin/buildfab --version
+        bin/buildfab --help
 
     - name: Build for all platforms
       run: |
-        cmake --build --preset conan-release --target pre-push-all
+        cmake --build --preset conan-release --target buildfab-all
 
     - name: Create GoReleaser binary backup
       run: |
@@ -275,7 +275,7 @@ jobs:
         # Clean installers directory to remove old installers
         rm -rf installers/
 
-        VERSION=$(bin/pre-push --version 2>/dev/null | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")
+        VERSION=$(bin/buildfab --version 2>/dev/null | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' || echo "v0.0.0")
 
         # Create simple installers in installers/ directory
         ./buildtools/create-all-installers.sh "${VERSION}" "installers"

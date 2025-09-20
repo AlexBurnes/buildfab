@@ -1,6 +1,6 @@
 project:
-  name: "buildfab-pre-push"
-  modules: ["pre-push"]
+  name: "buildfab"
+  modules: ["buildfab"]
   bin: "bin"
 
 actions:
@@ -40,7 +40,7 @@ actions:
     uses: git@modified
 
 stages:
-  pre-push:
+  buildfab:
     steps:
       - action: version-check
       - action: version-greatest

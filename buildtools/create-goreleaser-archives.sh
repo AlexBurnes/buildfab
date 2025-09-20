@@ -75,10 +75,10 @@ create_platform_archive() {
     if [[ -f "bin/${binary_name}" ]]; then
         if [[ "$archive_name" == *.zip ]]; then
             # Windows - keep .exe extension
-            cp "bin/${binary_name}" "$temp_dir/pre-push.exe"
+            cp "bin/${binary_name}" "$temp_dir/buildfab.exe"
         else
             # Unix - no extension
-            cp "bin/${binary_name}" "$temp_dir/pre-push"
+            cp "bin/${binary_name}" "$temp_dir/buildfab"
         fi
         log_info "Copied ${binary_name} to temp directory"
     else
@@ -99,16 +99,16 @@ create_platform_archive() {
     local dist_path=$(realpath dist)
     if [[ "$archive_name" == *.zip ]]; then
         # Windows zip archive
-        (cd "$temp_dir" && zip -r "$dist_path/pre-push_${version}_${platform}_${arch}.zip" .)
+        (cd "$temp_dir" && zip -r "$dist_path/buildfab_${version}_${platform}_${arch}.zip" .)
     else
         # Unix tar.gz archive
-        tar -czf "dist/pre-push_${version}_${platform}_${arch}.tar.gz" -C "$temp_dir" .
+        tar -czf "dist/buildfab_${version}_${platform}_${arch}.tar.gz" -C "$temp_dir" .
     fi
     
     # Clean up
     rm -rf "$temp_dir"
     
-    log_success "Created archive: dist/pre-push_${version}_${platform}_${arch}${archive_name}"
+    log_success "Created archive: dist/buildfab_${version}_${platform}_${arch}${archive_name}"
 }
 
 # Main function
@@ -123,26 +123,26 @@ main() {
     local temp_dirs=()
     
     # Linux amd64
-    create_platform_archive "linux" "amd64" "pre-push-linux-amd64" ".tar.gz" "$version"
+    create_platform_archive "linux" "amd64" "buildfab-linux-amd64" ".tar.gz" "$version"
     
     # Linux arm64
-    create_platform_archive "linux" "arm64" "pre-push-linux-arm64" ".tar.gz" "$version"
+    create_platform_archive "linux" "arm64" "buildfab-linux-arm64" ".tar.gz" "$version"
     
     # Darwin amd64
-    create_platform_archive "darwin" "amd64" "pre-push-darwin-amd64" ".tar.gz" "$version"
+    create_platform_archive "darwin" "amd64" "buildfab-darwin-amd64" ".tar.gz" "$version"
     
     # Darwin arm64
-    create_platform_archive "darwin" "arm64" "pre-push-darwin-arm64" ".tar.gz" "$version"
+    create_platform_archive "darwin" "arm64" "buildfab-darwin-arm64" ".tar.gz" "$version"
     
     # Windows amd64
-    create_platform_archive "windows" "amd64" "pre-push-windows-amd64.exe" ".zip" "$version"
+    create_platform_archive "windows" "amd64" "buildfab-windows-amd64.exe" ".zip" "$version"
     
     log_success "GoReleaser archives created successfully"
     log_info "Archives location: dist/"
     
     # List created archives
     log_info "Created archives:"
-    ls -la dist/pre-push_${version}_*.tar.gz dist/pre-push_${version}_*.zip 2>/dev/null || true
+    ls -la dist/buildfab_${version}_*.tar.gz dist/buildfab_${version}_*.zip 2>/dev/null || true
 }
 
 # Run main function with all arguments
