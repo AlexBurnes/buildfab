@@ -1,0 +1,535 @@
+# Git Operations Rules
+
+## Commit Message Format
+
+### Conventional Commits Standard
+All commit messages MUST follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+
+```
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Required Format
+```
+<type>(<scope>): <description>
+
+<detailed description>
+
+<footer information>
+```
+
+### Type Categories
+- **feat**: New feature for the user
+- **fix**: Bug fix for the user
+- **docs**: Documentation changes only
+- **style**: Code style changes (formatting, etc.)
+- **refactor**: Code refactoring without feature changes
+- **test**: Adding or updating tests
+- **chore**: Maintenance tasks, dependency updates
+- **build**: Build system or external dependencies
+- **ci**: CI/CD pipeline changes
+- **perf**: Performance improvements
+- **revert**: Reverting previous commits
+
+### Scope Guidelines
+- Use lowercase, hyphenated scope names
+- Common scopes: `ui`, `config`, `exec`, `tests`, `docs`, `build`, `ci`
+- Be specific but concise
+- Examples: `(ui)`, `(config)`, `(exec)`, `(tests)`, `(docs)`
+
+### Description Rules
+- Use imperative mood ("add feature" not "added feature")
+- Start with lowercase letter
+- No period at the end
+- Maximum 50 characters for the first line
+- Be clear and descriptive
+
+### Body Rules
+- Separate from description with blank line
+- Explain what and why, not how
+- Wrap at 72 characters
+- Use bullet points for multiple changes
+- Include technical details and implementation notes
+
+### Footer Rules
+- Reference issues: `Closes #123`, `Fixes #456`
+- Breaking changes: `BREAKING CHANGE: description`
+- Co-authors: `Co-authored-by: Name <email>`
+
+## Commit Process
+
+### Pre-Commit Checklist
+1. **Run tests**: `go test ./... -v -race`
+2. **Check linting**: `golangci-lint run`
+3. **Verify changes**: `git diff --cached`
+4. **Update documentation**: CHANGELOG.md and memory bank files
+5. **Check version**: Ensure VERSION file is updated if needed
+
+### Commit Command Format
+```bash
+git add .
+git commit -m "<type>(<scope>): <description>
+
+<detailed description>
+
+<footer information>"
+```
+
+### Example Commit Messages
+
+**Feature Addition:**
+```
+feat(ui): add colored output for better user experience
+
+- Implement conditional coloring for status indicators
+- Add cyan headers, green success, red errors, yellow warnings
+- Enhance visual feedback with count-based highlighting
+- Update UI package with comprehensive color support
+
+Closes #123
+```
+
+**Bug Fix:**
+```
+fix(tests): resolve mockUI interface compilation errors
+
+- Add missing UI interface methods to mockUI test struct
+- Implement all required methods for proper test execution
+- Fix test compilation failures in executor_test.go
+- Ensure all tests pass with race detection enabled
+
+Fixes #456
+```
+
+**Documentation Update:**
+```
+docs(changelog): fix version dates using git log timestamps
+
+- Correct all version dates to match actual git commit dates
+- Update v1.0.2, v1.0.1, v0.1.0 dates from git log
+- Ensure changelog accuracy and consistency
+- Maintain proper chronological order
+```
+
+**Version Bump:**
+```
+chore(version): bump to v1.0.3 for bug fixes
+
+- Increment version from v1.0.2 to v1.0.3
+- Update VERSION file with new version number
+- Prepare for release with test fixes and improvements
+- Follow semantic versioning for patch release
+```
+
+## Tagging Rules
+
+### Tag Format
+- **Format**: `v<major>.<minor>.<patch>`
+- **Examples**: `v1.0.0`, `v1.2.3`, `v2.0.0-beta.1`
+- **Semantic Versioning**: Follow [SemVer](https://semver.org/) specification
+
+### Tag Creation Process
+1. **Verify tests pass**: `go test ./... -v -race`
+2. **Check VERSION file**: Ensure it matches the tag
+3. **Update CHANGELOG.md**: Add entry for new version
+4. **Create tag**: `git tag <version>`
+5. **Verify tag**: `git tag -l` and `git show <version>`
+
+### Tag Commands
+```bash
+# Create tag
+git tag v1.0.3
+
+# Verify tag
+git tag -l
+git show v1.0.3
+
+# Push tag
+git push origin <version>
+```
+
+### Tag Message (Optional)
+For annotated tags with messages:
+```bash
+git tag -a v1.0.3 -m "Release v1.0.3: Fix test compilation errors
+
+- Resolve mockUI interface method issues
+- Add comprehensive test coverage
+- Update documentation and changelog
+- Ensure all tests pass with race detection"
+```
+
+## Push Operations
+
+### Push with Tags
+Always push both commits and tags together:
+```bash
+git push origin master --tags
+```
+
+### Push Verification
+After pushing, verify:
+1. **Remote status**: `git status`
+2. **Tag pushed**: `git ls-remote --tags origin`
+3. **CI triggered**: Check GitHub Actions workflow
+4. **Release created**: Verify GitHub release was created
+
+### Push Process
+1. **Stage changes**: `git add .`
+2. **Commit changes**: `git commit -m "message"`
+3. **Create tag**: `git tag <version>`
+4. **Push everything**: `git push origin master --tags`
+5. **Verify push**: Check remote repository
+
+## Pre-Push Validation
+
+### Automated Checks
+The pre-push hook automatically runs:
+- **Version validation**: Ensures version consistency
+- **Git status checks**: Untracked, uncommitted, modified files
+- **Build verification**: Ensures code compiles
+- **Test execution**: Runs test suite
+
+### Manual Verification
+Before pushing, manually verify:
+```bash
+# Run tests
+go test ./... -v -race
+
+# Check git status
+git status
+
+# Verify version
+cat VERSION
+
+# Check changelog
+head -20 CHANGELOG.md
+```
+
+## Retagging Procedures
+
+### When to Retag
+Retagging is required when:
+- **Push tag failed**: Tag creation succeeded locally but push to remote failed
+- **Tag not on remote**: Current version tag doesn't exist on remote repository
+- **Tag mismatch**: Local and remote tags are out of sync
+- **Version not bumped**: Current VERSION file matches existing remote tag
+
+### Retag Process
+**DO NOT bump version** - use retagging instead:
+
+1. **Check current status**:
+   ```bash
+   # Check local tags
+   git tag -l
+   
+   # Check remote tags
+   git ls-remote --tags origin
+   
+   # Check current version
+   cat VERSION
+   ```
+
+2. **Remove local tag**:
+   ```bash
+   # Delete local tag
+   git tag -d <version>
+   
+   # Example
+   git tag -d v1.0.3
+   ```
+
+3. **Make commit for retag**:
+   ```bash
+   # Stage any pending changes
+   git add .
+   
+   # Commit with retag message
+   git commit -m "chore(retag): retag <version> after push failure
+
+   - Remove and recreate tag due to push failure
+   - Ensure tag exists on both local and remote
+   - No version bump - using existing version number
+   - Fix tag synchronization issues"
+   ```
+
+4. **Recreate and push tag**:
+   ```bash
+   # Create tag on current commit
+   git tag <version>
+   
+   # Push commit and tag together
+   git push origin master --tags
+   
+   # Example
+   git tag v1.0.3
+   git push origin master --tags
+   ```
+
+### Retag Scenarios
+
+#### Scenario 1: Push Tag Failed
+```bash
+# Initial attempt failed
+git tag v1.0.3
+git push origin master --tags
+# ERROR: Push failed
+
+# Retag process
+git tag -d v1.0.3
+git add .
+git commit -m "chore(retag): retag v1.0.3 after push failure
+
+- Remove and recreate tag due to push failure
+- Ensure tag exists on both local and remote
+- No version bump - using existing version number"
+
+git tag v1.0.3
+git push origin master --tags
+```
+
+#### Scenario 2: Tag Not on Remote
+```bash
+# Check if tag exists on remote
+git ls-remote --tags origin | grep v1.0.3
+# No output = tag not on remote
+
+# Retag process
+git tag -d v1.0.3
+git add .
+git commit -m "chore(retag): retag v1.0.3 - tag missing on remote
+
+- Recreate tag that was not pushed to remote
+- Ensure tag synchronization between local and remote
+- No version bump - using existing version number"
+
+git tag v1.0.3
+git push origin master --tags
+```
+
+#### Scenario 3: Version Not Bumped
+```bash
+# Check if current version matches remote tag
+CURRENT_VERSION=$(cat VERSION)
+REMOTE_TAGS=$(git ls-remote --tags origin | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' | sort -V | tail -1)
+
+if [ "$CURRENT_VERSION" = "$REMOTE_TAGS" ]; then
+    echo "Version not bumped - retagging instead"
+    # Retag process
+    git tag -d $CURRENT_VERSION
+    git add .
+    git commit -m "chore(retag): retag $CURRENT_VERSION - no version bump needed
+
+    - Current version matches remote tag
+    - Retag to ensure synchronization
+    - No version increment required"
+
+    git tag $CURRENT_VERSION
+    git push origin master --tags
+fi
+```
+
+### Retag Validation
+
+#### Pre-Retag Checklist
+1. **Verify tag doesn't exist on remote**:
+   ```bash
+   git ls-remote --tags origin | grep <version>
+   ```
+
+2. **Check local tag exists**:
+   ```bash
+   git tag -l | grep <version>
+   ```
+
+3. **Confirm no version bump needed**:
+   ```bash
+   cat VERSION
+   git ls-remote --tags origin | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+' | sort -V | tail -1
+   ```
+
+#### Post-Retag Verification
+1. **Verify tag on remote**:
+   ```bash
+   git ls-remote --tags origin | grep <version>
+   ```
+
+2. **Check tag points to correct commit**:
+   ```bash
+   git show <version>
+   ```
+
+3. **Verify push succeeded**:
+   ```bash
+   git status
+   ```
+
+### Retag vs Version Bump Decision Tree
+
+```
+Is current VERSION different from latest remote tag?
+├── YES → Version bump (normal process)
+│   ├── Update VERSION file
+│   ├── Update CHANGELOG.md
+│   ├── Commit changes
+│   ├── Create new tag
+│   └── Push with tag
+│
+└── NO → Retag process
+    ├── Check if tag exists on remote
+    ├── If missing → Retag
+    ├── If exists but wrong commit → Retag
+    └── If exists and correct → No action needed
+```
+
+### Retag Commit Message Templates
+
+#### Push Failure Retag
+```
+chore(retag): retag <version> after push failure
+
+- Remove and recreate tag due to push failure
+- Ensure tag exists on both local and remote
+- No version bump - using existing version number
+- Fix tag synchronization issues
+```
+
+#### Missing Remote Tag Retag
+```
+chore(retag): retag <version> - tag missing on remote
+
+- Recreate tag that was not pushed to remote
+- Ensure tag synchronization between local and remote
+- No version bump - using existing version number
+- Fix remote tag availability
+```
+
+#### Version Not Bumped Retag
+```
+chore(retag): retag <version> - no version bump needed
+
+- Current version matches remote tag
+- Retag to ensure synchronization
+- No version increment required
+- Maintain tag consistency
+```
+
+## Error Handling
+
+### Commit Errors
+- **Empty commit**: Add changes with `git add .`
+- **No message**: Use `git commit -m "message"`
+- **Wrong message**: Amend with `git commit --amend -m "new message"`
+
+### Tag Errors
+- **Tag exists locally**: Delete with `git tag -d <tag>` then recreate
+- **Tag exists remotely**: Use retag process if needed
+- **Wrong tag**: Delete and recreate with correct name
+- **Tag not pushed**: Use retag process
+- **Push tag failed**: Use retag process
+
+### Push Errors
+- **Authentication**: Check SSH keys or token
+- **Remote issues**: Verify remote URL with `git remote -v`
+- **Branch protection**: Check repository settings
+- **Conflicts**: Pull latest changes first
+- **Tag push failed**: Use retag process
+
+## Best Practices
+
+### Commit Frequency
+- **Small, focused commits**: One logical change per commit
+- **Frequent commits**: Don't wait for large batches
+- **Atomic changes**: Each commit should be complete and working
+
+### Message Quality
+- **Clear and descriptive**: Explain what and why
+- **Consistent format**: Follow conventional commits
+- **Reference issues**: Link to GitHub issues/PRs
+- **Include context**: Explain the reasoning behind changes
+
+### Tag Management
+- **Semantic versioning**: Follow SemVer strictly
+- **Release notes**: Update CHANGELOG.md before tagging
+- **Test before tag**: Ensure all tests pass
+- **Document changes**: Include detailed release notes
+
+### Push Strategy
+- **Push frequently**: Don't accumulate many commits
+- **Verify before push**: Run tests and checks
+- **Use tags**: Tag releases for easy reference
+- **Monitor CI**: Watch for build/test failures
+
+## Integration with CI/CD
+
+### GitHub Actions
+- **Automatic triggers**: Push and tag events
+- **Release workflow**: Triggered by version tags
+- **Test requirements**: All tests must pass
+- **Build verification**: Ensures code compiles
+
+### Release Process
+1. **Make changes**: Implement features/fixes
+2. **Update docs**: CHANGELOG.md and memory bank
+3. **Commit changes**: Use conventional commit format
+4. **Create tag**: Tag with version number
+5. **Push with tag**: `git push origin master --tags`
+6. **Monitor CI**: Watch GitHub Actions workflow
+7. **Verify release**: Check GitHub releases page
+
+## Examples
+
+### Complete Workflow
+```bash
+# 1. Make changes and test
+go test ./... -v -race
+
+# 2. Update documentation
+# Edit CHANGELOG.md, memory bank files
+
+# 3. Stage and commit
+git add .
+git commit -m "fix(tests): resolve mockUI interface compilation errors
+
+- Add missing UI interface methods to mockUI test struct
+- Implement all required methods for proper test execution
+- Fix test compilation failures in executor_test.go
+- Ensure all tests pass with race detection enabled
+
+Fixes #456"
+
+# 4. Create and push tag
+git tag v1.0.3
+git push origin master --tags
+```
+
+### Emergency Hotfix
+```bash
+# 1. Create hotfix branch
+git checkout -b hotfix/critical-bug
+
+# 2. Make minimal fix
+# Edit only necessary files
+
+# 3. Test thoroughly
+go test ./... -v -race
+
+# 4. Commit with urgency
+git add .
+git commit -m "fix(critical): resolve data corruption issue
+
+- Fix buffer overflow in data processing
+- Add bounds checking to prevent corruption
+- Update error handling for edge cases
+
+Fixes #789
+BREAKING CHANGE: Data format validation now stricter"
+
+# 5. Tag and push
+git tag v1.0.4
+git push origin hotfix/critical-bug --tags
+```

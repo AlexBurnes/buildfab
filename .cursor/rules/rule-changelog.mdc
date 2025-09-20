@@ -1,0 +1,121 @@
+---
+description: Changelog Management Rules for Documentation Updates
+globs: 
+alwaysApply: true
+---
+---
+rule_type: Always
+---
+# Changelog Management Rules
+
+## Mandatory Changelog Updates
+- **When updating ANY documentation**: CHANGELOG.md MUST be updated
+- **When making ANY code changes**: CHANGELOG.md MUST be updated
+- **When changing project rules or specifications**: CHANGELOG.md MUST be updated
+- **When updating memory bank files**: CHANGELOG.md MUST be updated
+- **When version is changed**: README.md must be updated
+
+## Changelog Entry Requirements
+
+### For New Features
+- Use `### Added` section
+- Include detailed description of what was added
+- Include technical details and implementation notes
+- Reference any new files, commands, or functionality
+
+### For Bug Fixes
+- Use `### Fixed` section
+- Include specific problem description
+- Include solution details
+- Reference affected files or components
+
+### For Documentation Updates
+- Use `### Documentation` section
+- Include specific files updated
+- Include reason for update
+- Reference any new documentation added
+
+### For Changes to Existing Features
+- Use `### Changed` section
+- Include what was changed and why
+- Include migration notes if applicable
+- Reference affected components
+
+## Date Management Rules
+
+### For Historical Entries (Existing Tags)
+- **ALWAYS use git log dates**: `git log -1 --format="%ai" <tag>`
+- **Command to get dates**: `git tag --sort=-version:refname | xargs -I {} git log -1 --format="%ai {}" {}`
+- **Never use placeholder dates**: All dates must be accurate from git history
+- **Format dates as**: `YYYY-MM-DD` (e.g., `2025-09-15`)
+
+### For Current Changes (Unreleased)
+- **Use current host date**: `date +%Y-%m-%d`
+- **Place in `[Unreleased]` section**: Until version is tagged
+- **Move to version section**: When version is released and tagged
+
+## Changelog Structure Requirements
+
+### Version Sections
+- **Format**: `## [X.Y.Z] - YYYY-MM-DD`
+- **Order**: Newest versions first (reverse chronological)
+- **Unreleased section**: Always at top for current work
+
+### Entry Format
+- **Use bullet points**: `- **Feature Name**: Description`
+- **Include sub-bullets**: For detailed explanations
+- **Reference files**: When applicable
+- **Include technical details**: For complex changes
+
+## Automation Requirements
+
+### Before Making Changes
+1. **Check if changelog needs update**: Any documentation or code change
+2. **Determine entry type**: Added, Fixed, Changed, Documentation
+3. **Prepare entry content**: With proper formatting and details
+
+### After Making Changes
+1. **Add changelog entry**: In appropriate section
+2. **Use correct date**: Historical from git log, current from host
+3. **Verify formatting**: Follow Keep a Changelog format
+4. **Update memory bank**: Document changelog update
+
+## Quality Standards
+
+### Content Quality
+- **Be specific**: Avoid vague descriptions
+- **Include context**: Why the change was made
+- **Reference components**: Files, functions, or features affected
+- **Use consistent terminology**: Match project conventions
+
+### Formatting Quality
+- **Follow Keep a Changelog**: Standard format and structure
+- **Consistent indentation**: Use proper markdown formatting
+- **Proper categorization**: Use correct section headers
+- **Complete entries**: Include all necessary details
+
+## Integration with Workflow
+
+### Version Management
+- **Changelog updates**: Required before version increment
+- **Release process**: Changelog must be complete before tagging
+- **Memory bank sync**: Changelog updates must be reflected in memory bank
+
+### Documentation Consistency
+- **Cross-reference**: Changelog entries should match other docs
+- **Version alignment**: Changelog versions must match git tags
+- **Date accuracy**: All dates must be verifiable from git history
+
+## Error Prevention
+
+### Common Mistakes to Avoid
+- **Using wrong dates**: Always verify with git log
+- **Incomplete entries**: Include all necessary details
+- **Wrong categorization**: Use correct section headers
+- **Missing technical details**: Include implementation notes
+
+### Validation Steps
+1. **Check git log**: Verify historical dates are correct
+2. **Review formatting**: Ensure proper markdown structure
+3. **Verify completeness**: All changes documented
+4. **Test readability**: Clear and understandable entries

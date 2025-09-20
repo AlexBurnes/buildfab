@@ -1,0 +1,192 @@
+---
+description: Documentation naming conventions and directory structure requirements
+globs: 
+alwaysApply: true
+---
+# Documentation Rules
+
+## File Naming Conventions
+
+### General Rules
+- **Format**: `First-word-second-word.md` (lowercase-first-word-with-dash)
+- **Exceptions**: 
+  - `README.md` and `CHANGELOG.md` must remain as-is
+  - Memory bank documents must remain in root directory as-is
+  - Abbreviations must remain uppercase (e.g., `CI-cd.md`, `BNF-grammar.md`)
+
+### Examples
+- ✅ `Developer-workflow.md`
+- ✅ `Project-specification.md`
+- ✅ `Implementation-summary.md`
+- ✅ `Library.md`
+- ✅ `Build.md`
+- ✅ `Deploy.md`
+- ✅ `BNF-grammar.md` (BNF is abbreviation)
+- ✅ `CI-cd.md` (CI is abbreviation)
+- ❌ `DEVELOPER_WORKFLOW.md` (all caps)
+- ❌ `developer_workflow.md` (underscores)
+- ❌ `developerworkflow.md` (no separators)
+
+## Directory Structure Requirements
+
+### Root Directory (Keep in Root)
+- **README.md**: Main project documentation
+- **CHANGELOG.md**: Version history and changes
+- **VERSION**: Current version number
+- **LICENSE**: Project license
+- **go.mod**, **go.sum**: Go module files
+- **.project.yml**: Project configuration
+- **Memory bank files**: Must stay in root for MCP server compatibility
+  - `projectbrief.md`
+  - `productContext.md`
+  - `activeContext.md`
+  - `systemPatterns.md`
+  - `techContext.md`
+  - `progress.md`
+
+### docs/ Directory (All Other Documentation)
+- **Project Documentation**:
+  - `Project-specification.md` - Main project specification
+  - `Implementation-summary.md` - Implementation overview
+  - `Developer-workflow.md` - Development workflow
+- **Technical Documentation**:
+  - `Build.md` - Build system documentation
+  - `Deploy.md` - CI/CD and deployment documentation
+  - `Library.md` - Library API documentation
+  - `BNF-grammar.md` - Grammar specification
+  - `Goreleaser-hooks.md` - GoReleaser hooks documentation
+- **Platform-Specific Documentation**:
+  - `packaging.md` - General packaging documentation
+  - `linux-packaging.md` - Linux-specific packaging
+  - `windows-packaging.md` - Windows-specific packaging
+- **Feature Documentation**:
+  - `New-features-specification.md` - New features specification
+
+## Documentation Types and Requirements
+
+### Required Documentation Types
+1. **Project Specification** (`docs/Project-specification.md`)
+   - Core requirements and goals
+   - Technical specifications
+   - Architecture decisions
+   - Must be single source of truth
+
+2. **User Documentation** (`README.md`)
+   - Purpose and features
+   - Installation instructions
+   - Usage examples
+   - Quick start guide
+
+3. **Developer Documentation** (`docs/Developer-workflow.md`)
+   - Development setup
+   - Build process
+   - Release workflow
+   - Contributing guidelines
+
+4. **API Documentation** (`docs/Library.md`)
+   - Library API reference
+   - Usage examples
+   - Type definitions
+   - Function documentation
+
+5. **Change Log** (`CHANGELOG.md`)
+   - Version history
+   - Feature additions
+   - Bug fixes
+   - Breaking changes
+
+### Optional Documentation Types
+1. **Implementation Details** (`docs/Implementation-summary.md`)
+2. **Build System** (`docs/Build.md`)
+3. **Deployment** (`docs/Deploy.md`)
+4. **Grammar Specification** (`docs/BNF-grammar.md`)
+5. **Platform-Specific Guides** (`docs/*-packaging.md`)
+
+## Reference Management
+
+### Internal References
+- Use relative paths from current file location
+- Always use forward slashes (`/`) in paths
+- Include file extension in links
+- Example: `[Project Specification](docs/Project-specification.md)`
+
+### Cross-Reference Updates
+When renaming or moving documentation files:
+1. **Search entire codebase** for references to old names
+2. **Update all references** to new names/locations
+3. **Update memory bank files** if referenced
+4. **Update CHANGELOG.md** with changes
+5. **Verify all links** work correctly
+
+### Memory Bank Integration
+- Memory bank files must reference documentation using correct paths
+- Update memory bank when documentation structure changes
+- Maintain consistency between memory bank and actual documentation
+
+## Quality Standards
+
+### Content Requirements
+- **Clear and concise** language
+- **Consistent formatting** across all documents
+- **Up-to-date information** reflecting current state
+- **Cross-references** must be accurate and working
+
+### Maintenance Requirements
+- **Regular updates** when features change
+- **Version synchronization** with code changes
+- **Link validation** to ensure all references work
+- **Consistency checks** for naming conventions
+
+## Enforcement
+
+### Pre-commit Checks
+- Verify file naming conventions
+- Check that documentation is in correct directory
+- Validate internal references
+- Ensure CHANGELOG.md is updated for changes
+
+### Code Review Requirements
+- Documentation changes must be reviewed
+- Reference updates must be verified
+- Naming conventions must be followed
+- Directory structure must be maintained
+
+## Examples
+
+### Correct Structure
+```
+project/
+├── README.md                    # User documentation
+├── CHANGELOG.md                 # Version history
+├── VERSION                      # Version number
+├── LICENSE                      # License file
+├── projectbrief.md              # Memory bank (root required)
+├── activeContext.md             # Memory bank (root required)
+├── progress.md                  # Memory bank (root required)
+└── docs/                        # All other documentation
+    ├── Project-specification.md
+    ├── Developer-workflow.md
+    ├── Implementation-summary.md
+    ├── Build.md
+    ├── Deploy.md
+    ├── Library.md
+    ├── BNF-grammar.md
+    ├── New-features-specification.md
+    ├── Goreleaser-hooks.md
+    ├── packaging.md
+    ├── linux-packaging.md
+    └── windows-packaging.md
+```
+
+### Incorrect Structure
+```
+project/
+├── README.md
+├── CHANGELOG.md
+├── DEVELOPER_WORKFLOW.md        # ❌ Wrong naming, wrong location
+├── project_specification.md     # ❌ Wrong naming, wrong location
+├── docs/
+│   ├── README.md                # ❌ Should be in root
+│   └── memory_bank/             # ❌ Memory bank should be in root
+│       └── activeContext.md
+```

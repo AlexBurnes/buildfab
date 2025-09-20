@@ -1,0 +1,80 @@
+# .golangci.yml
+# GolangCI-Lint configuration for the "version" CLI project
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags: []
+  skip-dirs:
+    - bin
+    - docs
+    - test
+  skip-files:
+    - ".*_gen.go"
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+linters:
+  disable-all: true
+  enable:
+    # Core checks
+    - govet
+    - errcheck
+    - staticcheck
+    - ineffassign
+    - typecheck
+
+    # Style & simplification
+    - gosimple
+    - unconvert
+    - unparam
+    - unused
+    - misspell
+    - whitespace
+
+    # Common bug patterns
+    - gocritic
+    - goconst
+    - gosec
+
+    # Performance suggestions
+    - prealloc
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  goconst:
+    min-len: 3
+    min-occurrences: 2
+  govet:
+    check-shadowing: true
+  misspell:
+    locale: US
+  whitespace:
+    multi-if: true
+    multi-func: true
+  gosec:
+    excludes:
+      - G104  # Audit for errors not checked (redundant with errcheck)
+
+issues:
+  exclude-rules:
+    # Allow using t.Fatal/f.Fail in test files
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gocritic
+    # Ignore magic numbers in tests
+    - path: _test\.go
+      linters:
+        - goconst
+
+  # Show only new issues on changed lines in PRs (if integrated with CI)
+  new: true
+
+service:
+  golangci-lint-version: 1.59.0

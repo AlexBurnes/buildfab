@@ -1,0 +1,71 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+---
+rule_type: Always
+---
+# Project RULES (Go + Releasing + Docs + Tests)
+
+## Scope
+- Project: CLI `version` (Git describe-like).
+- Code: Go (>=1.22/1.23), CGO disabled for reproducible static builds.
+- Platforms: linux/amd64, linux/arm64, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64.
+
+## General Engineering
+- Keep functions short and cohesive; prefer composition over inheritance.
+- No global mutable state; pass dependencies explicitly.
+- Handle errors explicitly; user-facing messages must be helpful.
+- Log minimally for CLI (stderr), keep stdout for machine-readable output if flags require it.
+
+## Style & Tooling
+- `gofmt`, `go vet`, `golangci-lint` (default presets; no nitpicking rules that block progress).
+- Naming: exported symbols with doc comments (`// Name ...`), internal packages without stutter.
+- Avoid external deps unless justified; prefer stdlib.
+- No panics in normal control flow.
+
+## Tests
+- Unit tests for formatting/edge cases/fallbacks.
+- Table-driven tests, no sleeping/timing unless necessary.
+- CI: run `go test ./... -race`.
+- Aim for practical coverage (≥70% in formatting/logic pkgs).
+
+## Docs
+- Each exported symbol documented.
+- `README.md`: what, how to install (Scoop + tar.gz install.sh), usage examples, versioning policy.
+- `/docs/RELEASE.md`: manual release steps + how to recover a failed release.
+- ADRs in `/docs/adr` and mirrored in MPC (memory-base).
+- **CHANGELOG.md**: MANDATORY update for ANY documentation or code changes (see rule-changelog.mdc).
+
+## Versioning & Git
+- SemVer, tags like `vX.Y.Z`.
+- Branching: feature branches → PR → squash merge.
+- Commit style (suggested): Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`).
+- Tag only from green CI.
+
+## Build/Release
+- Use GoReleaser (see `.goreleaser.yml`).
+- Windows: Scoop (own bucket).
+- Linux: tar.gz archive + `packaging/linux/install.sh`.
+- Artifacts must be reproducible: `-ldflags="-s -w ..."`; include build metadata via ldflags.
+
+## Cursor + MPC (memory-base)
+- ALWAYS consult MPC for rules/specs before coding (see `.cursor/mpc-usage.md`).
+- If rules missing/ambiguous: write ADR proposal in `/docs/adr`, sync to MPC `decisions/*`.
+- After changes to rules/spec: update `.cursor/rules.md`, `/docs`, and MPC.
+- PR descriptions must include:
+  - What changed and why.
+  - Links to MPC entries and ADRs (if any).
+
+## Definition of Done (DoD)
+- Lint & tests pass.
+- CLI help accurate.
+- Docs updated (README, RELEASE, ADR if needed).
+- **CHANGELOG.md updated** (MANDATORY for any changes).
+- MPC updated (decisions/changelog).
+- GoReleaser dry-run successful.
+
+## Security & Licenses
+- No vendoring secrets.
+- Respect licenses; include LICENSE file.

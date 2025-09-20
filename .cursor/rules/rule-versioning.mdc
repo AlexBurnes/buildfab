@@ -1,0 +1,83 @@
+---
+description: Version Management and Workflow Rules for Version CLI Project
+globs: 
+alwaysApply: true
+---
+---
+rule_type: Always
+---
+# Version Management & Workflow Rules
+
+## Version Management & Workflow
+- **VERSION file**: Single source of truth for version numbers.
+- **Pre-push validation**: Automated version checking before git push.
+- **Version increment**: Always increment version before making changes.
+- **Workflow enforcement**: Follow docs/Developer-workflow.md process.
+
+### Version Change Requirements
+- **Before ANY changes**: Check if VERSION file version matches current git tag.
+- **If versions match**: Suggest user to increment version first using `./scripts/version-bump`.
+- **Version format**: Must follow `vX.Y.Z` pattern (e.g., `v1.2.3`).
+- **Increment types**: `patch` (bug fixes), `minor` (new features), `major` (breaking changes).
+
+### Pre-Change Version Check
+```bash
+# Check current version status
+CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+VERSION_FILE=$(cat VERSION 2>/dev/null || echo "none")
+
+if [[ "$CURRENT_TAG" == "$VERSION_FILE" ]]; then
+    echo "⚠️  VERSION file ($VERSION_FILE) matches current tag ($CURRENT_TAG)"
+    echo "📝 Suggestion: Increment version before making changes:"
+    echo "   ./scripts/version-bump patch    # for bug fixes"
+    echo "   ./scripts/version-bump minor    # for new features" 
+    echo "   ./scripts/version-bump major    # for breaking changes"
+    echo ""
+    echo "Then make your changes and follow the workflow in docs/Developer-workflow.md"
+fi
+```
+
+### Mandatory Workflow Steps
+1. **Check version**: Ensure VERSION file is incremented from last tag
+2. **Make changes**: Implement features/fixes
+3. **Test**: Run `go test ./... -v`
+4. **Dry run**: `./buildtools/build-goreleaser.sh dry-run`
+5. **Commit**: Use conventional commit messages
+6. **Tag**: `git tag $(cat VERSION)`
+7. **Push**: `git push origin master && git push origin $(cat VERSION)`
+8. **Release**: `./buildtools/build-goreleaser.sh release`
+
+## AI Assistant Version Check Protocol
+
+### Before Making ANY Changes
+1. **Run version check**: `./scripts/check-version-status`
+2. **If version check fails**: Suggest user to increment version first
+3. **If version check passes**: Proceed with changes
+
+### Version Check Script Usage
+```bash
+# Check current version status
+./scripts/check-version-status
+
+# If needed, increment version
+./scripts/version-bump patch    # for bug fixes
+./scripts/version-bump minor    # for new features
+./scripts/version-bump major    # for breaking changes
+```
+
+### Error Handling
+- **VERSION file missing**: Create with current version
+- **Version format invalid**: Fix format to `vX.Y.Z`
+- **Version matches tag**: Suggest increment before changes
+- **Git tag issues**: Help user resolve git state
+
+## Integration with Git Hooks
+- **Pre-push hook**: Automatically validates version before push
+- **Version validation**: Ensures version format and increment
+- **Tag validation**: Prevents duplicate or invalid tags
+
+## Documentation Requirements
+- **docs/Developer-workflow.md**: Complete workflow documentation
+- **VERSION file**: Current planned version
+- **CHANGELOG.md**: Updated with each release
+- **Memory bank**: Updated with version changes

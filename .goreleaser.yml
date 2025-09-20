@@ -1,0 +1,83 @@
+project_name: buildfab
+
+before:
+  hooks:
+    # 1) Ensure Conan profiles exist (idempotent).
+    - bash -lc 'conan profile show -pr default >/dev/null 2>&1 || conan profile detect --force'
+    # 2) Install tool_requires from conanfile.py and DEPLOY their binaries into ./.toolchain
+    #    - We use the deploy generator to copy tool binaries into a local folder.
+    #    - --build=missing lets CI bootstrap tools if cache is empty.
+    - bash -lc 'mkdir -p .toolchain && conan install . -d full_deploy --deployer-folder=.toolchain --build=missing -s build_type=Release'
+    # 3) Normalize PATH: collect all */bin under .toolchain into .toolchain/bin for a stable PATH entry.
+    - bash -lc './buildtools/collect_bins.sh .toolchain'
+    - go mod tidy
+    # 4) Copy pre-built binaries to dist/ after cleanup
+    - bash -lc 'if [ -d ".goreleaser-binaries" ]; then cp .goreleaser-binaries/* dist/ 2>/dev/null || true; fi'
+    # 5) Create installer scripts for release
+    - bash -lc './buildtools/create-simple-installers.sh {{ .Tag }}'
+
+builds:
+  - id: buildfab
+    main: ./cmd/buildfab
+    binary: buildfab
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.appVersion={{ .Version }}
+
+archives:
+  - id: default
+    builds: [buildfab]
+    format_overrides:
+      - goos: windows
+        format: zip
+    name_template: "{{ .ProjectName }}_{{ if eq .Os \"darwin\" }}macos{{ else }}{{ .Os }}{{ end }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - src: "packaging/linux/install.sh"
+        dst: "install.sh"
+
+checksum:
+  name_template: "checksums.txt"
+
+release:
+  prerelease: auto
+  draft: false
+  extra_files:
+    - glob: "installers/buildfab-linux-*-install.sh"
+    - glob: "installers/buildfab-macos-*-install.sh"
+
+
+scoop:
+  bucket:
+    owner: burnes
+    name: buildfab-scoop-bucket
+    branch: main
+  homepage: "https://github.com/burnes/buildfab"
+  description: "Go-based automation runner with DAG executor"
+  license: "MIT"
+  name: buildfab
+  commit_msg_template: "chore(scoop): update buildfab to {{ .Tag }}"
+  url_template: "https://github.com/burnes/buildfab/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+  skip_upload: false
+  folder: "packaging/windows/scoop-bucket"
+
+brews:
+  - tap:
+      owner: burnes
+      name: homebrew-tap
+      branch: main
+    homepage: "https://github.com/burnes/buildfab"
+    description: "Go-based automation runner with DAG-based execution"
+    license: "MIT"
+    name: buildfab
+    commit_msg_template: "chore(homebrew): update buildfab to {{ .Tag }}"
+    url_template: "https://github.com/burnes/buildfab/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    skip_upload: false
+    folder: "packaging/macos"
+    test: |
+      system "#{bin}/buildfab --version"
+      system "#{bin}/buildfab --help"
+      system "#{bin}/buildfab list-actions"

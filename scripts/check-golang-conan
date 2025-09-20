@@ -1,0 +1,29 @@
+#!/bin/bash
+# Check if golang package is available in Conan, create locally if not
+
+set -e
+
+echo "🔍 Checking for golang package in Conan..."
+
+# Check if golang package exists
+if conan search golang --remote=all 2>/dev/null | grep -q "golang/"; then
+    echo "✅ golang package found in Conan remote repositories"
+    exit 0
+fi
+
+echo "⚠️  golang package not found in Conan remote repositories"
+echo "📦 Creating golang package locally..."
+
+# Check if conanfile-golang.py exists
+if [ ! -f "conanfile-golang.py" ]; then
+    echo "❌ conanfile-golang.py not found in project root"
+    echo "   Please ensure conanfile-golang.py exists before running this script"
+    exit 1
+fi
+
+# Create golang package locally
+echo "🔨 Creating golang package from local recipe..."
+conan create conanfile-golang.py --build=missing
+
+echo "✅ golang package created locally and available for use"
+echo "   You can now run: conan search golang"

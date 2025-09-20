@@ -1,0 +1,23 @@
+# build artifacts
+bin/
+
+# build directory
+.build
+.toolchain
+.goreleaser-binaries/
+.goreleaser-skip-build.yml
+build
+CMakeUserPresets.json
+dist
+installers
+scripts/version
+scripts/pre-push
+
+# environment and tockens
+.env
+
+# docs
+
+# IDE
+*.geany
+

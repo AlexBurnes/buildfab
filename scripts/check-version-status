@@ -1,0 +1,135 @@
+#!/bin/bash
+
+# Version status checking script
+# Used by AI assistant to check version status before making changes
+
+set -e
+
+# Colors for output
+if [[ -t 1 ]] && [[ -z "${NO_COLOR-}" ]] && [[ "${TERM-}" != "dumb" ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    NC='\033[0m' # No Color
+else
+    RED='' GREEN='' YELLOW='' BLUE='' NC=''
+fi
+
+echo -e "${BLUE}🔍 Checking version status...${NC}"
+
+# Download version utility from GitHub releases
+download_version_utility() {
+    echo -e "${BLUE}No version utility found, downloading latest from GitHub...${NC}"
+    
+    # Detect platform and architecture
+    local platform=$(uname -s | tr '[:upper:]' '[:lower:]')
+    local arch=$(uname -m)
+    
+    # Map architecture names
+    case "$arch" in
+        x86_64) arch="amd64" ;;
+        arm64|aarch64) arch="arm64" ;;
+        *) echo -e "${RED}Unsupported architecture: $arch${NC}"; return 1 ;;
+    esac
+    
+    # Map platform names
+    case "$platform" in
+        darwin) platform="macos" ;;
+        linux) platform="linux" ;;
+        *) echo -e "${RED}Unsupported platform: $platform${NC}"; return 1 ;;
+    esac
+    
+    echo -e "${BLUE}Detected platform: ${platform}-${arch}${NC}"
+    
+    # Download URL using latest release (no version number in URL)
+    local download_url="https://github.com/AlexBurnes/version-go/releases/latest/download/version-${platform}-${arch}.tar.gz"
+    
+    # Create scripts directory
+    mkdir -p scripts
+    
+    # Download and install using pipe approach
+    echo -e "${BLUE}Downloading version utility from: $download_url${NC}"
+    if wget -q -O - "$download_url" | INSTALL_DIR="$(dirname "$0")/scripts" sh; then
+        if [[ -f "scripts/version" ]]; then
+            echo -e "${GREEN}Successfully downloaded version utility${NC}"
+            return 0
+        else
+            echo -e "${RED}Version binary not found after installation${NC}"
+            return 1
+        fi
+    else
+        echo -e "${RED}Failed to download and install version utility from GitHub${NC}"
+        return 1
+    fi
+}
+
+# Get current version with corrected priority order
+CURRENT_TAG=""
+
+# 1. Try to use built version utility first
+if [[ -f "scripts/version" ]]; then
+    CURRENT_TAG=$(scripts/version version 2>/dev/null || echo "")
+    if [[ -n "$CURRENT_TAG" ]]; then
+        echo -e "Current version (from built utility): ${GREEN}$CURRENT_TAG${NC}"
+    fi
+fi
+
+# 2. NEW: Auto-download latest version utility
+if [[ -z "$CURRENT_TAG" ]]; then
+    if download_version_utility; then
+        CURRENT_TAG=$(scripts/version version 2>/dev/null || echo "")
+        if [[ -n "$CURRENT_TAG" ]]; then
+            echo -e "Current version (from downloaded utility): ${GREEN}$CURRENT_TAG${NC}"
+        fi
+    fi
+fi
+
+# 3. Fallback to git describe if version utility not available or failed
+if [[ -z "$CURRENT_TAG" ]]; then
+    CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+    echo -e "Current git tag: ${GREEN}$CURRENT_TAG${NC}"
+fi
+
+# Get VERSION file content
+if [[ -f "VERSION" ]]; then
+    VERSION_FILE=$(cat VERSION)
+    echo -e "VERSION file: ${GREEN}$VERSION_FILE${NC}"
+else
+    echo -e "VERSION file: ${RED}NOT FOUND${NC}"
+    echo -e "${RED}❌ VERSION file is required for this project${NC}"
+    
+    # Get current version to suggest proper VERSION file content
+    SUGGESTED_VERSION=""
+    if [[ -f "scripts/version" ]]; then
+        SUGGESTED_VERSION=$(scripts/version version 2>/dev/null || echo "")
+    fi
+    
+    if [[ -n "$SUGGESTED_VERSION" ]]; then
+        echo -e "${YELLOW}💡 Create VERSION file with: echo 'v$SUGGESTED_VERSION' > VERSION${NC}"
+    else
+        echo -e "${YELLOW}💡 Create VERSION file with: echo 'v1.0.0' > VERSION${NC}"
+    fi
+    exit 1
+fi
+
+# Normalize versions for comparison (remove 'v' prefix if present)
+CURRENT_TAG_NORMALIZED=$(echo "$CURRENT_TAG" | sed 's/^v//')
+VERSION_FILE_NORMALIZED=$(echo "$VERSION_FILE" | sed 's/^v//')
+
+# Check if versions match
+if [[ "$CURRENT_TAG_NORMALIZED" == "$VERSION_FILE_NORMALIZED" ]]; then
+    echo -e "${YELLOW}⚠️  VERSION file ($VERSION_FILE) matches current tag ($CURRENT_TAG)${NC}"
+    echo -e "${YELLOW}📝 Suggestion: Increment version before making changes:${NC}"
+    echo -e "   ${BLUE}scripts/version bump patch${NC}    # for bug fixes"
+    echo -e "   ${BLUE}scripts/version bump minor${NC}    # for new features" 
+    echo -e "   ${BLUE}scripts/version bump major${NC}    # for breaking changes"
+    echo ""
+    echo -e "${YELLOW}Then make your changes and follow the workflow in docs/Developer-workflow.md${NC}"
+    exit 1
+else
+    echo -e "${GREEN}✅ Version status OK${NC}"
+    echo -e "VERSION file ($VERSION_FILE) differs from current tag ($CURRENT_TAG)"
+    echo -e "${GREEN}Ready to make changes!${NC}"
+    exit 0
+fi

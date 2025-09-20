@@ -1,0 +1,89 @@
+#!/bin/bash
+
+# Version checking script for pre-push hook
+# Usage: version-check <version_tag>
+
+set -e
+
+VERSION_TAG="$1"
+
+if [[ -z "$VERSION_TAG" ]]; then
+    echo "Usage: $0 <version_tag>"
+    exit 1
+fi
+
+# Check version format
+if [[ ! "$VERSION_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: Invalid version tag format: $VERSION_TAG"
+    echo "Version tags must follow format: vX.Y.Z (e.g., v1.2.3)"
+    exit 1
+fi
+
+# Check VERSION file exists
+if [[ ! -f "VERSION" ]]; then
+    echo "Error: VERSION file not found"
+    echo "Create VERSION file with version number before pushing tag"
+    exit 1
+fi
+
+# Check VERSION file matches tag
+VERSION_FILE=$(cat VERSION)
+if [[ "$VERSION_FILE" != "$VERSION_TAG" ]]; then
+    echo "Error: VERSION file ($VERSION_FILE) does not match tag ($VERSION_TAG)"
+    echo "Update VERSION file to match the tag being pushed"
+    exit 1
+fi
+
+# Check if version is incremented from last tag
+LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+if [[ -n "$LAST_TAG" ]]; then
+    if [[ "$VERSION_TAG" == "$LAST_TAG" ]]; then
+        echo "Error: Version tag $VERSION_TAG already exists"
+        echo "Increment version number before pushing"
+        exit 1
+    fi
+    
+    # Compare versions using sort -V for proper semantic version comparison
+    # compare version function and variables
+    declare -ri EQUAL=0
+    declare -ri GREATEST=2
+    declare -ri LEAST=1
+    declare -ri CMPERR=3
+    function compare_versions() {
+        local v1="${1}"
+        local v2="${2}"
+        if [[ "${v1}" == "${v2}" ]]; then
+            # v1 == v2, v1 and v2 are equal
+            return $EQUAL
+        fi
+
+        local least=$(for v in $(echo "${v1} ${v2}"); do echo "${v}"; done | sort -V | head -1)
+        if [[ "${least}" == "${v1}" ]]; then
+            # v1 < v2, v1 is least
+            return $LEAST
+        fi
+
+        if [[ "${least}" == "${v2}" ]]; then
+            # v1 > v2, v1 is greatest
+            return $GREATEST
+        fi
+
+        return $CMPERR
+    }
+    
+    # Compare the new tag with the last tag
+    compare_versions "$VERSION_TAG" "$LAST_TAG" || true
+    result=$?
+    
+    if [[ $result -eq $LEAST ]]; then
+        echo "Error: Version tag $VERSION_TAG is older than last tag $LAST_TAG"
+        echo "Version must be incremented from last release"
+        exit 1
+    elif [[ $result -eq $CMPERR ]]; then
+        echo "Error: Failed to compare versions $VERSION_TAG and $LAST_TAG"
+        exit 1
+    fi
+fi
+
+echo "Version check passed: $VERSION_TAG"
+exit 0
