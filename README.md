@@ -4,7 +4,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.2.0-orange.svg)](https://github.com/burnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.6.0-orange.svg)](https://github.com/burnes/buildfab/releases)
 
 ## Features
 
@@ -74,6 +74,73 @@ buildfab action git@untracked
 
 # List all available actions
 buildfab list-actions
+```
+
+## Built-in Actions
+
+buildfab includes a comprehensive set of built-in actions for common automation tasks:
+
+### Git Actions
+- **`git@untracked`**: Check for untracked files in the repository
+- **`git@uncommitted`**: Check for uncommitted changes
+- **`git@modified`**: Check for modified files (warning only)
+
+### Version Actions
+- **`version@check`**: Validate version format in VERSION file
+- **`version@check-greatest`**: Check if current version is the greatest tag
+
+### Using Built-in Actions
+
+Built-in actions can be used in two ways:
+
+1. **In YAML configuration**:
+```yaml
+actions:
+  - name: git-untracked
+    uses: git@untracked
+
+  - name: version-check
+    uses: version@check
+
+stages:
+  pre-push:
+    steps:
+      - action: git-untracked
+      - action: version-check
+```
+
+2. **Directly via CLI**:
+```bash
+# Run built-in actions directly
+buildfab action git@untracked
+buildfab action version@check
+
+# List all available built-in actions
+buildfab list-actions
+```
+
+### Library Integration
+
+Built-in actions are automatically available when using the buildfab library:
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/AlexBurnes/buildfab/pkg/buildfab"
+)
+
+func main() {
+    config, _ := buildfab.LoadConfig(".project.yml")
+    runner := buildfab.NewRunner(config, nil)
+    
+    // Built-in actions work automatically
+    err := runner.RunAction(context.Background(), "git-untracked")
+    if err != nil {
+        // Handle error
+    }
+}
 ```
 
 ## Configuration

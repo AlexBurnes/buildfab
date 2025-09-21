@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2025-01-27
+
+### Added
+- **Built-in Action Support in Public API**: Added comprehensive built-in action support to the buildfab library
+  - Added `ActionRegistry` and `ActionRunner` interfaces for extensible action system
+  - Implemented `DefaultActionRegistry` with all built-in actions (git@untracked, git@uncommitted, git@modified, version@check, version@check-greatest)
+  - Added `NewRunnerWithRegistry()` function for custom action registry support
+  - Added `ListBuiltInActions()` method to list available built-in actions
+  - Updated `Runner` to support both `run:` and `uses:` fields in action configuration
+  - Added proper error handling and status reporting for built-in actions
+  - Added comprehensive test coverage for built-in action functionality
+  - Added configuration loading support with `LoadConfig()` and `LoadConfigFromBytes()` functions
+  - Built-in actions now work seamlessly in both CLI and library usage
+
+### Documentation
+- **README Updates**: Added comprehensive built-in action documentation
+  - Added "Built-in Actions" section with complete action reference
+  - Added usage examples for both YAML configuration and CLI usage
+  - Added library integration examples showing built-in action support
+  - Updated feature list to highlight built-in action capabilities
+
 ## [0.5.1] - 2025-01-27
 
 ### Fixed

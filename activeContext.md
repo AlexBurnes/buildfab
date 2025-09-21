@@ -1,9 +1,19 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-**COMPLETE IMPLEMENTATION ACHIEVED!** All library methods are now fully implemented with zero placeholder "not yet implemented" messages. Version v0.5.1 released with complete library API functionality. The buildfab library is now 100% production-ready for pre-push integration and other automation use cases. **All core functionality implemented** - library API, CLI interface, DAG execution engine, built-in actions, and version library integration. **Comprehensive test suite with 100% test success rate** - all core functionality thoroughly tested with unit tests, integration tests, and end-to-end scenarios. Version library integration fixed to use official AlexBurnes/version-go v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. **Library API completion** - Fixed RunStage(), RunAction(), RunStageStep(), and RunCLI() methods with proper implementations. Added error policy support, type safety improvements, and comprehensive test coverage. All methods now fully functional for embedding in pre-push utilities and other applications.
+**VERSION v0.6.0 RELEASED!** Successfully implemented comprehensive built-in action support in the public buildfab library API and released version v0.6.0. The library now fully supports both `run:` and `uses:` fields in action configuration, enabling seamless integration with pre-push utilities and other automation tools. **All core functionality implemented** - library API, CLI interface, DAG execution engine, built-in actions, and version library integration. **Comprehensive test suite with 100% test success rate** - all core functionality thoroughly tested with unit tests, integration tests, and end-to-end scenarios. Version library integration fixed to use official AlexBurnes/version-go v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. **Library API completion** - Fixed RunStage(), RunAction(), RunStageStep(), and RunCLI() methods with proper implementations. Added error policy support, type safety improvements, and comprehensive test coverage. All methods now fully functional for embedding in pre-push utilities and other applications.
 
 ## Recent Changes
+- **Built-in Action Support in Public API**: Added comprehensive built-in action support to the buildfab library
+  - Added `ActionRegistry` and `ActionRunner` interfaces for extensible action system
+  - Implemented `DefaultActionRegistry` with all built-in actions (git@untracked, git@uncommitted, git@modified, version@check, version@check-greatest)
+  - Added `NewRunnerWithRegistry()` function for custom action registry support
+  - Added `ListBuiltInActions()` method to list available built-in actions
+  - Updated `Runner` to support both `run:` and `uses:` fields in action configuration
+  - Added proper error handling and status reporting for built-in actions
+  - Added comprehensive test coverage for built-in action functionality
+  - Added configuration loading support with `LoadConfig()` and `LoadConfigFromBytes()` functions
+  - Built-in actions now work seamlessly in both CLI and library usage
 - **Library API Implementation Complete**: Fixed all placeholder "not yet implemented" methods
   - `buildfab.Runner.RunStage()` - Sequential execution with error policies
   - `buildfab.Runner.RunAction()` - Custom and built-in action execution

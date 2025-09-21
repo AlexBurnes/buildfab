@@ -115,20 +115,39 @@ func DefaultRunOptions() *RunOptions {
 	}
 }
 
-// Runner provides the main execution interface
-type Runner struct {
-	config *Config
-	opts   *RunOptions
+// ActionRegistry defines the interface for built-in action execution
+type ActionRegistry interface {
+	GetRunner(name string) (ActionRunner, bool)
+	ListActions() map[string]string
 }
 
-// NewRunner creates a new buildfab runner
+// ActionRunner defines the interface for action runners
+type ActionRunner interface {
+	Run(ctx context.Context) (Result, error)
+	Description() string
+}
+
+// Runner provides the main execution interface
+type Runner struct {
+	config   *Config
+	opts     *RunOptions
+	registry ActionRegistry
+}
+
+// NewRunner creates a new buildfab runner with default built-in actions
 func NewRunner(config *Config, opts *RunOptions) *Runner {
+	return NewRunnerWithRegistry(config, opts, NewDefaultActionRegistry())
+}
+
+// NewRunnerWithRegistry creates a new buildfab runner with a custom action registry
+func NewRunnerWithRegistry(config *Config, opts *RunOptions, registry ActionRegistry) *Runner {
 	if opts == nil {
 		opts = DefaultRunOptions()
 	}
 	return &Runner{
-		config: config,
-		opts:   opts,
+		config:   config,
+		opts:     opts,
+		registry: registry,
 	}
 }
 
@@ -200,6 +219,20 @@ func RunCLI(ctx context.Context, args []string) error {
 	// Simple argument parsing for common cases
 	command := args[0]
 	
+	// Check command validity before loading config
+	switch command {
+	case "run":
+		if len(args) < 2 {
+			return fmt.Errorf("run command requires a stage name")
+		}
+	case "action":
+		if len(args) < 2 {
+			return fmt.Errorf("action command requires an action name")
+		}
+	default:
+		return fmt.Errorf("unknown command: %s", command)
+	}
+	
 	// Load default configuration
 	configPath := ".project.yml"
 	for i, arg := range args {
@@ -227,16 +260,10 @@ func RunCLI(ctx context.Context, args []string) error {
 	// Handle different commands
 	switch command {
 	case "run":
-		if len(args) < 2 {
-			return fmt.Errorf("run command requires a stage name")
-		}
 		stageName := args[1]
 		return runner.RunStage(ctx, stageName)
 		
 	case "action":
-		if len(args) < 2 {
-			return fmt.Errorf("action command requires an action name")
-		}
 		actionName := args[1]
 		return runner.RunAction(ctx, actionName)
 		
@@ -247,23 +274,7 @@ func RunCLI(ctx context.Context, args []string) error {
 
 // loadConfig is a helper function to load configuration
 func loadConfig(path string) (*Config, error) {
-	// This is a simplified version - in practice, this would use the internal/config package
-	// For now, we'll return a basic config
-	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
-			Name: "default-project",
-		},
-		Actions: []Action{},
-		Stages:  map[string]Stage{},
-	}
-	
-	// In a real implementation, this would load from the YAML file
-	// For now, we'll return the empty config
-	return config, nil
+	return LoadConfig(path)
 }
 
 // GetAction returns the action with the specified name
@@ -280,6 +291,14 @@ func (c *Config) GetAction(name string) (Action, bool) {
 func (c *Config) GetStage(name string) (Stage, bool) {
 	stage, exists := c.Stages[name]
 	return stage, exists
+}
+
+// ListBuiltInActions returns all available built-in actions
+func (r *Runner) ListBuiltInActions() map[string]string {
+	if r.registry == nil {
+		return make(map[string]string)
+	}
+	return r.registry.ListActions()
 }
 
 // Validate validates the configuration
@@ -385,9 +404,37 @@ func (r *Runner) runActionInternal(ctx context.Context, action Action) error {
 
 // runBuiltInAction executes a built-in action
 func (r *Runner) runBuiltInAction(ctx context.Context, action Action) error {
-	// For now, return an error for built-in actions since we can't import internal packages
-	// In a full implementation, this would use the action registry
-	return fmt.Errorf("built-in action %s not supported in public API", action.Uses)
+	if r.registry == nil {
+		return fmt.Errorf("built-in action %s not supported: no action registry provided", action.Uses)
+	}
+	
+	runner, exists := r.registry.GetRunner(action.Uses)
+	if !exists {
+		return fmt.Errorf("unknown built-in action: %s", action.Uses)
+	}
+	
+	result, err := runner.Run(ctx)
+	if err != nil {
+		return err
+	}
+	
+	// Print result if verbose mode is enabled
+	if r.opts.Verbose {
+		if result.Status == StatusOK {
+			fmt.Fprintf(r.opts.Output, "✓ %s: %s\n", action.Name, result.Message)
+		} else if result.Status == StatusWarn {
+			fmt.Fprintf(r.opts.Output, "! %s: %s\n", action.Name, result.Message)
+		} else if result.Status == StatusError {
+			fmt.Fprintf(r.opts.ErrorOutput, "✗ %s: %s\n", action.Name, result.Message)
+		}
+	}
+	
+	// Return error if action failed
+	if result.Status == StatusError {
+		return fmt.Errorf("built-in action failed: %s", result.Message)
+	}
+	
+	return nil
 }
 
 // runCustomAction executes a custom action with run command

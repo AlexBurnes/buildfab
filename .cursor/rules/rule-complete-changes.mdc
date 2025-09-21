@@ -1,4 +1,91 @@
+---
+alwaysApply: true
+---
+
 # Complete Changes Shortcut Rule
+
+## Rule Description
+When the user writes "complete changes" (or variations like "complete", "finish changes", "finalize changes", "finish him"), automatically execute the full release workflow including version bump, documentation updates, git operations, and push.
+
+## Shortcut Variations
+- "complete changes"
+- "complete"
+- "finish changes" 
+- "finalize changes"
+- "release changes"
+- "bump and release"
+- "finish him"
+
+## Automatic Workflow
+When any of these shortcuts are detected, automatically execute:
+
+1. **Check current version status**
+   ```bash
+   ./scripts/check-version-status
+   ```
+
+2. **Bump version** (if needed)
+   ```bash
+   scripts/version bump patch  # for bug fixes
+   scripts/version bump minor  # for new features
+   scripts/version bump major  # for breaking changes
+   ```
+
+3. **Update memory bank documents**
+   - `activeContext.md` - Add recent changes and current work focus
+   - `progress.md` - Update what works and current status
+
+4. **Update documentation**
+   - `README.md` - Update version badge and release info
+   - `CHANGELOG.md` - Add new version entry with changes
+
+5. **Git operations**
+   - Stage all changes: `git add .`
+   - Commit with proper format: `git commit -m "type(scope): vX.Y.Z, description" -m "and write change description on new line"`
+   - Create tag: `git tag vX.Y.Z`
+   - Push with tag: `git push origin master --tags`
+
+## Commit Format
+Follow the established pattern from git log with semantic formatting:
+```
+type(scope): vX.Y.Z, brief description
+and write change description on new line
+```
+
+Examples:
+- `fix(executor): v0.1.2, fix DAG executor streaming output implementation`
+  `and write change description on new line`
+- `feat(ui): v0.2.0, add new UI features`
+  `and write change description on new line`
+- `chore(docs): v0.1.3, update documentation`
+  `and write change description on new line`
+
+## Version Bump Logic
+- **patch**: Bug fixes, small improvements
+- **minor**: New features, enhancements
+- **major**: Breaking changes, major rewrites
+
+## Error Handling
+- If version check fails, suggest user to increment version first
+- If git operations fail, provide specific error messages
+- If documentation is missing required updates, prompt for completion
+
+## Integration
+This rule works with:
+- `rule-versioning.mdc` - Version management
+- `rule-git-operations.mdc` - Git workflow
+- `rule-changelog.mdc` - Changelog management
+- `rule-documents.mdc` - Documentation updates
+
+## Usage Examples
+User input: "complete changes"
+AI response: Automatically executes full release workflow
+
+User input: "complete"
+AI response: Automatically executes full release workflow
+
+User input: "finish changes"
+AI response: Automatically executes full release workflow# Complete Changes Shortcut Rule
 
 ## Rule Description
 When the user writes "complete changes" (or variations like "complete", "finish changes", "finalize changes", "finish him"), automatically execute the full release workflow including version bump, documentation updates, git operations, and push.
