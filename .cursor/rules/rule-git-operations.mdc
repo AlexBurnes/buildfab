@@ -4,16 +4,6 @@
 
 ### Conventional Commits Standard
 All commit messages MUST follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-### Required Format **MANDATORY**
 ```
 <type>(<scope>): <version> <description>
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -413,6 +414,9 @@ func TestConfig_Validate(t *testing.T) {
 
 func TestRunner_RunStage(t *testing.T) {
 	config := &Config{
+		Actions: []Action{
+			{Name: "action1", Run: "echo action1"},
+		},
 		Stages: map[string]Stage{
 			"test-stage": {
 				Steps: []Step{
@@ -423,13 +427,10 @@ func TestRunner_RunStage(t *testing.T) {
 	}
 	runner := NewRunner(config, nil)
 
-	// Test existing stage (should return not implemented error)
+	// Test existing stage (should now work)
 	err := runner.RunStage(context.Background(), "test-stage")
-	if err == nil {
-		t.Error("RunStage() expected error, got nil")
-	}
-	if err.Error() != "stage execution not yet implemented" {
-		t.Errorf("RunStage() error = %v, want %v", err.Error(), "stage execution not yet implemented")
+	if err != nil {
+		t.Errorf("RunStage() unexpected error: %v", err)
 	}
 
 	// Test non-existing stage
@@ -450,13 +451,10 @@ func TestRunner_RunAction(t *testing.T) {
 	}
 	runner := NewRunner(config, nil)
 
-	// Test existing action (should return not implemented error)
+	// Test existing action (should now work)
 	err := runner.RunAction(context.Background(), "test-action")
-	if err == nil {
-		t.Error("RunAction() expected error, got nil")
-	}
-	if err.Error() != "action execution not yet implemented" {
-		t.Errorf("RunAction() error = %v, want %v", err.Error(), "action execution not yet implemented")
+	if err != nil {
+		t.Errorf("RunAction() unexpected error: %v", err)
 	}
 
 	// Test non-existing action
@@ -471,6 +469,10 @@ func TestRunner_RunAction(t *testing.T) {
 
 func TestRunner_RunStageStep(t *testing.T) {
 	config := &Config{
+		Actions: []Action{
+			{Name: "step1", Run: "echo step1"},
+			{Name: "step2", Run: "echo step2"},
+		},
 		Stages: map[string]Stage{
 			"test-stage": {
 				Steps: []Step{
@@ -482,13 +484,10 @@ func TestRunner_RunStageStep(t *testing.T) {
 	}
 	runner := NewRunner(config, nil)
 
-	// Test existing step (should return not implemented error)
+	// Test existing step (should now work)
 	err := runner.RunStageStep(context.Background(), "test-stage", "step1")
-	if err == nil {
-		t.Error("RunStageStep() expected error, got nil")
-	}
-	if err.Error() != "step execution not yet implemented" {
-		t.Errorf("RunStageStep() error = %v, want %v", err.Error(), "step execution not yet implemented")
+	if err != nil {
+		t.Errorf("RunStageStep() unexpected error: %v", err)
 	}
 
 	// Test non-existing stage
@@ -511,12 +510,30 @@ func TestRunner_RunStageStep(t *testing.T) {
 }
 
 func TestRunCLI(t *testing.T) {
-	// Test CLI function (should return not implemented error)
-	err := RunCLI(context.Background(), []string{"test", "args"})
+	// Test CLI function with no arguments (should return error)
+	err := RunCLI(context.Background(), []string{})
 	if err == nil {
-		t.Error("RunCLI() expected error, got nil")
+		t.Error("RunCLI() expected error for no arguments, got nil")
 	}
-	if err.Error() != "not implemented" {
-		t.Errorf("RunCLI() error = %v, want %v", err.Error(), "not implemented")
+	if !strings.Contains(err.Error(), "no arguments provided") {
+		t.Errorf("RunCLI() error = %v, want error containing 'no arguments provided'", err.Error())
+	}
+	
+	// Test CLI function with unknown command (should return error)
+	err = RunCLI(context.Background(), []string{"unknown"})
+	if err == nil {
+		t.Error("RunCLI() expected error for unknown command, got nil")
+	}
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Errorf("RunCLI() error = %v, want error containing 'unknown command'", err.Error())
+	}
+	
+	// Test CLI function with run command but no stage (should return error)
+	err = RunCLI(context.Background(), []string{"run"})
+	if err == nil {
+		t.Error("RunCLI() expected error for run without stage, got nil")
+	}
+	if !strings.Contains(err.Error(), "run command requires a stage name") {
+		t.Errorf("RunCLI() error = %v, want error containing 'run command requires a stage name'", err.Error())
 	}
 }

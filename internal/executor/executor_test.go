@@ -29,6 +29,7 @@ func (m *mockUI) PrintReproInline(stepName, repro string) {}
 func (m *mockUI) PrintSummary(results []buildfab.Result) {}
 func (m *mockUI) IsVerbose() bool { return m.verbose }
 func (m *mockUI) IsDebug() bool { return m.debug }
+func (m *mockUI) Write(p []byte) (n int, err error) { return len(p), nil }
 
 func TestNew(t *testing.T) {
 	config := &buildfab.Config{

@@ -253,7 +253,7 @@ func runStage(cmd *cobra.Command, args []string) error {
 	
 	// Create UI
 	ui := ui.New(verbose, debug)
-	opts.Output = ui
+	opts.Output = os.Stdout
 	
 	// Create executor
 	exec := executor.New(cfg, opts, ui)
@@ -332,7 +332,7 @@ func runAction(cmd *cobra.Command, args []string) error {
 	
 	// Create UI
 	ui := ui.New(verbose, debug)
-	opts.Output = ui
+	opts.Output = os.Stdout
 	
 	// Create executor
 	exec := executor.New(cfg, opts, ui)

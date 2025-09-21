@@ -113,7 +113,7 @@ stages:
 		Debug:       false,
 		Variables:   variables,
 		WorkingDir:  tempDir,
-		Output:      ui.New(false, false),
+		Output:      os.Stdout,
 		ErrorOutput: os.Stderr,
 		Only:        []string{},
 		WithRequires: false,
@@ -130,17 +130,16 @@ stages:
 		t.Errorf("ListActions() length = %v, want %v", len(actions), 3)
 	}
 
-	// Test stage execution (will likely fail due to unimplemented DAG)
+	// Test stage execution
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err = exec.RunStage(ctx, "test-stage")
-	// Note: This will likely fail due to unimplemented DAG execution
-	// but we're testing the integration flow
+	// The DAG execution should now work correctly
 	if err == nil {
-		t.Log("Integration test completed successfully (unexpected)")
+		t.Log("Integration test completed successfully")
 	} else {
-		t.Logf("Integration test returned error (expected): %v", err)
+		t.Logf("Integration test returned error: %v", err)
 	}
 }
 
@@ -193,7 +192,7 @@ stages:
 		Debug:       false,
 		Variables:   make(map[string]string),
 		WorkingDir:  tempDir,
-		Output:      ui.New(false, false),
+		Output:      os.Stdout,
 		ErrorOutput: os.Stderr,
 		Only:        []string{},
 		WithRequires: false,

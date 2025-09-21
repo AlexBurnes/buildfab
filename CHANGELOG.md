@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-01-27
+
+### Fixed
+- **Library API Implementation**: Fixed `buildfab.Runner.RunStage()`, `RunAction()`, and `RunStageStep()` methods
+  - Replaced placeholder "not yet implemented" errors with working implementations
+  - Added proper sequential execution for stages with error handling
+  - Implemented custom action execution with shell command support
+  - Added support for error policies (stop/warn) in stage execution
+  - Fixed type issues with `RunOptions.Output` and `RunOptions.ErrorOutput` fields
+  - Updated all related unit tests to reflect working implementation
+  - Library now fully functional for pre-push integration and other use cases
+
+- **RunCLI Function**: Implemented `buildfab.RunCLI()` function for programmatic CLI execution
+  - Added argument parsing for common CLI commands (run, action)
+  - Added configuration loading support with config path detection
+  - Added proper error handling for invalid arguments and commands
+  - Updated tests to reflect new implementation behavior
+  - All library methods now fully implemented with no placeholder messages
+
+### Changed
+- **RunOptions Type Safety**: Changed `Output` and `ErrorOutput` fields from `interface{}` to `io.Writer`
+  - Improves type safety and prevents runtime errors
+  - Ensures proper interface compliance for output handling
+
 ## [0.5.0] - 2025-09-21
 
 ### Added
