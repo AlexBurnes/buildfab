@@ -1,9 +1,36 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-**VERSION 0.7.1 RELEASED!** Successfully completed v0.5.0 style output implementation with comprehensive UI improvements and CLI fixes. Implemented beautiful v0.5.0 style formatting with proper headers, stage headers, step execution display, and summary statistics. Fixed all major UI issues including correct summary counts, duplicate step display, skipped step visibility, and CLI flag parsing. **Complete v0.5.0 output compatibility** - header with project info, stage headers, step execution with proper icons and indentation, footer summary with statistics. **Fixed summary counting** - now correctly shows successful step counts instead of 0. **Fixed duplicate steps** - eliminated duplicate version-module step display issue. **Fixed skipped steps** - run-tests now properly shows as skipped when version-module fails. **Fixed CLI flag parsing** - -v pre-push now works correctly with proper argument handling. **Library API integration** - all functionality uses modern buildfab library while maintaining beautiful output formatting.
+**VERSION 0.7.2 RELEASED!** Successfully completed comprehensive API simplification and error message improvements. Implemented beautiful v0.5.0 style formatting with proper headers, stage headers, step execution display, and summary statistics. Fixed all major UI issues including correct summary counts, duplicate step display, skipped step visibility, and CLI flag parsing. **Complete v0.5.0 output compatibility** - header with project info, stage headers, step execution with proper icons and indentation, footer summary with statistics. **Fixed summary counting** - now correctly shows successful step counts instead of 0. **Fixed duplicate steps** - eliminated duplicate version-module step display issue. **Fixed skipped steps** - run-tests now properly shows as skipped when version-module fails. **Fixed CLI flag parsing** - -v pre-push now works correctly with proper argument handling. **Library API integration** - all functionality uses modern buildfab library while maintaining beautiful output formatting.
+
+**MAJOR API SIMPLIFICATION COMPLETED!** Successfully simplified the buildfab library API to address user feedback about callback complexity. Created `SimpleRunner` with basic `RunStage()`, `RunAction()`, and `RunStageStep()` methods that handle all output internally. **Eliminated callback complexity** - consumers no longer need to implement `StepCallback` interface or manage `StepStatus` types. **Kept advanced API** - existing callback-based API remains available for advanced use cases but is now internal. **Updated CLI** - CLI now uses simplified API instead of complex callback system. **Added convenience functions** - `RunStageSimple()` and `RunActionSimple()` for minimal configuration usage. **Comprehensive testing** - added test coverage for simplified API to ensure reliability. **Perfect for consumers** - now consumers can simply call `runner.RunStage(ctx, "stage-name")` with verbose option and all output is handled automatically.
+
+**ENHANCED ERROR MESSAGES COMPLETED!** Successfully implemented v0.5.0 style error messages with proper reproduction instructions and dependency failure details. **Improved error formatting** - instead of generic "command failed: exit status 1", now shows "failed, to check run: [actual command]". **Enhanced skipped messages** - dependency failures now show which specific dependency failed (e.g., "skipped (dependency failed: step-name)"). **Better reproduction instructions** - actual commands are extracted from action configuration and displayed with proper indentation. **Maintained beautiful formatting** - all error messages use v0.5.0 style with proper icons, colors, and alignment. **Comprehensive testing** - added test coverage for enhanced error message functionality. **Perfect user experience** - users get clear, actionable error messages that help them understand and reproduce issues.
+
+**COMMAND ALIGNMENT AND DUPLICATE OUTPUT FIXES COMPLETED!** Successfully fixed command alignment and eliminated duplicate output issues. **Fixed command indentation** - multi-line commands now properly preserve relative indentation structure with 6-space base indentation. **Fixed duplicate output** - eliminated duplicate "FAILED - stage" messages by removing redundant `printSimpleResult` calls from CLI. **Perfect alignment** - commands maintain their original YAML indentation structure while being properly aligned with "to check run:" prefix. **Clean output** - single result message per stage execution with proper summary statistics.
 
 ## Recent Changes
+- **Enhanced Error Messages**: Successfully implemented v0.5.0 style error messages with proper reproduction instructions
+  - Enhanced `SimpleStepCallback.enhanceMessage()` to improve error message formatting
+  - Added `extractCommand()` method to extract actual commands from action configuration
+  - Added `extractFailedDependency()` method to identify which dependency failed
+  - Updated `runCustomAction()` in main library to include reproduction instructions in error messages
+  - Error messages now show "failed, to manually run: [actual command]" instead of generic messages
+  - Skipped messages now show "skipped (dependency failed: [dependency-name])" with specific dependency info
+  - All error messages maintain v0.5.0 style formatting with proper icons, colors, and alignment
+  - Added comprehensive test coverage for enhanced error message functionality
+  - Perfect user experience with clear, actionable error messages that help users reproduce issues
+- **API Simplification**: Successfully simplified buildfab library API to address callback complexity concerns
+  - Created `SimpleRunner` with basic `RunStage()`, `RunAction()`, and `RunStageStep()` methods
+  - Added `SimpleRunOptions` with simplified configuration (no callback setup required)
+  - Implemented `SimpleStepCallback` that handles all output internally with beautiful formatting
+  - Added convenience functions `RunStageSimple()` and `RunActionSimple()` for minimal configuration
+  - Updated CLI to use simplified API instead of complex callback system
+  - Kept existing callback-based API for advanced use cases (now internal)
+  - Added comprehensive test coverage for simplified API functionality
+  - Consumers can now simply call `runner.RunStage(ctx, "stage-name")` with verbose option
+  - All output formatting, step tracking, and result display handled automatically
+  - Perfect for embedding in other tools like pre-push utility
 - **v0.5.0 Style Output Implementation**: Successfully implemented beautiful v0.5.0 style output formatting
   - Added proper header with project info and version display (🚀 buildfab v0.7.1)
   - Added stage header with clean formatting (▶️ Running stage: pre-push)

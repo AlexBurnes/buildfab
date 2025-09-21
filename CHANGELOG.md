@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2025-01-27
+
+### Fixed
+- **Command Alignment Issues**: Fixed multi-line command indentation and duplicate output problems
+  - Fixed multi-line command indentation to properly preserve relative indentation structure with 6-space base indentation
+  - Commands now maintain their original YAML indentation structure while being properly aligned with "to check run:" prefix
+  - Eliminated duplicate "FAILED - stage" messages by removing redundant printSimpleResult calls from CLI
+  - Clean single result message per stage execution with proper summary statistics
+  - Enhanced error message formatting to use "failed, to check run:" instead of "command failed: exit status 1"
+  - Improved skipped step messages to show specific dependency failures (e.g., "skipped (dependency failed: step-name)")
+
+### Changed
+- **API Simplification**: Enhanced SimpleRunner for easier consumption without callback complexity
+  - Simplified command extraction logic to preserve original YAML indentation structure
+  - Updated CLI to use SimpleRunner exclusively, eliminating callback complexity for end users
+  - Maintained advanced callback API for internal use while providing simple public interface
+
 ## [0.7.1] - 2025-01-27
 
 ### Added

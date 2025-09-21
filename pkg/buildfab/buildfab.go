@@ -437,6 +437,7 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 			
 			if err != nil {
 				status = StepStatusError
+				// Use the original error message for the callback, not the wrapped one
 				message = err.Error()
 				r.opts.StepCallback.OnStepError(ctx, step.Action, err)
 			}
@@ -555,7 +556,8 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 	}
 	
 	if err != nil {
-		return fmt.Errorf("command failed: %w", err)
+		// Provide better error message with reproduction instructions
+		return fmt.Errorf("failed, to check run:\n  %s", action.Run)
 	}
 	
 	return nil
