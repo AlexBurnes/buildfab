@@ -13,9 +13,9 @@ All commit messages MUST follow the [Conventional Commits](https://www.conventio
 [optional footer(s)]
 ```
 
-### Required Format
+### Required Format **MANDATORY**
 ```
-<type>(<scope>): <description>
+<type>(<scope>): <version> <description>
 
 <detailed description>
 
@@ -72,7 +72,7 @@ All commit messages MUST follow the [Conventional Commits](https://www.conventio
 ### Commit Command Format
 ```bash
 git add .
-git commit -m "<type>(<scope>): <description>
+git commit -m "<type>(<scope>): <version> <description>
 
 <detailed description>
 
@@ -83,7 +83,7 @@ git commit -m "<type>(<scope>): <description>
 
 **Feature Addition:**
 ```
-feat(ui): add colored output for better user experience
+feat(ui): v1.0.0 add colored output for better user experience
 
 - Implement conditional coloring for status indicators
 - Add cyan headers, green success, red errors, yellow warnings
@@ -95,7 +95,7 @@ Closes #123
 
 **Bug Fix:**
 ```
-fix(tests): resolve mockUI interface compilation errors
+fix(tests): v1.0.1 resolve mockUI interface compilation errors
 
 - Add missing UI interface methods to mockUI test struct
 - Implement all required methods for proper test execution
@@ -107,7 +107,7 @@ Fixes #456
 
 **Documentation Update:**
 ```
-docs(changelog): fix version dates using git log timestamps
+docs(changelog): v1.0.2 fix version dates using git log timestamps
 
 - Correct all version dates to match actual git commit dates
 - Update v1.0.2, v1.0.1, v0.1.0 dates from git log
@@ -117,7 +117,7 @@ docs(changelog): fix version dates using git log timestamps
 
 **Version Bump:**
 ```
-chore(version): bump to v1.0.3 for bug fixes
+chore(version): v1.0.3, version up for bug fixes
 
 - Increment version from v1.0.2 to v1.0.3
 - Update VERSION file with new version number
@@ -148,14 +148,14 @@ git tag v1.0.3
 git tag -l
 git show v1.0.3
 
-# Push tag
-git push origin <version>
+# Push tag, always push tag with branch
+git push origin <branch> --tags
 ```
 
 ### Tag Message (Optional)
 For annotated tags with messages:
 ```bash
-git tag -a v1.0.3 -m "Release v1.0.3: Fix test compilation errors
+git tag -a v1.0.3 -m "v1.0.3: Fix test compilation errors
 
 - Resolve mockUI interface method issues
 - Add comprehensive test coverage

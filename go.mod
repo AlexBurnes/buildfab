@@ -1,11 +1,11 @@
-module github.com/burnes/buildfab
+module github.com/AlexBurnes/buildfab
 
-go 1.22
+go 1.23.1
 
 require (
-	gopkg.in/yaml.v3 v3.0.1
-	golang.org/x/sync v0.6.0
+	github.com/AlexBurnes/version-go v0.8.22
 	github.com/spf13/cobra v1.8.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

@@ -19,8 +19,8 @@ actions:
           echo "Could not get version from bin/$module -V"
           exit 1
         fi
-        if [ "$module_version" != "${{ tag }}" ]; then
-          echo "Version mismatch: bin/$module reports $module_version, expected ${{ tag }}"
+        if [ "$module_version" != "${{ version.version }}"]; then
+          echo "Version mismatch: bin/$module reports $module_version, expected ${{ version.version }}"
           echo "To check manually run: bin/$module -V"
           exit 1
         fi
@@ -40,7 +40,7 @@ actions:
     uses: git@modified
 
 stages:
-  buildfab:
+  pre-push:
     steps:
       - action: version-check
       - action: version-greatest

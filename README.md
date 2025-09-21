@@ -2,13 +2,19 @@
 
 A Go-based CLI utility and library for executing project automation stages and actions defined in YAML configuration files. buildfab provides a flexible framework for running complex, dependency-aware automation workflows with parallel execution capabilities.
 
+[![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
+[![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
+[![Release](https://img.shields.io/badge/release-v0.1.0-orange.svg)](https://github.com/burnes/buildfab/releases)
+
 ## Features
 
 - **YAML-driven configuration**: Define stages and actions in `project.yml` files
 - **DAG-based execution**: Parallel execution with explicit dependencies and cycle detection
-- **Built-in action registry**: Extensible system for common automation tasks
+- **Built-in action registry**: Extensible system for common automation tasks (git checks, version validation)
 - **Custom action support**: Execute shell commands and external tools with variable interpolation
 - **Library API**: Embeddable Go library for integration with other tools
+- **Version integration**: Full integration with AlexBurnes/version-go for comprehensive version support
+- **Variable interpolation**: GitHub-style `${{ }}` syntax for Git and version variables
 - **Cross-platform compatibility**: Linux, Windows, macOS (amd64/arm64)
 
 ## Quick Start
@@ -19,6 +25,9 @@ A Go-based CLI utility and library for executing project automation stages and a
 ```bash
 # Download and install
 curl -sSL https://github.com/burnes/buildfab/releases/latest/download/install.sh | bash
+
+# Or download specific version
+curl -sSL https://github.com/burnes/buildfab/releases/download/v0.1.0/install.sh | bash
 ```
 
 #### Windows (Scoop)
@@ -55,6 +64,18 @@ stages:
 buildfab run pre-push
 ```
 
+3. Run individual actions:
+```bash
+# Check version format
+buildfab action version@check
+
+# Check for untracked files
+buildfab action git@untracked
+
+# List all available actions
+buildfab list-actions
+```
+
 ## Configuration
 
 See [Project Specification](docs/Project-specification.md) for complete configuration reference.
@@ -87,7 +108,7 @@ func main() {
 ## Development
 
 ### Prerequisites
-- Go 1.22+
+- Go 1.23.1+
 - CMake
 - Conan
 
@@ -116,7 +137,7 @@ go test ./... -race
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+Apache License 2.0 - see [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
