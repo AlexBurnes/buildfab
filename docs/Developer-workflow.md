@@ -61,9 +61,9 @@ This document describes the development setup, workflow, and contribution guidel
 
 If version matches current tag, increment version:
 ```bash
-./scripts/version-bump patch    # for bug fixes
-./scripts/version-bump minor    # for new features
-./scripts/version-bump major    # for breaking changes
+scripts/version bump patch    # for bug fixes
+scripts/version bump minor    # for new features
+scripts/version bump major    # for breaking changes
 ```
 
 ### 2. Making Changes
@@ -166,7 +166,7 @@ go test ./internal/... -v
 
 1. **Increment version** (if not done already):
    ```bash
-   ./scripts/version-bump minor
+   scripts/version bump minor
    ```
 
 2. **Update CHANGELOG.md** with new version

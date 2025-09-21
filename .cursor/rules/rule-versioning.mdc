@@ -16,7 +16,7 @@ rule_type: Always
 
 ### Version Change Requirements
 - **Before ANY changes**: Check if VERSION file version matches current git tag.
-- **If versions match**: Suggest user to increment version first using `./scripts/version-bump`.
+- **If versions match**: Suggest user to increment version first using `scripts/version bump <type>`.
 - **Version format**: Must follow `vX.Y.Z` pattern (e.g., `v1.2.3`).
 - **Increment types**: `patch` (bug fixes), `minor` (new features), `major` (breaking changes).
 
@@ -29,9 +29,9 @@ VERSION_FILE=$(cat VERSION 2>/dev/null || echo "none")
 if [[ "$CURRENT_TAG" == "$VERSION_FILE" ]]; then
     echo "⚠️  VERSION file ($VERSION_FILE) matches current tag ($CURRENT_TAG)"
     echo "📝 Suggestion: Increment version before making changes:"
-    echo "   ./scripts/version-bump patch    # for bug fixes"
-    echo "   ./scripts/version-bump minor    # for new features" 
-    echo "   ./scripts/version-bump major    # for breaking changes"
+    echo "   scripts/version bump patch    # for bug fixes"
+    echo "   scripts/version bump minor    # for new features" 
+    echo "   scripts/version bump major    # for breaking changes"
     echo ""
     echo "Then make your changes and follow the workflow in docs/Developer-workflow.md"
 fi
@@ -42,7 +42,7 @@ fi
 2. **Make changes**: Implement features/fixes
 3. **Test**: Run `go test ./... -v`
 4. **Dry run**: `./buildtools/build-goreleaser.sh dry-run`
-5. **Commit**: Use simple commit messages (e.g., "feat: add feature", "fix: resolve bug", "chore: update docs")
+5. **Commit**: Use simple commit messages with version (e.g., "feat: v0.1.1, add feature", "fix: v0.1.1, resolve bug", "chore: v0.1.1, update docs")
 6. **Tag**: `git tag $(cat VERSION)`
 7. **Push**: `git push origin master --tags` (always use --tags when pushing with tags)
 8. **Release**: `./buildtools/build-goreleaser.sh release`
@@ -60,9 +60,9 @@ fi
 ./scripts/check-version-status
 
 # If needed, increment version
-./scripts/version-bump patch    # for bug fixes
-./scripts/version-bump minor    # for new features
-./scripts/version-bump major    # for breaking changes
+scripts/version bump patch    # for bug fixes
+scripts/version bump minor    # for new features
+scripts/version bump major    # for breaking changes
 ```
 
 ### Error Handling
