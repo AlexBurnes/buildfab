@@ -295,10 +295,11 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 			
 			// Skip if already failed and this node requires it
 			if e.hasFailedDependency(node, failed) {
+				failedDeps := e.getFailedDependencyNames(node, failed)
 				result := buildfab.Result{
 					Name:   nodeName,
 					Status: buildfab.StatusSkipped,
-					Message: "skipped (dependency failed)",
+					Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
 				}
 				resultChan <- result
 				continue
@@ -433,6 +434,17 @@ func (e *Executor) hasFailedDependency(node *DAGNode, failed map[string]bool) bo
 	return false
 }
 
+// getFailedDependencyNames returns the names of failed dependencies
+func (e *Executor) getFailedDependencyNames(node *DAGNode, failed map[string]bool) []string {
+	var failedDeps []string
+	for _, dep := range node.Dependencies {
+		if failed[dep] {
+			failedDeps = append(failedDeps, dep)
+		}
+	}
+	return failedDeps
+}
+
 // executeAction executes a single action
 func (e *Executor) executeAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) {
 	if action.Uses != "" {
@@ -486,7 +498,7 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 		// For custom actions, provide the exact command to run manually
 		return buildfab.Result{
 			Status:  buildfab.StatusError,
-			Message: fmt.Sprintf("Command failed. To debug run: %s", action.Run),
+			Message: fmt.Sprintf("Command failed. To debug run:\n%s", action.Run),
 		}, fmt.Errorf("command failed: %w", err)
 	}
 	

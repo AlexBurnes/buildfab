@@ -26,7 +26,12 @@ func New(verbose, debug bool) *UI {
 
 // PrintCLIHeader prints the CLI header
 func (u *UI) PrintCLIHeader(name, version string) {
-	fmt.Fprintf(os.Stderr, "🚀 %s v%s\n", name, version)
+	// Handle version that already has 'v' prefix
+	versionDisplay := version
+	if !strings.HasPrefix(version, "v") {
+		versionDisplay = "v" + version
+	}
+	fmt.Fprintf(os.Stderr, "🚀 %s %s\n", name, versionDisplay)
 	fmt.Fprintf(os.Stderr, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 }
 
@@ -50,27 +55,42 @@ func (u *UI) PrintStepStatus(stepName string, status buildfab.Status, message st
 	
 	switch status {
 	case buildfab.StatusOK:
-		icon = "✅"
+		icon = "✓"
 		color = "\033[32m" // Green
 	case buildfab.StatusWarn:
-		icon = "⚠️"
+		icon = "!"
 		color = "\033[33m" // Yellow
 	case buildfab.StatusError:
-		icon = "❌"
+		icon = "✗"
 		color = "\033[31m" // Red
 	case buildfab.StatusSkipped:
-		icon = "⏭️"
+		icon = "→"
 		color = "\033[90m" // Gray
 	case buildfab.StatusRunning:
-		icon = "🔄"
+		icon = "○"
 		color = "\033[36m" // Cyan
 	default:
-		icon = "❓"
+		icon = "?"
 		color = "\033[37m" // White
 	}
 	
 	reset := "\033[0m"
-	fmt.Fprintf(os.Stderr, "  %s %s%-20s%s %s\n", icon, color, stepName, reset, message)
+	
+	// Handle multi-line messages properly
+	lines := strings.Split(message, "\n")
+	if len(lines) == 1 {
+		// Single line message
+		fmt.Fprintf(os.Stderr, "  %s%s%s %s %s\n", color, icon, reset, stepName, message)
+	} else {
+		// Multi-line message - first line with step name, subsequent lines indented
+		fmt.Fprintf(os.Stderr, "  %s%s%s %s %s\n", color, icon, reset, stepName, lines[0])
+		for _, line := range lines[1:] {
+			if strings.TrimSpace(line) != "" {
+				// Indent subsequent lines with simple spacing
+				fmt.Fprintf(os.Stderr, "    %s\n", line)
+			}
+		}
+	}
 }
 
 // PrintStageResult prints stage result
@@ -117,7 +137,15 @@ func (u *UI) PrintCommandOutput(output string) {
 func (u *UI) PrintRepro(stepName, repro string) {
 	fmt.Fprintf(os.Stderr, "\n")
 	fmt.Fprintf(os.Stderr, "🔧 To reproduce %s:\n", stepName)
-	fmt.Fprintf(os.Stderr, "   %s\n", repro)
+	
+	// Handle multi-line reproduction instructions
+	lines := strings.Split(strings.TrimRight(repro, "\n"), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			// Preserve the original indentation structure
+			fmt.Fprintf(os.Stderr, "%s\n", line)
+		}
+	}
 }
 
 // PrintReproInline prints inline reproduction instructions
@@ -139,23 +167,59 @@ func (u *UI) PrintSummary(results []buildfab.Result) {
 		statusCounts[result.Status]++
 	}
 	
-	for status, count := range statusCounts {
-		if count > 0 {
-			var icon string
-			switch status {
-			case buildfab.StatusOK:
-				icon = "✅"
-			case buildfab.StatusWarn:
-				icon = "⚠️"
-			case buildfab.StatusError:
-				icon = "❌"
-			case buildfab.StatusSkipped:
-				icon = "⏭️"
-			default:
-				icon = "❓"
+	// Define status order for consistent display
+	statusOrder := []buildfab.Status{
+		buildfab.StatusError,
+		buildfab.StatusWarn,
+		buildfab.StatusOK,
+		buildfab.StatusSkipped,
+	}
+	
+	for _, status := range statusOrder {
+		count := statusCounts[status]
+		var icon string
+		var color string
+		
+		switch status {
+		case buildfab.StatusOK:
+			icon = "✓"
+			if count > 0 {
+				color = "\033[32m" // Green
+			} else {
+				color = "\033[90m" // Gray
 			}
-			fmt.Fprintf(os.Stderr, "   %s %s: %d\n", icon, status.String(), count)
+		case buildfab.StatusWarn:
+			icon = "!"
+			if count > 0 {
+				color = "\033[33m" // Yellow
+			} else {
+				color = "\033[90m" // Gray
+			}
+		case buildfab.StatusError:
+			icon = "✗"
+			if count > 0 {
+				color = "\033[31m" // Red
+			} else {
+				color = "\033[90m" // Gray
+			}
+		case buildfab.StatusSkipped:
+			icon = "→"
+			if count > 0 {
+				color = "\033[90m" // Gray
+			} else {
+				color = "\033[90m" // Gray
+			}
+		default:
+			icon = "?"
+			if count > 0 {
+				color = "\033[37m" // White
+			} else {
+				color = "\033[90m" // Gray
+			}
 		}
+		
+		reset := "\033[0m"
+		fmt.Fprintf(os.Stderr, "   %s%s%s %s%-8s %3d%s\n", color, icon, reset, color, status.String(), count, reset)
 	}
 }
 

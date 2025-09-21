@@ -1,6 +1,6 @@
 project:
   name: "buildfab"
-  modules: ["buildfab"]
+  modules: ["buildfab-unexists"]
   bin: "bin"
 
 actions:
@@ -48,9 +48,8 @@ stages:
       # Always run version module validation
       - action: version-module
       
-      # Run tests only for release versions
+      # Run tests after version module validation
       - action: run-tests
-        only: [release]
         require: [version-module]
       
       # Run Git checks for all versions      

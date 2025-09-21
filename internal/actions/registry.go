@@ -161,7 +161,7 @@ func (a *GitModifiedAction) Run(ctx context.Context) (buildfab.Result, error) {
 	if len(modified) > 0 {
 		return buildfab.Result{
 			Status:  buildfab.StatusWarn,
-			Message: fmt.Sprintf("Modified files found: %s", strings.Join(modified, ", ")),
+			Message: "There are modified files, to check run:\n    git status",
 		}, nil // Return nil error for warning status
 	}
 	

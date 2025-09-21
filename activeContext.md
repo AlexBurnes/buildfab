@@ -1,7 +1,7 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-Core implementation phase completed successfully! All major components have been implemented including the library API, CLI interface, DAG execution engine, built-in actions, and version library integration. The project is now fully functional and ready for production use. Version library integration has been fixed to use the official release v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly.
+Core implementation phase completed successfully! All major components have been implemented including the library API, CLI interface, DAG execution engine, built-in actions, and version library integration. The project is now fully functional and ready for production use. Version library integration has been fixed to use the official release v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. Version v0.1.1 released with UI improvements and alignment fixes.
 
 ## Recent Changes
 - **Core library implementation**: Complete library API with Config, Action, Stage, Step, and Result types
@@ -14,9 +14,21 @@ Core implementation phase completed successfully! All major components have been
 - **Variable system**: Git and version variable detection with interpolation support
 - **Action command enhancement**: Built-in actions now work directly without configuration file
 - **Compilation fixes**: Resolved all unused variable errors and compilation issues
+- **Error message improvements**: Enhanced dependency failure messages to show specific dependency names
+- **Execution order fixes**: Fixed run-tests to execute after version-module step by removing release-only condition
+- **Command formatting**: Improved error message formatting for better readability
+- **UI display fixes**: Fixed version display duplicate 'v' prefix and summary color formatting
+- **Output formatting improvements**: Fixed multi-line message alignment and simplified git-modified action messages
+- **Multi-line indentation**: Fixed indentation for subsequent lines in multi-line messages to align properly with message content (improved to use 25 spaces for better emoji alignment)
+- **Icon alignment**: Replaced emoji icons with monospace symbols (✓, !, ✗, →, ○, ?) to ensure consistent alignment across all status indicators
+- **Simplified output format**: Removed unnecessary alignment between command names and descriptions for cleaner output
+- **Colored icons**: Added color to status icons for better visual distinction and readability
+- **Reproduction instructions alignment**: Fixed multi-line reproduction instructions to preserve original indentation structure without adding extra indentation
+- **Command error message indentation**: Removed extra indentation from custom action error messages to preserve original script indentation structure
+- **Summary number alignment**: Improved summary formatting with right-aligned numbers and consistent spacing for better readability (removed unnecessary colon)
+- **Version v0.1.1 release**: Released with comprehensive UI improvements, alignment fixes, and enhanced user experience
 
 ## Next Steps
-- **Release preparation**: Create v0.1.0 release with proper tagging and documentation
 - **Testing suite**: Add comprehensive unit tests, integration tests, and E2E tests
 - **Integration testing**: Test with real project.yml files and pre-push integration
 - **Performance optimization**: Profile and optimize DAG execution and parallel processing

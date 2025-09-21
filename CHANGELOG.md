@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.1] - 2025-01-21
+
+### Fixed
+- **Dependency Error Messages**: Enhanced dependency failure messages to show specific dependency names instead of generic "dependency failed"
+- **Run-tests Execution Order**: Fixed run-tests to execute after version-module step by removing release-only condition
+- **Command Error Formatting**: Improved version-module command error messages to place commands on new lines for better readability
+- **Version Display**: Fixed duplicate 'v' prefix in version display (was showing 'vv0.1.0', now shows 'v0.1.0')
+- **Summary Colors**: Fixed summary color display - counts of 0 now show in gray, counts >0 show in appropriate colors
+- **Output Alignment**: Fixed multi-line message alignment in step status display
+- **Git-modified Message**: Simplified git-modified action message to show concise message with git status command
+- **Multi-line Indentation**: Fixed indentation for subsequent lines in multi-line messages to align properly with message content (improved to use 25 spaces for better emoji alignment)
+- **Icon Alignment**: Replaced emoji icons with monospace symbols (✓, !, ✗, →, ○, ?) to ensure consistent alignment across all status indicators
+- **Simplified Output Format**: Removed unnecessary alignment between command names and descriptions for cleaner output
+- **Colored Icons**: Added color to status icons for better visual distinction and readability
+- **Reproduction Instructions Alignment**: Fixed multi-line reproduction instructions to preserve original indentation structure without adding extra indentation
+- **Command Error Message Indentation**: Removed extra indentation from custom action error messages to preserve original script indentation structure
+- **Summary Number Alignment**: Improved summary formatting with right-aligned numbers and consistent spacing for better readability (removed unnecessary colon)
+
 ## [v0.1.0] - 2025-01-21
 
 ### Added
