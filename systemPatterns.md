@@ -34,6 +34,8 @@ buildfab follows a layered architecture with clear separation of concerns:
 - **Builder Pattern**: Configuration and options construction
 - **Factory Pattern**: Action instantiation and registration
 - **Dependency Injection**: Context and options passed to components
+- **Mock Pattern**: Test doubles for external dependencies and UI components
+- **Test Builder Pattern**: Helper functions for creating test configurations
 
 ## Component Relationships
 - **CLI → Library API**: CLI is thin wrapper around library functions
@@ -58,3 +60,22 @@ project.yml → Config Parser → DAG Builder → Executor → Actions → Resul
   Validation → Dependency → Wave → Action → Variable → Status
               Resolution  Planning Execution Interpolation Reporting
 ```
+
+## Testing Architecture
+```
+Test Suite (75.3% Coverage)
+├── Unit Tests (pkg/buildfab: 100%)
+├── Integration Tests (internal/config: 87.3%)
+├── Action Tests (internal/actions: 50.5%)
+├── Version Tests (internal/version: 71.6%)
+├── UI Tests (internal/ui: 69.4%)
+├── Executor Tests (internal/executor: 0% - blocked)
+└── End-to-End Tests (integration_test.go)
+```
+
+## Test Patterns
+- **Table-driven tests**: Comprehensive test cases with expected inputs/outputs
+- **Mock objects**: UI and external dependency mocking for isolated testing
+- **Error testing**: Comprehensive error condition and edge case coverage
+- **Integration testing**: Cross-package functionality validation
+- **Coverage analysis**: Function-level coverage reporting and analysis

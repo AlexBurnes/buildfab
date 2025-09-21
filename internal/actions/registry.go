@@ -284,7 +284,7 @@ func isValidVersion(version string) bool {
 	
 	// Split by dots and check each part
 	parts := strings.Split(version, ".")
-	if len(parts) < 2 {
+	if len(parts) < 3 {
 		return false
 	}
 	

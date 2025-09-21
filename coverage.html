@@ -1,0 +1,1189 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>actions: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/AlexBurnes/buildfab/internal/actions/registry.go (50.5%)</option>
+				
+				<option value="file1">github.com/AlexBurnes/buildfab/internal/config/config.go (87.3%)</option>
+				
+				<option value="file2">github.com/AlexBurnes/buildfab/internal/version/version.go (71.6%)</option>
+				
+				<option value="file3">github.com/AlexBurnes/buildfab/pkg/buildfab/buildfab.go (100.0%)</option>
+				
+				<option value="file4">github.com/AlexBurnes/buildfab/pkg/buildfab/errors.go (100.0%)</option>
+				
+				<option value="file5">github.com/AlexBurnes/buildfab/pkg/buildfab/types.go (100.0%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">// Package actions provides built-in action implementations
+package actions
+
+import (
+        "context"
+        "fmt"
+        "os"
+        "os/exec"
+        "strings"
+
+        "github.com/AlexBurnes/buildfab/pkg/buildfab"
+)
+
+// Registry manages built-in actions
+type Registry struct {
+        actions map[string]ActionRunner
+}
+
+// ActionRunner defines the interface for action runners
+type ActionRunner interface {
+        Run(ctx context.Context) (buildfab.Result, error)
+        Description() string
+}
+
+// New creates a new action registry
+func New() *Registry <span class="cov8" title="1">{
+        registry := &amp;Registry{
+                actions: make(map[string]ActionRunner),
+        }
+        
+        // Register built-in actions
+        registry.Register("git@untracked", &amp;GitUntrackedAction{})
+        registry.Register("git@uncommitted", &amp;GitUncommittedAction{})
+        registry.Register("git@modified", &amp;GitModifiedAction{})
+        registry.Register("version@check", &amp;VersionCheckAction{})
+        registry.Register("version@check-greatest", &amp;VersionCheckGreatestAction{})
+        
+        return registry
+}</span>
+
+// Register registers a built-in action
+func (r *Registry) Register(name string, runner ActionRunner) <span class="cov8" title="1">{
+        r.actions[name] = runner
+}</span>
+
+// GetRunner returns the runner for a built-in action
+func (r *Registry) GetRunner(name string) (ActionRunner, bool) <span class="cov8" title="1">{
+        runner, exists := r.actions[name]
+        return runner, exists
+}</span>
+
+// ListActions returns all available built-in actions
+func (r *Registry) ListActions() map[string]string <span class="cov8" title="1">{
+        actions := make(map[string]string)
+        for name, runner := range r.actions </span><span class="cov8" title="1">{
+                actions[name] = runner.Description()
+        }</span>
+        <span class="cov8" title="1">return actions</span>
+}
+
+// GitUntrackedAction checks for untracked files
+type GitUntrackedAction struct{}
+
+func (a *GitUntrackedAction) Run(ctx context.Context) (buildfab.Result, error) <span class="cov0" title="0">{
+        cmd := exec.CommandContext(ctx, "git", "status", "--porcelain")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: "Failed to check git status",
+                }, fmt.Errorf("git status failed: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+        untracked := []string{}
+        
+        for _, line := range lines </span><span class="cov0" title="0">{
+                if len(line) &gt;= 2 &amp;&amp; line[:2] == "??" </span><span class="cov0" title="0">{
+                        untracked = append(untracked, strings.TrimSpace(line[2:]))
+                }</span>
+        }
+        
+        <span class="cov0" title="0">if len(untracked) &gt; 0 </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: fmt.Sprintf("Untracked files found: %s", strings.Join(untracked, ", ")),
+                }, fmt.Errorf("untracked files present")
+        }</span>
+        
+        <span class="cov0" title="0">return buildfab.Result{
+                Status:  buildfab.StatusOK,
+                Message: "No untracked files found",
+        }, nil</span>
+}
+
+func (a *GitUntrackedAction) Description() string <span class="cov8" title="1">{
+        return "Check for untracked files"
+}</span>
+
+// GitUncommittedAction checks for uncommitted changes
+type GitUncommittedAction struct{}
+
+func (a *GitUncommittedAction) Run(ctx context.Context) (buildfab.Result, error) <span class="cov0" title="0">{
+        cmd := exec.CommandContext(ctx, "git", "status", "--porcelain")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: "Failed to check git status",
+                }, fmt.Errorf("git status failed: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+        uncommitted := []string{}
+        
+        for _, line := range lines </span><span class="cov0" title="0">{
+                if len(line) &gt;= 2 &amp;&amp; (line[:2] == "M " || line[:2] == "A " || line[:2] == "D " || line[:2] == "R " || line[:2] == "C ") </span><span class="cov0" title="0">{
+                        uncommitted = append(uncommitted, strings.TrimSpace(line[2:]))
+                }</span>
+        }
+        
+        <span class="cov0" title="0">if len(uncommitted) &gt; 0 </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: fmt.Sprintf("Uncommitted changes found: %s", strings.Join(uncommitted, ", ")),
+                }, fmt.Errorf("uncommitted changes present")
+        }</span>
+        
+        <span class="cov0" title="0">return buildfab.Result{
+                Status:  buildfab.StatusOK,
+                Message: "No uncommitted changes found",
+        }, nil</span>
+}
+
+func (a *GitUncommittedAction) Description() string <span class="cov8" title="1">{
+        return "Check for uncommitted changes"
+}</span>
+
+// GitModifiedAction checks for modified files
+type GitModifiedAction struct{}
+
+func (a *GitModifiedAction) Run(ctx context.Context) (buildfab.Result, error) <span class="cov0" title="0">{
+        cmd := exec.CommandContext(ctx, "git", "diff", "--name-only")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: "Failed to check git diff",
+                }, fmt.Errorf("git diff failed: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+        modified := []string{}
+        
+        for _, line := range lines </span><span class="cov0" title="0">{
+                if line != "" </span><span class="cov0" title="0">{
+                        modified = append(modified, line)
+                }</span>
+        }
+        
+        <span class="cov0" title="0">if len(modified) &gt; 0 </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusWarn,
+                        Message: "There are modified files, to check run:\n    git status",
+                }, nil // Return nil error for warning status
+        }</span>
+        
+        <span class="cov0" title="0">return buildfab.Result{
+                Status:  buildfab.StatusOK,
+                Message: "No modified files found",
+        }, nil</span>
+}
+
+func (a *GitModifiedAction) Description() string <span class="cov8" title="1">{
+        return "Check for modified files"
+}</span>
+
+// VersionCheckAction validates version format
+type VersionCheckAction struct{}
+
+func (a *VersionCheckAction) Run(ctx context.Context) (buildfab.Result, error) <span class="cov8" title="1">{
+        // Read VERSION file
+        data, err := os.ReadFile("VERSION")
+        if err != nil </span><span class="cov8" title="1">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: "VERSION file not found",
+                }, fmt.Errorf("VERSION file not found: %w", err)
+        }</span>
+        
+        <span class="cov8" title="1">version := strings.TrimSpace(string(data))
+        if version == "" </span><span class="cov8" title="1">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: "VERSION file is empty",
+                }, fmt.Errorf("VERSION file is empty")
+        }</span>
+        
+        // Basic version format validation
+        <span class="cov8" title="1">if !isValidVersion(version) </span><span class="cov8" title="1">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: fmt.Sprintf("Invalid version format: %s", version),
+                }, fmt.Errorf("invalid version format: %s", version)
+        }</span>
+        
+        <span class="cov8" title="1">return buildfab.Result{
+                Status:  buildfab.StatusOK,
+                Message: fmt.Sprintf("Version format is valid: %s", version),
+        }, nil</span>
+}
+
+func (a *VersionCheckAction) Description() string <span class="cov8" title="1">{
+        return "Validate version format"
+}</span>
+
+// VersionCheckGreatestAction checks if current version is the greatest
+type VersionCheckGreatestAction struct{}
+
+func (a *VersionCheckGreatestAction) Run(ctx context.Context) (buildfab.Result, error) <span class="cov0" title="0">{
+        // Read current version
+        data, err := os.ReadFile("VERSION")
+        if err != nil </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: "VERSION file not found",
+                }, fmt.Errorf("VERSION file not found: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">currentVersion := strings.TrimSpace(string(data))
+        
+        // Get all git tags
+        cmd := exec.CommandContext(ctx, "git", "tag", "--sort=-version:refname")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: "Failed to get git tags",
+                }, fmt.Errorf("git tag failed: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">tags := strings.Split(strings.TrimSpace(string(output)), "\n")
+        if len(tags) == 0 || (len(tags) == 1 &amp;&amp; tags[0] == "") </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusOK,
+                        Message: "No tags found, current version is greatest",
+                }, nil
+        }</span>
+        
+        // Find the greatest tag
+        <span class="cov0" title="0">greatestTag := tags[0]
+        
+        if currentVersion == greatestTag </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusOK,
+                        Message: fmt.Sprintf("Current version %s is the greatest", currentVersion),
+                }, nil
+        }</span>
+        
+        <span class="cov0" title="0">return buildfab.Result{
+                Status:  buildfab.StatusError,
+                Message: fmt.Sprintf("Current version %s is not the greatest. Greatest is %s", currentVersion, greatestTag),
+        }, fmt.Errorf("current version is not the greatest")</span>
+}
+
+func (a *VersionCheckGreatestAction) Description() string <span class="cov8" title="1">{
+        return "Check if current version is the greatest"
+}</span>
+
+// isValidVersion performs basic version format validation
+func isValidVersion(version string) bool <span class="cov8" title="1">{
+        // Basic validation: should start with v and contain numbers
+        if !strings.HasPrefix(version, "v") </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        
+        // Remove v prefix
+        <span class="cov8" title="1">version = version[1:]
+        
+        // Should contain at least one dot
+        if !strings.Contains(version, ".") </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        
+        // Split by dots and check each part
+        <span class="cov8" title="1">parts := strings.Split(version, ".")
+        if len(parts) &lt; 3 </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        
+        // Each part should be numeric or contain valid prerelease identifiers
+        <span class="cov8" title="1">for _, part := range parts </span><span class="cov8" title="1">{
+                if part == "" </span><span class="cov8" title="1">{
+                        return false
+                }</span>
+                // Allow numeric parts and prerelease identifiers
+                <span class="cov8" title="1">if !isValidVersionPart(part) </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+        }
+        
+        <span class="cov8" title="1">return true</span>
+}
+
+// isValidVersionPart validates a version part
+func isValidVersionPart(part string) bool <span class="cov8" title="1">{
+        // Allow numeric parts
+        if isNumeric(part) </span><span class="cov8" title="1">{
+                return true
+        }</span>
+        
+        // Allow prerelease identifiers (alpha, beta, rc, etc.)
+        <span class="cov8" title="1">lower := strings.ToLower(part)
+        if strings.Contains(lower, "alpha") || strings.Contains(lower, "beta") || 
+           strings.Contains(lower, "rc") || strings.Contains(lower, "dev") </span><span class="cov8" title="1">{
+                return true
+        }</span>
+        
+        <span class="cov8" title="1">return false</span>
+}
+
+// isNumeric checks if a string is numeric
+func isNumeric(s string) bool <span class="cov8" title="1">{
+        if s == "" </span><span class="cov8" title="1">{
+                return false
+        }</span>
+        <span class="cov8" title="1">for _, r := range s </span><span class="cov8" title="1">{
+                if r &lt; '0' || r &gt; '9' </span><span class="cov8" title="1">{
+                        return false
+                }</span>
+        }
+        <span class="cov8" title="1">return true</span>
+}</pre>
+		
+		<pre class="file" id="file1" style="display: none">// Package config provides configuration loading and validation functionality.
+package config
+
+import (
+        "context"
+        "fmt"
+        "io"
+        "os"
+        "os/exec"
+        "path/filepath"
+        "strings"
+
+        "gopkg.in/yaml.v3"
+        "github.com/AlexBurnes/buildfab/pkg/buildfab"
+)
+
+// Loader handles loading and parsing configuration files
+type Loader struct {
+        configPath string
+}
+
+// New creates a new configuration loader
+func New(configPath string) *Loader <span class="cov8" title="1">{
+        return &amp;Loader{
+                configPath: configPath,
+        }
+}</span>
+
+// Load loads configuration from the specified file
+func Load(configPath string) (*buildfab.Config, error) <span class="cov8" title="1">{
+        loader := New(configPath)
+        return loader.Load()
+}</span>
+
+// Load loads and parses the configuration file
+func (l *Loader) Load() (*buildfab.Config, error) <span class="cov8" title="1">{
+        // Check if file exists
+        if _, err := os.Stat(l.configPath); os.IsNotExist(err) </span><span class="cov8" title="1">{
+                return nil, fmt.Errorf("configuration file not found: %s", l.configPath)
+        }</span>
+
+        // Open file
+        <span class="cov8" title="1">file, err := os.Open(l.configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to open configuration file: %w", err)
+        }</span>
+        <span class="cov8" title="1">defer file.Close()
+
+        // Read file content
+        content, err := io.ReadAll(file)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read configuration file: %w", err)
+        }</span>
+
+        // Parse YAML
+        <span class="cov8" title="1">var config buildfab.Config
+        if err := yaml.Unmarshal(content, &amp;config); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to parse YAML configuration: %w", err)
+        }</span>
+
+        // Validate configuration
+        <span class="cov8" title="1">if err := config.Validate(); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("configuration validation failed: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;config, nil</span>
+}
+
+// LoadFromDir searches for configuration files in the specified directory
+func LoadFromDir(dir string) (*buildfab.Config, error) <span class="cov8" title="1">{
+        // Common configuration file names
+        configFiles := []string{
+                ".project.yml",
+                ".project.yaml",
+                "project.yml",
+                "project.yaml",
+                "buildfab.yml",
+                "buildfab.yaml",
+        }
+
+        for _, filename := range configFiles </span><span class="cov8" title="1">{
+                configPath := filepath.Join(dir, filename)
+                if _, err := os.Stat(configPath); err == nil </span><span class="cov8" title="1">{
+                        return Load(configPath)
+                }</span>
+        }
+
+        <span class="cov8" title="1">return nil, fmt.Errorf("no configuration file found in directory: %s", dir)</span>
+}
+
+// ResolveVariables resolves variable interpolation in configuration
+func ResolveVariables(config *buildfab.Config, variables map[string]string) error <span class="cov8" title="1">{
+        // Resolve variables in action run commands
+        for i := range config.Actions </span><span class="cov8" title="1">{
+                if config.Actions[i].Run != "" </span><span class="cov8" title="1">{
+                        resolved, err := resolveString(config.Actions[i].Run, variables)
+                        if err != nil </span><span class="cov8" title="1">{
+                                return fmt.Errorf("failed to resolve variables in action %s: %w", config.Actions[i].Name, err)
+                        }</span>
+                        <span class="cov8" title="1">config.Actions[i].Run = resolved</span>
+                }
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// resolveString resolves variable interpolation in a string
+func resolveString(s string, variables map[string]string) (string, error) <span class="cov8" title="1">{
+        result := s
+        
+        // Find all variable references in the format ${{ variable }}
+        for </span><span class="cov8" title="1">{
+                start := strings.Index(result, "${{")
+                if start == -1 </span><span class="cov8" title="1">{
+                        break</span>
+                }
+                
+                <span class="cov8" title="1">end := strings.Index(result[start:], "}}")
+                if end == -1 </span><span class="cov8" title="1">{
+                        return "", fmt.Errorf("unclosed variable reference: %s", result[start:])
+                }</span>
+                
+                <span class="cov8" title="1">end += start + 2 // Adjust for the start position
+                
+                variableName := strings.TrimSpace(result[start+3 : end-2])
+                
+                value, exists := variables[variableName]
+                if !exists </span><span class="cov8" title="1">{
+                        return "", fmt.Errorf("undefined variable: %s", variableName)
+                }</span>
+                
+                <span class="cov8" title="1">result = result[:start] + value + result[end:]</span>
+        }
+        
+        <span class="cov8" title="1">return result, nil</span>
+}
+
+// GetDefaultVariables returns default variables available for interpolation
+func GetDefaultVariables() map[string]string <span class="cov8" title="1">{
+        return map[string]string{
+                "tag":    "", // Will be set by version detection
+                "branch": "", // Will be set by git detection
+        }
+}</span>
+
+// DetectGitVariables detects Git-related variables from the current repository
+func DetectGitVariables(ctx context.Context) (map[string]string, error) <span class="cov8" title="1">{
+        variables := make(map[string]string)
+        
+        // Detect current tag
+        if tag, err := detectGitTag(ctx); err == nil </span><span class="cov0" title="0">{
+                variables["tag"] = tag
+        }</span>
+        
+        // Detect current branch
+        <span class="cov8" title="1">if branch, err := detectGitBranch(ctx); err == nil </span><span class="cov0" title="0">{
+                variables["branch"] = branch
+        }</span>
+        
+        <span class="cov8" title="1">return variables, nil</span>
+}
+
+// detectGitTag detects the current Git tag
+func detectGitTag(ctx context.Context) (string, error) <span class="cov8" title="1">{
+        cmd := exec.CommandContext(ctx, "git", "describe", "--tags", "--abbrev=0")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov8" title="1">{
+                return "", err
+        }</span>
+        <span class="cov0" title="0">return strings.TrimSpace(string(output)), nil</span>
+}
+
+// detectGitBranch detects the current Git branch
+func detectGitBranch(ctx context.Context) (string, error) <span class="cov8" title="1">{
+        cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov8" title="1">{
+                return "", err
+        }</span>
+        <span class="cov0" title="0">return strings.TrimSpace(string(output)), nil</span>
+}</pre>
+		
+		<pre class="file" id="file2" style="display: none">// Package version provides version detection and variable integration
+package version
+
+import (
+        "context"
+        "fmt"
+        "os"
+        "os/exec"
+        "strings"
+
+        "github.com/AlexBurnes/version-go/pkg/version"
+)
+
+// Detector handles version detection and provides version variables
+type Detector struct{}
+
+// New creates a new version detector
+func New() *Detector <span class="cov8" title="1">{
+        return &amp;Detector{}
+}</span>
+
+// VersionInfo represents version information
+type VersionInfo struct {
+        Version string
+        Project string
+        Commit  string
+        Date    string
+        Type    string // release, prerelease, patch, minor, major
+        Major   int
+        Minor   int
+        Patch   int
+}
+
+// DetectCurrentVersion detects the current version from various sources
+func (d *Detector) DetectCurrentVersion(ctx context.Context) (string, error) <span class="cov8" title="1">{
+        // Try to read from VERSION file first
+        if version, err := d.readVersionFile(); err == nil </span><span class="cov8" title="1">{
+                return version, nil
+        }</span>
+        
+        // Fallback to git tag detection
+        <span class="cov8" title="1">if version, err := d.detectGitTag(ctx); err == nil </span><span class="cov0" title="0">{
+                return version, nil
+        }</span>
+        
+        // Final fallback
+        <span class="cov8" title="1">return "unknown", nil</span>
+}
+
+// DetectVersionInfo detects comprehensive version information
+func (d *Detector) DetectVersionInfo(ctx context.Context) (*VersionInfo, error) <span class="cov8" title="1">{
+        info := &amp;VersionInfo{}
+        
+        // Detect version
+        versionStr, err := d.DetectCurrentVersion(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to detect version: %w", err)
+        }</span>
+        <span class="cov8" title="1">info.Version = versionStr
+        
+        // Parse version using version-go library
+        parsedVersion, err := version.Parse(versionStr)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to parse version: %w", err)
+        }</span>
+        
+        <span class="cov8" title="1">info.Major = parsedVersion.Major
+        info.Minor = parsedVersion.Minor
+        info.Patch = parsedVersion.Patch
+        info.Type = parsedVersion.Type.String()
+        
+        // Detect project name (from go.mod or directory)
+        project, err := d.detectProjectName(ctx)
+        if err == nil </span><span class="cov8" title="1">{
+                info.Project = project
+        }</span>
+        
+        // Detect commit hash
+        <span class="cov8" title="1">commit, err := d.detectGitCommit(ctx)
+        if err == nil </span><span class="cov0" title="0">{
+                info.Commit = commit
+        }</span>
+        
+        // Detect build date
+        <span class="cov8" title="1">info.Date = d.detectBuildDate()
+        
+        return info, nil</span>
+}
+
+// GetVersionVariables returns version variables for interpolation
+func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, error) <span class="cov8" title="1">{
+        info, err := d.DetectVersionInfo(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        
+        <span class="cov8" title="1">variables := map[string]string{
+                "version.version": info.Version,
+                "version.project": info.Project,
+                "version.commit":  info.Commit,
+                "version.date":    info.Date,
+                "version.type":    info.Type,
+                "version.major":   fmt.Sprintf("%d", info.Major),
+                "version.minor":   fmt.Sprintf("%d", info.Minor),
+                "version.patch":   fmt.Sprintf("%d", info.Patch),
+        }
+        
+        return variables, nil</span>
+}
+
+// readVersionFile reads the version from the VERSION file
+func (d *Detector) readVersionFile() (string, error) <span class="cov8" title="1">{
+        data, err := os.ReadFile("VERSION")
+        if err != nil </span><span class="cov8" title="1">{
+                return "", err
+        }</span>
+        
+        <span class="cov8" title="1">version := strings.TrimSpace(string(data))
+        if version == "" </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("VERSION file is empty")
+        }</span>
+        
+        <span class="cov8" title="1">return version, nil</span>
+}
+
+// detectGitTag detects the current Git tag
+func (d *Detector) detectGitTag(ctx context.Context) (string, error) <span class="cov8" title="1">{
+        cmd := exec.CommandContext(ctx, "git", "describe", "--tags", "--abbrev=0")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov8" title="1">{
+                return "", err
+        }</span>
+        <span class="cov0" title="0">return strings.TrimSpace(string(output)), nil</span>
+}
+
+// detectProjectName detects the project name
+func (d *Detector) detectProjectName(ctx context.Context) (string, error) <span class="cov8" title="1">{
+        // Try to read from go.mod
+        cmd := exec.CommandContext(ctx, "go", "list", "-m")
+        output, err := cmd.Output()
+        if err == nil </span><span class="cov8" title="1">{
+                module := strings.TrimSpace(string(output))
+                // Extract project name from module path
+                parts := strings.Split(module, "/")
+                if len(parts) &gt; 0 </span><span class="cov8" title="1">{
+                        return parts[len(parts)-1], nil
+                }</span>
+        }
+        
+        // Fallback to current directory name
+        <span class="cov0" title="0">wd, err := os.Getwd()
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        
+        <span class="cov0" title="0">parts := strings.Split(wd, string(os.PathSeparator))
+        if len(parts) &gt; 0 </span><span class="cov0" title="0">{
+                return parts[len(parts)-1], nil
+        }</span>
+        
+        <span class="cov0" title="0">return "unknown", nil</span>
+}
+
+// detectGitCommit detects the current Git commit hash
+func (d *Detector) detectGitCommit(ctx context.Context) (string, error) <span class="cov8" title="1">{
+        cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
+        output, err := cmd.Output()
+        if err != nil </span><span class="cov8" title="1">{
+                return "", err
+        }</span>
+        <span class="cov0" title="0">return strings.TrimSpace(string(output)), nil</span>
+}
+
+// detectBuildDate detects the build date
+func (d *Detector) detectBuildDate() string <span class="cov8" title="1">{
+        // For now, return current time
+        // In a real implementation, this would be set at build time
+        return "unknown"
+}</span>
+
+// determineVersionType determines the type of version using version-go library
+func (d *Detector) determineVersionType(versionStr string) string <span class="cov0" title="0">{
+        parsedVersion, err := version.Parse(versionStr)
+        if err != nil </span><span class="cov0" title="0">{
+                return "invalid"
+        }</span>
+        <span class="cov0" title="0">return parsedVersion.Type.String()</span>
+}</pre>
+		
+		<pre class="file" id="file3" style="display: none">package buildfab
+
+import (
+        "context"
+        "fmt"
+        "os"
+        "runtime"
+        "time"
+)
+
+// Config represents the buildfab configuration loaded from YAML
+type Config struct {
+        Project struct {
+                Name    string   `yaml:"name"`
+                Modules []string `yaml:"modules"`
+                BinDir  string   `yaml:"bin,omitempty"`
+        } `yaml:"project"`
+        
+        Actions []Action `yaml:"actions"`
+        Stages  map[string]Stage `yaml:"stages"`
+}
+
+// Action represents a single action that can be executed
+type Action struct {
+        Name string `yaml:"name"`
+        Run  string `yaml:"run,omitempty"`
+        Uses string `yaml:"uses,omitempty"`
+}
+
+// Stage represents a collection of steps to execute
+type Stage struct {
+        Steps []Step `yaml:"steps"`
+}
+
+// Step represents a single step in a stage
+type Step struct {
+        Action  string   `yaml:"action"`
+        Require []string `yaml:"require,omitempty"`
+        OnError string   `yaml:"onerror,omitempty"`
+        If      string   `yaml:"if,omitempty"`
+        Only    []string `yaml:"only,omitempty"`
+}
+
+// Result represents the result of executing a step
+type Result struct {
+        Name    string
+        Status  Status
+        Message string
+        Error   error
+        Duration time.Duration
+}
+
+// Status represents the execution status of a step
+type Status int
+
+const (
+        StatusPending Status = iota
+        StatusRunning
+        StatusOK
+        StatusWarn
+        StatusError
+        StatusSkipped
+)
+
+// String returns the string representation of the status
+func (s Status) String() string <span class="cov8" title="1">{
+        switch s </span>{
+        case StatusPending:<span class="cov8" title="1">
+                return "PENDING"</span>
+        case StatusRunning:<span class="cov8" title="1">
+                return "RUNNING"</span>
+        case StatusOK:<span class="cov8" title="1">
+                return "OK"</span>
+        case StatusWarn:<span class="cov8" title="1">
+                return "WARN"</span>
+        case StatusError:<span class="cov8" title="1">
+                return "ERROR"</span>
+        case StatusSkipped:<span class="cov8" title="1">
+                return "SKIPPED"</span>
+        default:<span class="cov8" title="1">
+                return "UNKNOWN"</span>
+        }
+}
+
+// RunOptions configures stage execution
+type RunOptions struct {
+        ConfigPath  string            // Path to project.yml (default: ".project.yml")
+        MaxParallel int               // Maximum parallel execution (default: CPU count)
+        Verbose     bool              // Enable verbose output
+        Debug       bool              // Enable debug output
+        Variables   map[string]string // Additional variables for interpolation
+        WorkingDir  string            // Working directory for execution
+        Output      interface{}       // Output writer (default: os.Stdout)
+        ErrorOutput interface{}       // Error output writer (default: os.Stderr)
+        Only        []string          // Only run steps matching these labels
+        WithRequires bool             // Include required dependencies when running single step
+}
+
+// DefaultRunOptions returns default run options
+func DefaultRunOptions() *RunOptions <span class="cov8" title="1">{
+        return &amp;RunOptions{
+                ConfigPath:  ".project.yml",
+                MaxParallel: runtime.NumCPU(),
+                Verbose:     false,
+                Debug:       false,
+                Variables:   make(map[string]string),
+                WorkingDir:  ".",
+                Output:      os.Stdout,
+                ErrorOutput: os.Stderr,
+                Only:        []string{},
+                WithRequires: false,
+        }
+}</span>
+
+// Runner provides the main execution interface
+type Runner struct {
+        config *Config
+        opts   *RunOptions
+}
+
+// NewRunner creates a new buildfab runner
+func NewRunner(config *Config, opts *RunOptions) *Runner <span class="cov8" title="1">{
+        if opts == nil </span><span class="cov8" title="1">{
+                opts = DefaultRunOptions()
+        }</span>
+        <span class="cov8" title="1">return &amp;Runner{
+                config: config,
+                opts:   opts,
+        }</span>
+}
+
+// RunStage executes a specific stage
+func (r *Runner) RunStage(ctx context.Context, stageName string) error <span class="cov8" title="1">{
+        _, exists := r.config.GetStage(stageName)
+        if !exists </span><span class="cov8" title="1">{
+                return fmt.Errorf("stage not found: %s", stageName)
+        }</span>
+
+        // TODO: Implement stage execution with DAG
+        <span class="cov8" title="1">return fmt.Errorf("stage execution not yet implemented")</span>
+}
+
+// RunAction executes a specific action
+func (r *Runner) RunAction(ctx context.Context, actionName string) error <span class="cov8" title="1">{
+        _, exists := r.config.GetAction(actionName)
+        if !exists </span><span class="cov8" title="1">{
+                return fmt.Errorf("action not found: %s", actionName)
+        }</span>
+
+        // TODO: Implement action execution
+        <span class="cov8" title="1">return fmt.Errorf("action execution not yet implemented")</span>
+}
+
+// RunStageStep executes a specific step within a stage
+func (r *Runner) RunStageStep(ctx context.Context, stageName, stepName string) error <span class="cov8" title="1">{
+        stage, exists := r.config.GetStage(stageName)
+        if !exists </span><span class="cov8" title="1">{
+                return fmt.Errorf("stage not found: %s", stageName)
+        }</span>
+
+        // Find the step
+        <span class="cov8" title="1">var targetStep *Step
+        for i, step := range stage.Steps </span><span class="cov8" title="1">{
+                if step.Action == stepName </span><span class="cov8" title="1">{
+                        targetStep = &amp;stage.Steps[i]
+                        break</span>
+                }
+        }
+
+        <span class="cov8" title="1">if targetStep == nil </span><span class="cov8" title="1">{
+                return fmt.Errorf("step not found: %s in stage %s", stepName, stageName)
+        }</span>
+
+        // TODO: Implement step execution
+        <span class="cov8" title="1">return fmt.Errorf("step execution not yet implemented")</span>
+}
+
+// RunCLI executes the buildfab CLI with the given arguments
+func RunCLI(ctx context.Context, args []string) error <span class="cov8" title="1">{
+        // TODO: Implement CLI parsing and execution
+        // This is a placeholder implementation
+        fmt.Fprintf(os.Stderr, "buildfab CLI not yet implemented\n")
+        fmt.Fprintf(os.Stderr, "Arguments: %v\n", args)
+        return fmt.Errorf("not implemented")
+}</span>
+
+// GetAction returns the action with the specified name
+func (c *Config) GetAction(name string) (Action, bool) <span class="cov8" title="1">{
+        for _, action := range c.Actions </span><span class="cov8" title="1">{
+                if action.Name == name </span><span class="cov8" title="1">{
+                        return action, true
+                }</span>
+        }
+        <span class="cov8" title="1">return Action{}, false</span>
+}
+
+// GetStage returns the stage with the specified name
+func (c *Config) GetStage(name string) (Stage, bool) <span class="cov8" title="1">{
+        stage, exists := c.Stages[name]
+        return stage, exists
+}</span>
+
+// Validate validates the configuration
+func (c *Config) Validate() error <span class="cov8" title="1">{
+        if c.Project.Name == "" </span><span class="cov8" title="1">{
+                return fmt.Errorf("project name is required")
+        }</span>
+        
+        <span class="cov8" title="1">if len(c.Actions) == 0 </span><span class="cov8" title="1">{
+                return fmt.Errorf("at least one action is required")
+        }</span>
+        
+        // Validate actions
+        <span class="cov8" title="1">actionNames := make(map[string]bool)
+        for _, action := range c.Actions </span><span class="cov8" title="1">{
+                if action.Name == "" </span><span class="cov8" title="1">{
+                        return fmt.Errorf("action name is required")
+                }</span>
+                
+                <span class="cov8" title="1">if action.Run == "" &amp;&amp; action.Uses == "" </span><span class="cov8" title="1">{
+                        return fmt.Errorf("action %s must have either 'run' or 'uses'", action.Name)
+                }</span>
+                
+                <span class="cov8" title="1">if action.Run != "" &amp;&amp; action.Uses != "" </span><span class="cov8" title="1">{
+                        return fmt.Errorf("action %s cannot have both 'run' and 'uses'", action.Name)
+                }</span>
+                
+                <span class="cov8" title="1">if actionNames[action.Name] </span><span class="cov8" title="1">{
+                        return fmt.Errorf("duplicate action name: %s", action.Name)
+                }</span>
+                <span class="cov8" title="1">actionNames[action.Name] = true</span>
+        }
+        
+        // Validate stages
+        <span class="cov8" title="1">for stageName, stage := range c.Stages </span><span class="cov8" title="1">{
+                if len(stage.Steps) == 0 </span><span class="cov8" title="1">{
+                        return fmt.Errorf("stage %s must have at least one step", stageName)
+                }</span>
+                
+                <span class="cov8" title="1">for i, step := range stage.Steps </span><span class="cov8" title="1">{
+                        if step.Action == "" </span><span class="cov8" title="1">{
+                                return fmt.Errorf("step %d in stage %s must have an action", i+1, stageName)
+                        }</span>
+                        
+                        <span class="cov8" title="1">if !actionNames[step.Action] </span><span class="cov8" title="1">{
+                                return fmt.Errorf("step %d in stage %s references unknown action: %s", i+1, stageName, step.Action)
+                        }</span>
+                        
+                        <span class="cov8" title="1">if step.OnError != "" &amp;&amp; step.OnError != "stop" &amp;&amp; step.OnError != "warn" </span><span class="cov8" title="1">{
+                                return fmt.Errorf("step %d in stage %s has invalid onerror value: %s (must be 'stop' or 'warn')", i+1, stageName, step.OnError)
+                        }</span>
+                        
+                        // Validate only field contains valid values
+                        <span class="cov8" title="1">for _, onlyValue := range step.Only </span><span class="cov8" title="1">{
+                                if onlyValue != "release" &amp;&amp; onlyValue != "prerelease" &amp;&amp; onlyValue != "patch" &amp;&amp; onlyValue != "minor" &amp;&amp; onlyValue != "major" </span><span class="cov8" title="1">{
+                                        return fmt.Errorf("step %d in stage %s has invalid only value: %s (must be 'release', 'prerelease', 'patch', 'minor', or 'major')", i+1, stageName, onlyValue)
+                                }</span>
+                        }
+                }
+        }
+        
+        <span class="cov8" title="1">return nil</span>
+}</pre>
+		
+		<pre class="file" id="file4" style="display: none">package buildfab
+
+import "fmt"
+
+// ConfigurationError represents errors in project.yml configuration
+type ConfigurationError struct {
+        Message string
+        Path    string
+        Line    int
+        Column  int
+}
+
+func (e *ConfigurationError) Error() string <span class="cov8" title="1">{
+        if e.Path != "" </span><span class="cov8" title="1">{
+                return fmt.Sprintf("configuration error in %s at line %d, column %d: %s", e.Path, e.Line, e.Column, e.Message)
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("configuration error: %s", e.Message)</span>
+}
+
+// ExecutionError represents errors during step execution
+type ExecutionError struct {
+        StepName string
+        Action   string
+        Message  string
+        Output   string
+}
+
+func (e *ExecutionError) Error() string <span class="cov8" title="1">{
+        return fmt.Sprintf("execution error in step %q (action %q): %s", e.StepName, e.Action, e.Message)
+}</span>
+
+// DependencyError represents errors in dependency resolution
+type DependencyError struct {
+        Message string
+        Cycle   []string
+}
+
+func (e *DependencyError) Error() string <span class="cov8" title="1">{
+        if len(e.Cycle) &gt; 0 </span><span class="cov8" title="1">{
+                return fmt.Sprintf("dependency error: %s (cycle: %v)", e.Message, e.Cycle)
+        }</span>
+        <span class="cov8" title="1">return fmt.Sprintf("dependency error: %s", e.Message)</span>
+}
+
+// VariableError represents errors in variable interpolation
+type VariableError struct {
+        Variable string
+        Message  string
+}
+
+func (e *VariableError) Error() string <span class="cov8" title="1">{
+        return fmt.Sprintf("variable error for %q: %s", e.Variable, e.Message)
+}</pre>
+		
+		<pre class="file" id="file5" style="display: none">package buildfab
+
+import "time"
+
+// StageResult contains execution results for a stage
+type StageResult struct {
+        StageName string
+        Success   bool
+        Steps     []StepResult
+        Duration  time.Duration
+        Error     error
+}
+
+// StepResult contains execution results for a step
+type StepResult struct {
+        StepName   string
+        ActionName string
+        Status     StepStatus
+        Duration   time.Duration
+        Output     string
+        Error      error
+}
+
+// StepStatus represents the execution status of a step
+type StepStatus int
+
+const (
+        StepStatusPending StepStatus = iota
+        StepStatusRunning
+        StepStatusOK
+        StepStatusWarn
+        StepStatusError
+        StepStatusSkipped
+)
+
+// String returns the string representation of StepStatus
+func (s StepStatus) String() string <span class="cov8" title="1">{
+        switch s </span>{
+        case StepStatusPending:<span class="cov8" title="1">
+                return "pending"</span>
+        case StepStatusRunning:<span class="cov8" title="1">
+                return "running"</span>
+        case StepStatusOK:<span class="cov8" title="1">
+                return "ok"</span>
+        case StepStatusWarn:<span class="cov8" title="1">
+                return "warn"</span>
+        case StepStatusError:<span class="cov8" title="1">
+                return "error"</span>
+        case StepStatusSkipped:<span class="cov8" title="1">
+                return "skipped"</span>
+        default:<span class="cov8" title="1">
+                return "unknown"</span>
+        }
+}</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
