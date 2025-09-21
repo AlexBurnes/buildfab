@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2025-01-27
+
+### Added
+- **v0.5.0 Style Output Implementation**: Successfully implemented beautiful v0.5.0 style output formatting
+  - Added proper header with project info and version display (🚀 buildfab v0.7.1)
+  - Added stage header with clean formatting (▶️ Running stage: pre-push)
+  - Added step execution display with proper icons and indentation (💻 for commands, ✓/✗ for results)
+  - Added footer summary with statistics and status (💥 FAILED/🎉 SUCCESS with duration and counts)
+  - Implemented proper ANSI color codes for green ✓, red ✗, gray →, etc.
+  - Added consistent spacing and professional formatting throughout
+  - Both normal and verbose modes working perfectly with beautiful output
+
+### Fixed
+- **Summary Counting Issue**: Fixed step result collection and summary statistics
+  - Fixed summary to show correct count of successful steps (was showing 0 instead of 2)
+  - Implemented proper result collection in step callbacks to track actual step results
+  - Added deduplication logic to prevent duplicate results in summary
+  - Summary now accurately reflects executed steps: ✓ ok 2, ✗ error 1, → skipped 1
+- **Duplicate Step Display**: Eliminated duplicate version-module step display issue
+  - Added step display deduplication logic to prevent showing same step multiple times
+  - Modified OnStepError to not display anything (OnStepComplete handles all display)
+  - Prevented duplicate display when both OnStepComplete and OnStepError are called
+  - Each step now appears only once in the output with correct status
+- **Skipped Steps Visibility**: Implemented proper skipped step display and dependency resolution
+  - Added getSkippedSteps() function to analyze stage configuration and executed results
+  - Added manual step callback invocation for skipped steps to ensure they appear in output
+  - Fixed run-tests to show as → skipped (dependency failed) when version-module fails
+  - Added proper dependency analysis to identify steps that should be skipped
+  - Skipped steps now appear in both normal and verbose output with correct status
+- **CLI Flag Parsing**: Resolved issue where -v pre-push was not working correctly
+  - Fixed argument parsing logic to handle flags followed by stage names
+  - Added logic to detect when first argument is flag and second argument is stage name
+  - Added automatic "run" command insertion for flag + stage name combinations
+  - All command variations now work: pre-push, -v pre-push, run pre-push, -v run pre-push
+  - Maintained intuitive behavior where stage names can be used directly without explicit run command
+
+### Changed
+- **Library API Integration**: Successfully integrated modern buildfab library while maintaining beautiful output
+  - Replaced internal package usage with pkg/buildfab library API
+  - Implemented CLIStepCallback with v0.5.0 style formatting using library StepCallback interface
+  - Added proper result collection and summary generation using library types
+  - Maintained all beautiful output formatting while using modern library architecture
+  - All functions now use buildfab.LoadConfig(), buildfab.NewRunner(), etc.
+
 ## [0.7.0] - 2025-01-27
 
 ### Added

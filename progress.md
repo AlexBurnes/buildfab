@@ -6,7 +6,7 @@
 - **Go project structure**: Complete cmd/, pkg/, internal/ directories with proper layout
 - **Documentation framework**: All required documentation created following naming conventions
 - **Build infrastructure**: Updated CMake/Conan/GoReleaser configuration for buildfab
-- **Version management**: VERSION file (v0.1.0) and CHANGELOG.md established
+- **Version management**: VERSION file (v0.7.1) and CHANGELOG.md established
 - **Core library implementation**: Complete library API with Config, Action, Stage, Step, and Result types
 - **YAML configuration system**: Full parsing, validation, and variable interpolation with `${{ }}` syntax
 - **DAG execution engine**: Parallel execution with dependency management, cycle detection, and streaming output
@@ -23,7 +23,14 @@
 - **CLI help improvements**: Fixed help usage to show `buildfab [flags] [command]` instead of duplicate usage lines
 - **Default run behavior**: Added default command behavior where first argument is treated as stage name for run command
 - **Enhanced listing commands**: Improved list-actions to show both defined and built-in actions, added list-stages and list-steps commands
-- **UI system**: Colorized output with status indicators, progress reporting, and error handling
+- **UI system**: Beautiful v0.5.0 style output with proper headers, stage headers, step execution display, and summary statistics
+  - Header with project info and version display (🚀 buildfab v0.7.1)
+  - Stage header with clean formatting (▶️ Running stage: pre-push)
+  - Step execution display with proper icons and indentation (💻 for commands, ✓/✗ for results)
+  - Footer summary with statistics and status (💥 FAILED/🎉 SUCCESS with duration and counts)
+  - Proper ANSI color codes for green ✓, red ✗, gray →, etc.
+  - Consistent spacing and professional formatting throughout
+  - Both normal and verbose modes working perfectly
 - **Variable system**: Git and version variable detection with interpolation support
 - **Build system validation**: Successfully tested all build scripts and cross-platform compilation
 - **Error message improvements**: Enhanced dependency failure messages and command error formatting

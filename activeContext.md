@@ -1,9 +1,45 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-**VERSION 0.7.0 RELEASED!** Successfully completed comprehensive step-by-step progress reporting system and version management improvements for the buildfab library. Added `StepCallback` interface with `OnStepStart`, `OnStepComplete`, `OnStepOutput`, and `OnStepError` methods for real-time step execution visibility. **All core functionality implemented** - library API, CLI interface, DAG execution engine, built-in actions, version library integration, step callbacks, and enhanced version validation. **Comprehensive test suite with 100% test success rate** - all core functionality thoroughly tested with unit tests, integration tests, and end-to-end scenarios. Step callback system provides perfect integration for CLI tools, CI/CD systems, and applications needing step-by-step progress reporting. **Backward compatible implementation** - callbacks are optional and default behavior unchanged, ensuring seamless integration with existing code. **Complete documentation and examples** - added comprehensive usage examples and API documentation for step callbacks. **Enhanced version management** - improved version check script with proper validation workflow.
+**VERSION 0.7.1 RELEASED!** Successfully completed v0.5.0 style output implementation with comprehensive UI improvements and CLI fixes. Implemented beautiful v0.5.0 style formatting with proper headers, stage headers, step execution display, and summary statistics. Fixed all major UI issues including correct summary counts, duplicate step display, skipped step visibility, and CLI flag parsing. **Complete v0.5.0 output compatibility** - header with project info, stage headers, step execution with proper icons and indentation, footer summary with statistics. **Fixed summary counting** - now correctly shows successful step counts instead of 0. **Fixed duplicate steps** - eliminated duplicate version-module step display issue. **Fixed skipped steps** - run-tests now properly shows as skipped when version-module fails. **Fixed CLI flag parsing** - -v pre-push now works correctly with proper argument handling. **Library API integration** - all functionality uses modern buildfab library while maintaining beautiful output formatting.
 
 ## Recent Changes
+- **v0.5.0 Style Output Implementation**: Successfully implemented beautiful v0.5.0 style output formatting
+  - Added proper header with project info and version display (🚀 buildfab v0.7.1)
+  - Added stage header with clean formatting (▶️ Running stage: pre-push)
+  - Added step execution display with proper icons and indentation (💻 for commands, ✓/✗ for results)
+  - Added footer summary with statistics and status (💥 FAILED/🎉 SUCCESS with duration and counts)
+  - Implemented proper ANSI color codes for green ✓, red ✗, gray →, etc.
+  - Added consistent spacing and professional formatting throughout
+  - Both normal and verbose modes working perfectly with beautiful output
+- **Fixed Summary Counting Issue**: Corrected step result collection and summary statistics
+  - Fixed summary to show correct count of successful steps (was showing 0 instead of 2)
+  - Implemented proper result collection in step callbacks to track actual step results
+  - Added deduplication logic to prevent duplicate results in summary
+  - Summary now accurately reflects executed steps: ✓ ok 2, ✗ error 1, → skipped 1
+- **Fixed Duplicate Step Display**: Eliminated duplicate version-module step display issue
+  - Added step display deduplication logic to prevent showing same step multiple times
+  - Modified OnStepError to not display anything (OnStepComplete handles all display)
+  - Prevented duplicate display when both OnStepComplete and OnStepError are called
+  - Each step now appears only once in the output with correct status
+- **Fixed Skipped Steps Visibility**: Implemented proper skipped step display and dependency resolution
+  - Added getSkippedSteps() function to analyze stage configuration and executed results
+  - Added manual step callback invocation for skipped steps to ensure they appear in output
+  - Fixed run-tests to show as → skipped (dependency failed) when version-module fails
+  - Added proper dependency analysis to identify steps that should be skipped
+  - Skipped steps now appear in both normal and verbose output with correct status
+- **Fixed CLI Flag Parsing**: Resolved issue where -v pre-push was not working correctly
+  - Fixed argument parsing logic to handle flags followed by stage names
+  - Added logic to detect when first argument is flag and second argument is stage name
+  - Added automatic "run" command insertion for flag + stage name combinations
+  - All command variations now work: pre-push, -v pre-push, run pre-push, -v run pre-push
+  - Maintained intuitive behavior where stage names can be used directly without explicit run command
+- **Library API Integration**: Successfully integrated modern buildfab library while maintaining beautiful output
+  - Replaced internal package usage with pkg/buildfab library API
+  - Implemented CLIStepCallback with v0.5.0 style formatting using library StepCallback interface
+  - Added proper result collection and summary generation using library types
+  - Maintained all beautiful output formatting while using modern library architecture
+  - All functions now use buildfab.LoadConfig(), buildfab.NewRunner(), etc.
 - **Step Callback System Implementation**: Added comprehensive step-by-step progress reporting for buildfab library
   - Added `StepCallback` interface with `OnStepStart`, `OnStepComplete`, `OnStepOutput`, and `OnStepError` methods
   - Added `StepStatus` types (Pending, Running, OK, Warn, Error, Skipped) for detailed status reporting
