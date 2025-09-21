@@ -1,6 +1,6 @@
 project:
   name: "buildfab"
-  modules: ["buildfab-unexists"]
+  modules: ["buildfab"]
   bin: "bin"
 
 actions:

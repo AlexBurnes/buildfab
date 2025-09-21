@@ -12,7 +12,10 @@
 - **DAG execution engine**: Parallel execution with dependency management, cycle detection, and streaming output
 - **Built-in actions**: Git checks (untracked, uncommitted, modified) and version validation actions
 - **Version library integration**: Full integration with AlexBurnes/version-go v0.8.22 providing `${{version.version}}` variables
-- **CLI interface**: Complete cobra-based CLI with run, action, list-actions, and validate commands
+- **CLI interface**: Complete cobra-based CLI with run, action, list-actions, list-stages, list-steps, and validate commands
+- **CLI help improvements**: Fixed help usage to show `buildfab [flags] [command]` instead of duplicate usage lines
+- **Default run behavior**: Added default command behavior where first argument is treated as stage name for run command
+- **Enhanced listing commands**: Improved list-actions to show both defined and built-in actions, added list-stages and list-steps commands
 - **UI system**: Colorized output with status indicators, progress reporting, and error handling
 - **Variable system**: Git and version variable detection with interpolation support
 - **Build system validation**: Successfully tested all build scripts and cross-platform compilation
@@ -59,7 +62,7 @@
 - **Variable system design**: Adopted GitHub-style `${{ }}` syntax for familiar variable interpolation
 
 ## Current Status
-**Phase**: Production Ready - v0.2.0 Released
+**Phase**: Production Ready - v0.3.0 Released
 **Next Milestone**: Testing Suite and Performance Optimization
 **Blockers**: None - fully functional and ready for production use
 **Priority**: Medium - focus on testing and optimization

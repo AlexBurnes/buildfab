@@ -50,12 +50,19 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "buildfab",
+	Use:   "buildfab [flags] [command]",
 	Short: "Buildfab CLI tool for project automation",
 	Long: `buildfab is a Go-based runner for project automations defined in a YAML file.
 It executes stages composed of steps (actions), supports parallel and sequential
-execution via dependencies, and provides a library API for embedding.`,
+execution via dependencies, and provides a library API for embedding.
+
+When no command is specified, the first argument is treated as a stage name for the run command.
+For example: buildfab pre-push is equivalent to buildfab run pre-push`,
 	RunE: runRoot,
+	// Disable automatic command suggestions to allow custom argument handling
+	DisableSuggestions: true,
+	// Allow unknown commands to be handled by runRoot
+	DisableFlagParsing: false,
 }
 
 // runCmd represents the run command
@@ -93,6 +100,23 @@ var validateCmd = &cobra.Command{
 	RunE:  runValidate,
 }
 
+// listStagesCmd represents the list-stages command
+var listStagesCmd = &cobra.Command{
+	Use:   "list-stages",
+	Short: "List defined stages in project configuration",
+	Long:  `List all stages defined in the project configuration file.`,
+	RunE:  runListStages,
+}
+
+// listStepsCmd represents the list-steps command
+var listStepsCmd = &cobra.Command{
+	Use:   "list-steps <stage>",
+	Short: "List steps for a specific stage",
+	Long:  `List all steps defined for a specific stage in the project configuration.`,
+	Args:  cobra.ExactArgs(1),
+	RunE:  runListSteps,
+}
+
 func main() {
 	// Add global flags
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
@@ -112,7 +136,30 @@ func main() {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(actionCmd)
 	rootCmd.AddCommand(listActionsCmd)
+	rootCmd.AddCommand(listStagesCmd)
+	rootCmd.AddCommand(listStepsCmd)
 	rootCmd.AddCommand(validateCmd)
+	
+	// Check if first argument is a known subcommand
+	args := os.Args[1:]
+	if len(args) > 0 {
+		// Check if first argument is a known subcommand
+		knownCommands := []string{"run", "action", "list-actions", "list-stages", "list-steps", "validate", "completion", "help"}
+		isKnownCommand := false
+		for _, cmd := range knownCommands {
+			if args[0] == cmd {
+				isKnownCommand = true
+				break
+			}
+		}
+		
+		// If not a known command and not a flag, treat as stage name
+		if !isKnownCommand && !strings.HasPrefix(args[0], "-") {
+			// Insert "run" as the first argument
+			args = append([]string{"run"}, args...)
+			os.Args = append([]string{os.Args[0]}, args...)
+		}
+	}
 	
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {
@@ -133,8 +180,14 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	
-	// Show help if no arguments
-	return cmd.Help()
+	// If no arguments, show help
+	if len(args) == 0 {
+		return cmd.Help()
+	}
+	
+	// If arguments provided, treat first argument as stage name for run command
+	// This implements the default behavior: buildfab pre-push -> buildfab run pre-push
+	return runStage(cmd, args)
 }
 
 // runStage handles the run command
@@ -304,13 +357,37 @@ func runAction(cmd *cobra.Command, args []string) error {
 
 // runListActions handles the list-actions command
 func runListActions(cmd *cobra.Command, args []string) error {
-	registry := actions.New()
-	actions := registry.ListActions()
+	// Load configuration to get defined actions
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
 	
-	fmt.Println("Available built-in actions:")
+	// Get built-in actions
+	registry := actions.New()
+	builtinActions := registry.ListActions()
+	
+	fmt.Println("Available actions:")
 	fmt.Println()
 	
-	for name, description := range actions {
+	// Show defined actions from configuration
+	if len(cfg.Actions) > 0 {
+		fmt.Println("Defined actions in project configuration:")
+		for _, action := range cfg.Actions {
+			description := "Custom action"
+			if action.Uses != "" {
+				description = fmt.Sprintf("Uses: %s", action.Uses)
+			} else if action.Run != "" {
+				description = "Custom run command"
+			}
+			fmt.Printf("  %-20s %s\n", action.Name, description)
+		}
+		fmt.Println()
+	}
+	
+	// Show built-in actions
+	fmt.Println("Built-in actions:")
+	for name, description := range builtinActions {
 		fmt.Printf("  %-20s %s\n", name, description)
 	}
 	
@@ -329,6 +406,69 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Project: %s\n", cfg.Project.Name)
 	fmt.Printf("Actions: %d\n", len(cfg.Actions))
 	fmt.Printf("Stages: %d\n", len(cfg.Stages))
+	
+	return nil
+}
+
+// runListStages handles the list-stages command
+func runListStages(cmd *cobra.Command, args []string) error {
+	// Load configuration
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	
+	fmt.Println("Defined stages in project configuration:")
+	fmt.Println()
+	
+	if len(cfg.Stages) == 0 {
+		fmt.Println("  No stages defined")
+		return nil
+	}
+	
+	for name, stage := range cfg.Stages {
+		stepCount := len(stage.Steps)
+		description := fmt.Sprintf("%d step(s)", stepCount)
+		fmt.Printf("  %-20s %s\n", name, description)
+	}
+	
+	return nil
+}
+
+// runListSteps handles the list-steps command
+func runListSteps(cmd *cobra.Command, args []string) error {
+	// Load configuration
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	
+	stageName := args[0]
+	
+	// Find the stage
+	stage, exists := cfg.Stages[stageName]
+	if !exists {
+		return fmt.Errorf("stage '%s' not found in configuration", stageName)
+	}
+	
+	fmt.Printf("Steps for stage '%s':\n", stageName)
+	fmt.Println()
+	
+	if len(stage.Steps) == 0 {
+		fmt.Println("  No steps defined")
+		return nil
+	}
+	
+	for i, step := range stage.Steps {
+		description := step.Action
+		if step.If != "" {
+			description += fmt.Sprintf(" (if: %s)", step.If)
+		}
+		if len(step.Only) > 0 {
+			description += fmt.Sprintf(" (only: %s)", strings.Join(step.Only, ","))
+		}
+		fmt.Printf("  %-3d %-20s %s\n", i+1, step.Action, description)
+	}
 	
 	return nil
 }

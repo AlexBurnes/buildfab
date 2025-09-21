@@ -1,7 +1,7 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-Core implementation phase completed successfully! All major components have been implemented including the library API, CLI interface, DAG execution engine, built-in actions, and version library integration. The project is now fully functional and ready for production use. Version library integration has been fixed to use the official release v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. Version v0.1.1 released with UI improvements and alignment fixes. Critical DAG executor streaming bug fixed in v0.1.2 - now properly implements true streaming output with parallel execution while maintaining declaration order. Version v0.2.0 released with complete changes shortcut rule and enhanced semantic commit formatting.
+Core implementation phase completed successfully! All major components have been implemented including the library API, CLI interface, DAG execution engine, built-in actions, and version library integration. The project is now fully functional and ready for production use. Version library integration has been fixed to use the official release v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. Version v0.1.1 released with UI improvements and alignment fixes. Critical DAG executor streaming bug fixed in v0.1.2 - now properly implements true streaming output with parallel execution while maintaining declaration order. Version v0.2.0 released with complete changes shortcut rule and enhanced semantic commit formatting. Version v0.3.0 released with comprehensive CLI improvements including enhanced help system, default run behavior, and new listing commands for better user experience.
 
 ## Recent Changes
 - **Core library implementation**: Complete library API with Config, Action, Stage, Step, and Result types
@@ -31,6 +31,10 @@ Core implementation phase completed successfully! All major components have been
 - **Streaming output improvement**: Changed display logic to show results immediately when they complete, in declaration order, enabling true parallel execution with streaming output
 - **Complete changes shortcut**: Added rule for "complete changes" command that automatically executes full release workflow including version bump, documentation updates, git operations, and push
 - **Semantic commit formatting**: Extended git commit format to require "and write change description on new line" for better semantic formatting and consistency
+- **CLI help improvements**: Fixed help usage to show `buildfab [flags] [command]` instead of duplicate usage lines
+- **Default run behavior**: Added default command behavior where first argument is treated as stage name for run command (e.g., `buildfab pre-push` → `buildfab run pre-push`)
+- **New listing commands**: Added `list-stages`, enhanced `list-actions` to show both defined and built-in actions, and added `list-steps <stage>` command
+- **CLI command structure**: Improved CLI command organization with better help text and usage examples
 
 ## Next Steps
 - **Testing suite**: Add comprehensive unit tests, integration tests, and E2E tests

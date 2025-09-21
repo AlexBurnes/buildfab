@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.3.0] - 2025-01-21
+
+### Added
+- **CLI Help Improvements**: Fixed help usage to show `buildfab [flags] [command]` instead of duplicate usage lines
+- **Default Run Behavior**: Added default command behavior where first argument is treated as stage name for run command
+  - `buildfab pre-push` is now equivalent to `buildfab run pre-push`
+- **List Stages Command**: Added `list-stages` command to list defined stages in project configuration
+- **Enhanced List Actions Command**: Modified `list-actions` command to show both defined actions in project configuration and built-in actions
+- **List Steps Command**: Added `list-steps <stage>` command to list steps for a specific stage defined in project configuration
+
+### Changed
+- **CLI Command Structure**: Improved CLI command organization with better help text and usage examples
+- **Action Listing**: Enhanced action listing to show both custom and built-in actions with proper descriptions
+
 ## [v0.2.0] - 2025-01-21
 
 ### Added
