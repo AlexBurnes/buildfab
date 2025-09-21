@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reproduction Instructions Alignment**: Fixed multi-line reproduction instructions to preserve original indentation structure without adding extra indentation
 - **Command Error Message Indentation**: Removed extra indentation from custom action error messages to preserve original script indentation structure
 - **Summary Number Alignment**: Improved summary formatting with right-aligned numbers and consistent spacing for better readability (removed unnecessary colon)
+- **Workflow Rules Update**: Updated version management rules to use simple commit messages and always push with --tags
 
 ## [v0.1.0] - 2025-01-21
 

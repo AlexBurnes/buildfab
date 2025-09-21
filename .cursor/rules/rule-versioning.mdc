@@ -42,9 +42,9 @@ fi
 2. **Make changes**: Implement features/fixes
 3. **Test**: Run `go test ./... -v`
 4. **Dry run**: `./buildtools/build-goreleaser.sh dry-run`
-5. **Commit**: Use conventional commit messages
+5. **Commit**: Use simple commit messages (e.g., "feat: add feature", "fix: resolve bug", "chore: update docs")
 6. **Tag**: `git tag $(cat VERSION)`
-7. **Push**: `git push origin master && git push origin $(cat VERSION)`
+7. **Push**: `git push origin master --tags` (always use --tags when pushing with tags)
 8. **Release**: `./buildtools/build-goreleaser.sh release`
 
 ## AI Assistant Version Check Protocol
