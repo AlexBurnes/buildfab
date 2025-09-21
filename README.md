@@ -4,7 +4,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.1.2-orange.svg)](https://github.com/burnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.2.0-orange.svg)](https://github.com/burnes/buildfab/releases)
 
 ## Features
 

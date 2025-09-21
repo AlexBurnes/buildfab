@@ -31,6 +31,8 @@
 - **DAG executor streaming fix**: Fixed critical bug in v0.1.2 where DAG executor was not properly implementing streaming output - removed wave-based execution with wg.Wait() and implemented true continuous execution with immediate result display
 - **Streaming output improvement**: Changed display logic to show results immediately when they complete, in declaration order, enabling true parallel execution with streaming output
 - **Release readiness**: All components tested and ready for production use
+- **Complete changes shortcut**: Added rule for "complete changes" command that automatically executes full release workflow including version bump, documentation updates, git operations, and push
+- **Semantic commit formatting**: Extended git commit format to require "and write change description on new line" for better semantic formatting and consistency
 
 ## What's Left to Build
 - **Testing suite**: Unit tests, integration tests, and E2E tests
@@ -57,7 +59,7 @@
 - **Variable system design**: Adopted GitHub-style `${{ }}` syntax for familiar variable interpolation
 
 ## Current Status
-**Phase**: Production Ready - v0.1.2 Released
+**Phase**: Production Ready - v0.2.0 Released
 **Next Milestone**: Testing Suite and Performance Optimization
 **Blockers**: None - fully functional and ready for production use
 **Priority**: Medium - focus on testing and optimization

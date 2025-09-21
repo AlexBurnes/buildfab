@@ -1,7 +1,7 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-Core implementation phase completed successfully! All major components have been implemented including the library API, CLI interface, DAG execution engine, built-in actions, and version library integration. The project is now fully functional and ready for production use. Version library integration has been fixed to use the official release v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. Version v0.1.1 released with UI improvements and alignment fixes. Critical DAG executor streaming bug fixed in v0.1.2 - now properly implements true streaming output with parallel execution while maintaining declaration order.
+Core implementation phase completed successfully! All major components have been implemented including the library API, CLI interface, DAG execution engine, built-in actions, and version library integration. The project is now fully functional and ready for production use. Version library integration has been fixed to use the official release v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. Version v0.1.1 released with UI improvements and alignment fixes. Critical DAG executor streaming bug fixed in v0.1.2 - now properly implements true streaming output with parallel execution while maintaining declaration order. Version v0.2.0 released with complete changes shortcut rule and enhanced semantic commit formatting.
 
 ## Recent Changes
 - **Core library implementation**: Complete library API with Config, Action, Stage, Step, and Result types
@@ -29,6 +29,8 @@ Core implementation phase completed successfully! All major components have been
 - **Version v0.1.1 release**: Released with comprehensive UI improvements, alignment fixes, and enhanced user experience
 - **DAG executor streaming fix**: Fixed critical bug in v0.1.2 where DAG executor was not properly implementing streaming output - removed wave-based execution with wg.Wait() and implemented true continuous execution with immediate result display
 - **Streaming output improvement**: Changed display logic to show results immediately when they complete, in declaration order, enabling true parallel execution with streaming output
+- **Complete changes shortcut**: Added rule for "complete changes" command that automatically executes full release workflow including version bump, documentation updates, git operations, and push
+- **Semantic commit formatting**: Extended git commit format to require "and write change description on new line" for better semantic formatting and consistency
 
 ## Next Steps
 - **Testing suite**: Add comprehensive unit tests, integration tests, and E2E tests

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.2.0] - 2025-01-21
+
+### Added
+- **Complete Changes Shortcut**: Added rule for "complete changes" command that automatically executes full release workflow including version bump, documentation updates, git operations, and push
+- **Semantic Commit Formatting**: Extended git commit format to require "and write change description on new line" for better semantic formatting and consistency
+
 ## [v0.1.2] - 2025-01-21
 
 ### Fixed

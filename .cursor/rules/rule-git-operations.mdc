@@ -17,7 +17,7 @@ All commit messages MUST follow the [Conventional Commits](https://www.conventio
 ```
 <type>(<scope>): <version> <description>
 
-<detailed description>
+and write change description on new line
 
 <footer information>
 ```

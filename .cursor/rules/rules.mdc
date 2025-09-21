@@ -58,6 +58,11 @@ rule_type: Always
   - What changed and why.
   - Links to MPC entries and ADRs (if any).
 
+## Complete Changes Shortcut
+- When user writes "complete changes" (or variations), automatically execute full release workflow
+- See `rule-complete-changes.mdc` for detailed workflow and shortcuts
+- Includes: version bump, memory bank updates, documentation updates, git operations, and push
+
 ## Definition of Done (DoD)
 - Lint & tests pass.
 - CLI help accurate.
