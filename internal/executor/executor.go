@@ -276,7 +276,27 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 	
 	// Start execution goroutine that continuously starts new steps
 	go func() {
-		defer close(resultChan)
+		defer func() {
+			// Wait for all executing goroutines to complete before closing the channel
+			for {
+				mu.Lock()
+				allDone := true
+				for nodeName := range dag {
+					if executing[nodeName] {
+						allDone = false
+						break
+					}
+				}
+				mu.Unlock()
+				
+				if allDone {
+					break
+				}
+				
+				time.Sleep(10 * time.Millisecond)
+			}
+			close(resultChan)
+		}()
 		
 		for {
 			mu.Lock()
@@ -320,7 +340,11 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 						Status: buildfab.StatusSkipped,
 						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
 					}
-					resultChan <- result
+					select {
+					case resultChan <- result:
+					case <-ctx.Done():
+						return
+					}
 					continue
 				}
 				
@@ -331,7 +355,11 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 						Status: buildfab.StatusOK,
 						Message: "skipped (condition not met)",
 					}
-					resultChan <- result
+					select {
+					case resultChan <- result:
+					case <-ctx.Done():
+						return
+					}
 					continue
 				}
 				
@@ -339,7 +367,11 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 				go func(nodeName string, node *DAGNode) {
 					result, _ := e.executeAction(ctx, node.Action)
 					result.Name = nodeName
-					resultChan <- result
+					select {
+					case resultChan <- result:
+					case <-ctx.Done():
+						return
+					}
 				}(nodeName, node)
 			}
 		}

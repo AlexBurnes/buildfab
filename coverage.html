@@ -3,7 +3,7 @@
 <html>
 	<head>
 		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-		<title>actions: Go Coverage Report</title>
+		<title>buildfab: Go Coverage Report</title>
 		<style>
 			body {
 				background: black;
@@ -55,31 +55,523 @@
 			<div id="nav">
 				<select id="files">
 				
-				<option value="file0">github.com/AlexBurnes/buildfab/internal/actions/registry.go (50.5%)</option>
+				<option value="file0">github.com/AlexBurnes/buildfab/cmd/buildfab/main.go (0.0%)</option>
 				
-				<option value="file1">github.com/AlexBurnes/buildfab/internal/config/config.go (87.3%)</option>
+				<option value="file1">github.com/AlexBurnes/buildfab/internal/actions/registry.go (50.5%)</option>
 				
-				<option value="file2">github.com/AlexBurnes/buildfab/internal/version/version.go (71.6%)</option>
+				<option value="file2">github.com/AlexBurnes/buildfab/internal/config/config.go (87.3%)</option>
 				
-				<option value="file3">github.com/AlexBurnes/buildfab/pkg/buildfab/buildfab.go (100.0%)</option>
+				<option value="file3">github.com/AlexBurnes/buildfab/internal/executor/executor.go (73.4%)</option>
 				
-				<option value="file4">github.com/AlexBurnes/buildfab/pkg/buildfab/errors.go (100.0%)</option>
+				<option value="file4">github.com/AlexBurnes/buildfab/internal/ui/ui.go (73.5%)</option>
 				
-				<option value="file5">github.com/AlexBurnes/buildfab/pkg/buildfab/types.go (100.0%)</option>
+				<option value="file5">github.com/AlexBurnes/buildfab/internal/version/version.go (71.6%)</option>
+				
+				<option value="file6">github.com/AlexBurnes/buildfab/pkg/buildfab/buildfab.go (100.0%)</option>
+				
+				<option value="file7">github.com/AlexBurnes/buildfab/pkg/buildfab/errors.go (100.0%)</option>
+				
+				<option value="file8">github.com/AlexBurnes/buildfab/pkg/buildfab/types.go (100.0%)</option>
+				
+				<option value="file9">github.com/AlexBurnes/buildfab/test_version.go (0.0%)</option>
 				
 				</select>
 			</div>
 			<div id="legend">
 				<span>not tracked</span>
 			
-				<span class="cov0">not covered</span>
-				<span class="cov8">covered</span>
+				<span class="cov0">no coverage</span>
+				<span class="cov1">low coverage</span>
+				<span class="cov2">*</span>
+				<span class="cov3">*</span>
+				<span class="cov4">*</span>
+				<span class="cov5">*</span>
+				<span class="cov6">*</span>
+				<span class="cov7">*</span>
+				<span class="cov8">*</span>
+				<span class="cov9">*</span>
+				<span class="cov10">high coverage</span>
 			
 			</div>
 		</div>
 		<div id="content">
 		
-		<pre class="file" id="file0" style="display: none">// Package actions provides built-in action implementations
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "context"
+        "fmt"
+        "os"
+        "os/signal"
+        "strings"
+        "syscall"
+
+        "github.com/spf13/cobra"
+        "github.com/AlexBurnes/buildfab/internal/config"
+        "github.com/AlexBurnes/buildfab/internal/executor"
+        "github.com/AlexBurnes/buildfab/internal/ui"
+        "github.com/AlexBurnes/buildfab/internal/version"
+        "github.com/AlexBurnes/buildfab/internal/actions"
+        "github.com/AlexBurnes/buildfab/pkg/buildfab"
+)
+
+const (
+        appName = "buildfab"
+)
+
+// getVersion reads the version from the VERSION file
+func getVersion() string <span class="cov0" title="0">{
+        data, err := os.ReadFile("VERSION")
+        if err != nil </span><span class="cov0" title="0">{
+                return "unknown"
+        }</span>
+        
+        <span class="cov0" title="0">version := strings.TrimSpace(string(data))
+        if version == "" </span><span class="cov0" title="0">{
+                return "unknown"
+        }</span>
+        
+        <span class="cov0" title="0">return version</span>
+}
+
+// Global flags
+var (
+        verbose       bool
+        debug         bool
+        configPath    string
+        maxParallel   int
+        workingDir    string
+        only          []string
+        withRequires  bool
+        envVars       []string
+)
+
+// rootCmd represents the base command when called without any subcommands
+var rootCmd = &amp;cobra.Command{
+        Use:   "buildfab [flags] [command]",
+        Short: "Buildfab CLI tool for project automation",
+        Long: `buildfab is a Go-based runner for project automations defined in a YAML file.
+It executes stages composed of steps (actions), supports parallel and sequential
+execution via dependencies, and provides a library API for embedding.
+
+When no command is specified, the first argument is treated as a stage name for the run command.
+For example: buildfab pre-push is equivalent to buildfab run pre-push`,
+        RunE: runRoot,
+        // Disable automatic command suggestions to allow custom argument handling
+        DisableSuggestions: true,
+        // Allow unknown commands to be handled by runRoot
+        DisableFlagParsing: false,
+}
+
+// runCmd represents the run command
+var runCmd = &amp;cobra.Command{
+        Use:   "run &lt;stage&gt; [step]",
+        Short: "Run a stage or specific step",
+        Long: `Run a stage or specific step from the project configuration.
+If a step is specified, only that step will be run (with dependencies if --with-requires is set).`,
+        Args: cobra.RangeArgs(1, 2),
+        RunE: runStage,
+}
+
+// actionCmd represents the action command
+var actionCmd = &amp;cobra.Command{
+        Use:   "action &lt;action&gt;",
+        Short: "Run a standalone action",
+        Long:  `Run a standalone action directly without stage context.`,
+        Args:  cobra.ExactArgs(1),
+        RunE:  runAction,
+}
+
+// listActionsCmd represents the list-actions command
+var listActionsCmd = &amp;cobra.Command{
+        Use:   "list-actions",
+        Short: "List available built-in actions",
+        Long:  `List all available built-in actions that can be used in the 'uses' field.`,
+        RunE:  runListActions,
+}
+
+// validateCmd represents the validate command
+var validateCmd = &amp;cobra.Command{
+        Use:   "validate",
+        Short: "Validate project configuration",
+        Long:  `Validate the project.yml configuration file for errors.`,
+        RunE:  runValidate,
+}
+
+// listStagesCmd represents the list-stages command
+var listStagesCmd = &amp;cobra.Command{
+        Use:   "list-stages",
+        Short: "List defined stages in project configuration",
+        Long:  `List all stages defined in the project configuration file.`,
+        RunE:  runListStages,
+}
+
+// listStepsCmd represents the list-steps command
+var listStepsCmd = &amp;cobra.Command{
+        Use:   "list-steps &lt;stage&gt;",
+        Short: "List steps for a specific stage",
+        Long:  `List all steps defined for a specific stage in the project configuration.`,
+        Args:  cobra.ExactArgs(1),
+        RunE:  runListSteps,
+}
+
+func main() <span class="cov0" title="0">{
+        // Add global flags
+        rootCmd.PersistentFlags().BoolVarP(&amp;verbose, "verbose", "v", false, "enable verbose output")
+        rootCmd.PersistentFlags().BoolVarP(&amp;debug, "debug", "d", false, "enable debug output")
+        rootCmd.PersistentFlags().StringVarP(&amp;configPath, "config", "c", ".project.yml", "path to configuration file")
+        rootCmd.PersistentFlags().IntVar(&amp;maxParallel, "max-parallel", 0, "maximum parallel execution (default: CPU count)")
+        rootCmd.PersistentFlags().StringVarP(&amp;workingDir, "working-dir", "w", ".", "working directory for execution")
+        rootCmd.PersistentFlags().StringSliceVar(&amp;only, "only", []string{}, "only run steps matching these labels")
+        rootCmd.PersistentFlags().BoolVar(&amp;withRequires, "with-requires", false, "include required dependencies when running single step")
+        rootCmd.PersistentFlags().StringSliceVar(&amp;envVars, "env", []string{}, "export environment variables to actions")
+        
+        // Add version flags
+        rootCmd.Flags().BoolP("version", "", false, "print version and module name")
+        rootCmd.Flags().BoolP("version-only", "V", false, "print version only")
+        
+        // Add subcommands
+        rootCmd.AddCommand(runCmd)
+        rootCmd.AddCommand(actionCmd)
+        rootCmd.AddCommand(listActionsCmd)
+        rootCmd.AddCommand(listStagesCmd)
+        rootCmd.AddCommand(listStepsCmd)
+        rootCmd.AddCommand(validateCmd)
+        
+        // Check if first argument is a known subcommand
+        args := os.Args[1:]
+        if len(args) &gt; 0 </span><span class="cov0" title="0">{
+                // Check if first argument is a known subcommand
+                knownCommands := []string{"run", "action", "list-actions", "list-stages", "list-steps", "validate", "completion", "help"}
+                isKnownCommand := false
+                for _, cmd := range knownCommands </span><span class="cov0" title="0">{
+                        if args[0] == cmd </span><span class="cov0" title="0">{
+                                isKnownCommand = true
+                                break</span>
+                        }
+                }
+                
+                // If not a known command and not a flag, treat as stage name
+                <span class="cov0" title="0">if !isKnownCommand &amp;&amp; !strings.HasPrefix(args[0], "-") </span><span class="cov0" title="0">{
+                        // Insert "run" as the first argument
+                        args = append([]string{"run"}, args...)
+                        os.Args = append([]string{os.Args[0]}, args...)
+                }</span>
+        }
+        
+        // Execute the root command
+        <span class="cov0" title="0">if err := rootCmd.Execute(); err != nil </span><span class="cov0" title="0">{
+                fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+                os.Exit(1)
+        }</span>
+}
+
+// runRoot handles the root command
+func runRoot(cmd *cobra.Command, args []string) error <span class="cov0" title="0">{
+        // Check if version flags were set
+        if versionFlag, _ := cmd.Flags().GetBool("version"); versionFlag </span><span class="cov0" title="0">{
+                fmt.Printf("%s version %s\n", appName, getVersion())
+                return nil
+        }</span>
+        <span class="cov0" title="0">if versionOnlyFlag, _ := cmd.Flags().GetBool("version-only"); versionOnlyFlag </span><span class="cov0" title="0">{
+                fmt.Printf("%s\n", getVersion())
+                return nil
+        }</span>
+        
+        // If no arguments, show help
+        <span class="cov0" title="0">if len(args) == 0 </span><span class="cov0" title="0">{
+                return cmd.Help()
+        }</span>
+        
+        // If arguments provided, treat first argument as stage name for run command
+        // This implements the default behavior: buildfab pre-push -&gt; buildfab run pre-push
+        <span class="cov0" title="0">return runStage(cmd, args)</span>
+}
+
+// runStage handles the run command
+func runStage(cmd *cobra.Command, args []string) error <span class="cov0" title="0">{
+        // Create context with cancellation
+        ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+        defer cancel()
+        
+        // Load configuration
+        cfg, err := config.Load(configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to load configuration: %w", err)
+        }</span>
+        
+        // Detect Git variables
+        <span class="cov0" title="0">gitVars, err := config.DetectGitVariables(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to detect Git variables: %w", err)
+        }</span>
+        
+        // Detect version variables
+        <span class="cov0" title="0">versionDetector := version.New()
+        versionVars, err := versionDetector.GetVersionVariables(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to detect version variables: %w", err)
+        }</span>
+        
+        // Merge variables
+        <span class="cov0" title="0">variables := make(map[string]string)
+        for k, v := range gitVars </span><span class="cov0" title="0">{
+                variables[k] = v
+        }</span>
+        <span class="cov0" title="0">for k, v := range versionVars </span><span class="cov0" title="0">{
+                variables[k] = v
+        }</span>
+        
+        // Add environment variables
+        <span class="cov0" title="0">for _, envVar := range envVars </span><span class="cov0" title="0">{
+                parts := strings.SplitN(envVar, "=", 2)
+                if len(parts) == 2 </span><span class="cov0" title="0">{
+                        variables[parts[0]] = parts[1]
+                }</span>
+        }
+        
+        // Resolve variables in configuration
+        <span class="cov0" title="0">if err := config.ResolveVariables(cfg, variables); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to resolve variables: %w", err)
+        }</span>
+        
+        // Create run options
+        <span class="cov0" title="0">opts := &amp;buildfab.RunOptions{
+                ConfigPath:   configPath,
+                MaxParallel:  maxParallel,
+                Verbose:      verbose,
+                Debug:        debug,
+                Variables:    variables,
+                WorkingDir:   workingDir,
+                Output:       os.Stdout,
+                ErrorOutput:  os.Stderr,
+                Only:         only,
+                WithRequires: withRequires,
+        }
+        
+        // Create UI
+        ui := ui.New(verbose, debug)
+        opts.Output = ui
+        
+        // Create executor
+        exec := executor.New(cfg, opts, ui)
+        
+        stageName := args[0]
+        
+        // Check if running a specific step
+        if len(args) == 2 </span><span class="cov0" title="0">{
+                stepName := args[1]
+                return exec.RunStageStep(ctx, stageName, stepName)
+        }</span>
+        
+        // Run the entire stage
+        <span class="cov0" title="0">return exec.RunStage(ctx, stageName)</span>
+}
+
+// runAction handles the action command
+func runAction(cmd *cobra.Command, args []string) error <span class="cov0" title="0">{
+        // Create context with cancellation
+        ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+        defer cancel()
+        
+        // Load configuration
+        cfg, err := config.Load(configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to load configuration: %w", err)
+        }</span>
+        
+        // Detect Git variables
+        <span class="cov0" title="0">gitVars, err := config.DetectGitVariables(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to detect Git variables: %w", err)
+        }</span>
+        
+        // Detect version variables
+        <span class="cov0" title="0">versionDetector := version.New()
+        versionVars, err := versionDetector.GetVersionVariables(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to detect version variables: %w", err)
+        }</span>
+        
+        // Merge variables
+        <span class="cov0" title="0">variables := make(map[string]string)
+        for k, v := range gitVars </span><span class="cov0" title="0">{
+                variables[k] = v
+        }</span>
+        <span class="cov0" title="0">for k, v := range versionVars </span><span class="cov0" title="0">{
+                variables[k] = v
+        }</span>
+        
+        // Add environment variables
+        <span class="cov0" title="0">for _, envVar := range envVars </span><span class="cov0" title="0">{
+                parts := strings.SplitN(envVar, "=", 2)
+                if len(parts) == 2 </span><span class="cov0" title="0">{
+                        variables[parts[0]] = parts[1]
+                }</span>
+        }
+        
+        // Resolve variables in configuration
+        <span class="cov0" title="0">if err := config.ResolveVariables(cfg, variables); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to resolve variables: %w", err)
+        }</span>
+        
+        // Create run options
+        <span class="cov0" title="0">opts := &amp;buildfab.RunOptions{
+                ConfigPath:  configPath,
+                MaxParallel: maxParallel,
+                Verbose:     verbose,
+                Debug:       debug,
+                Variables:   variables,
+                WorkingDir:  workingDir,
+                Output:      os.Stdout,
+                ErrorOutput: os.Stderr,
+                Only:        only,
+        }
+        
+        // Create UI
+        ui := ui.New(verbose, debug)
+        opts.Output = ui
+        
+        // Create executor
+        exec := executor.New(cfg, opts, ui)
+        
+        actionName := args[0]
+        
+        // Check if it's a built-in action first
+        registry := actions.New()
+        if runner, exists := registry.GetRunner(actionName); exists </span><span class="cov0" title="0">{
+                // Execute built-in action directly
+                result, err := runner.Run(ctx)
+                ui.PrintStepStatus(actionName, result.Status, result.Message)
+                if err != nil </span><span class="cov0" title="0">{
+                        return err
+                }</span>
+                <span class="cov0" title="0">return nil</span>
+        }
+        
+        // Otherwise, try to run as configuration action
+        <span class="cov0" title="0">return exec.RunAction(ctx, actionName)</span>
+}
+
+// runListActions handles the list-actions command
+func runListActions(cmd *cobra.Command, args []string) error <span class="cov0" title="0">{
+        // Load configuration to get defined actions
+        cfg, err := config.Load(configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to load configuration: %w", err)
+        }</span>
+        
+        // Get built-in actions
+        <span class="cov0" title="0">registry := actions.New()
+        builtinActions := registry.ListActions()
+        
+        fmt.Println("Available actions:")
+        fmt.Println()
+        
+        // Show defined actions from configuration
+        if len(cfg.Actions) &gt; 0 </span><span class="cov0" title="0">{
+                fmt.Println("Defined actions in project configuration:")
+                for _, action := range cfg.Actions </span><span class="cov0" title="0">{
+                        description := "Custom action"
+                        if action.Uses != "" </span><span class="cov0" title="0">{
+                                description = fmt.Sprintf("Uses: %s", action.Uses)
+                        }</span> else<span class="cov0" title="0"> if action.Run != "" </span><span class="cov0" title="0">{
+                                description = "Custom run command"
+                        }</span>
+                        <span class="cov0" title="0">fmt.Printf("  %-20s %s\n", action.Name, description)</span>
+                }
+                <span class="cov0" title="0">fmt.Println()</span>
+        }
+        
+        // Show built-in actions
+        <span class="cov0" title="0">fmt.Println("Built-in actions:")
+        for name, description := range builtinActions </span><span class="cov0" title="0">{
+                fmt.Printf("  %-20s %s\n", name, description)
+        }</span>
+        
+        <span class="cov0" title="0">return nil</span>
+}
+
+// runValidate handles the validate command
+func runValidate(cmd *cobra.Command, args []string) error <span class="cov0" title="0">{
+        // Load configuration
+        cfg, err := config.Load(configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("configuration validation failed: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">fmt.Printf("Configuration is valid: %s\n", configPath)
+        fmt.Printf("Project: %s\n", cfg.Project.Name)
+        fmt.Printf("Actions: %d\n", len(cfg.Actions))
+        fmt.Printf("Stages: %d\n", len(cfg.Stages))
+        
+        return nil</span>
+}
+
+// runListStages handles the list-stages command
+func runListStages(cmd *cobra.Command, args []string) error <span class="cov0" title="0">{
+        // Load configuration
+        cfg, err := config.Load(configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to load configuration: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">fmt.Println("Defined stages in project configuration:")
+        fmt.Println()
+        
+        if len(cfg.Stages) == 0 </span><span class="cov0" title="0">{
+                fmt.Println("  No stages defined")
+                return nil
+        }</span>
+        
+        <span class="cov0" title="0">for name, stage := range cfg.Stages </span><span class="cov0" title="0">{
+                stepCount := len(stage.Steps)
+                description := fmt.Sprintf("%d step(s)", stepCount)
+                fmt.Printf("  %-20s %s\n", name, description)
+        }</span>
+        
+        <span class="cov0" title="0">return nil</span>
+}
+
+// runListSteps handles the list-steps command
+func runListSteps(cmd *cobra.Command, args []string) error <span class="cov0" title="0">{
+        // Load configuration
+        cfg, err := config.Load(configPath)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to load configuration: %w", err)
+        }</span>
+        
+        <span class="cov0" title="0">stageName := args[0]
+        
+        // Find the stage
+        stage, exists := cfg.Stages[stageName]
+        if !exists </span><span class="cov0" title="0">{
+                return fmt.Errorf("stage '%s' not found in configuration", stageName)
+        }</span>
+        
+        <span class="cov0" title="0">fmt.Printf("Steps for stage '%s':\n", stageName)
+        fmt.Println()
+        
+        if len(stage.Steps) == 0 </span><span class="cov0" title="0">{
+                fmt.Println("  No steps defined")
+                return nil
+        }</span>
+        
+        <span class="cov0" title="0">for i, step := range stage.Steps </span><span class="cov0" title="0">{
+                description := step.Action
+                if step.If != "" </span><span class="cov0" title="0">{
+                        description += fmt.Sprintf(" (if: %s)", step.If)
+                }</span>
+                <span class="cov0" title="0">if len(step.Only) &gt; 0 </span><span class="cov0" title="0">{
+                        description += fmt.Sprintf(" (only: %s)", strings.Join(step.Only, ","))
+                }</span>
+                <span class="cov0" title="0">fmt.Printf("  %-3d %-20s %s\n", i+1, step.Action, description)</span>
+        }
+        
+        <span class="cov0" title="0">return nil</span>
+}</pre>
+		
+		<pre class="file" id="file1" style="display: none">// Package actions provides built-in action implementations
 package actions
 
 import (
@@ -104,7 +596,7 @@ type ActionRunner interface {
 }
 
 // New creates a new action registry
-func New() *Registry <span class="cov8" title="1">{
+func New() *Registry <span class="cov4" title="4">{
         registry := &amp;Registry{
                 actions: make(map[string]ActionRunner),
         }
@@ -120,23 +612,23 @@ func New() *Registry <span class="cov8" title="1">{
 }</span>
 
 // Register registers a built-in action
-func (r *Registry) Register(name string, runner ActionRunner) <span class="cov8" title="1">{
+func (r *Registry) Register(name string, runner ActionRunner) <span class="cov7" title="21">{
         r.actions[name] = runner
 }</span>
 
 // GetRunner returns the runner for a built-in action
-func (r *Registry) GetRunner(name string) (ActionRunner, bool) <span class="cov8" title="1">{
+func (r *Registry) GetRunner(name string) (ActionRunner, bool) <span class="cov3" title="3">{
         runner, exists := r.actions[name]
         return runner, exists
 }</span>
 
 // ListActions returns all available built-in actions
-func (r *Registry) ListActions() map[string]string <span class="cov8" title="1">{
+func (r *Registry) ListActions() map[string]string <span class="cov1" title="1">{
         actions := make(map[string]string)
-        for name, runner := range r.actions </span><span class="cov8" title="1">{
+        for name, runner := range r.actions </span><span class="cov4" title="5">{
                 actions[name] = runner.Description()
         }</span>
-        <span class="cov8" title="1">return actions</span>
+        <span class="cov1" title="1">return actions</span>
 }
 
 // GitUntrackedAction checks for untracked files
@@ -174,7 +666,7 @@ func (a *GitUntrackedAction) Run(ctx context.Context) (buildfab.Result, error) <
         }, nil</span>
 }
 
-func (a *GitUntrackedAction) Description() string <span class="cov8" title="1">{
+func (a *GitUntrackedAction) Description() string <span class="cov3" title="3">{
         return "Check for untracked files"
 }</span>
 
@@ -213,7 +705,7 @@ func (a *GitUncommittedAction) Run(ctx context.Context) (buildfab.Result, error)
         }, nil</span>
 }
 
-func (a *GitUncommittedAction) Description() string <span class="cov8" title="1">{
+func (a *GitUncommittedAction) Description() string <span class="cov3" title="3">{
         return "Check for uncommitted changes"
 }</span>
 
@@ -252,25 +744,25 @@ func (a *GitModifiedAction) Run(ctx context.Context) (buildfab.Result, error) <s
         }, nil</span>
 }
 
-func (a *GitModifiedAction) Description() string <span class="cov8" title="1">{
+func (a *GitModifiedAction) Description() string <span class="cov3" title="3">{
         return "Check for modified files"
 }</span>
 
 // VersionCheckAction validates version format
 type VersionCheckAction struct{}
 
-func (a *VersionCheckAction) Run(ctx context.Context) (buildfab.Result, error) <span class="cov8" title="1">{
+func (a *VersionCheckAction) Run(ctx context.Context) (buildfab.Result, error) <span class="cov4" title="4">{
         // Read VERSION file
         data, err := os.ReadFile("VERSION")
-        if err != nil </span><span class="cov8" title="1">{
+        if err != nil </span><span class="cov1" title="1">{
                 return buildfab.Result{
                         Status:  buildfab.StatusError,
                         Message: "VERSION file not found",
                 }, fmt.Errorf("VERSION file not found: %w", err)
         }</span>
         
-        <span class="cov8" title="1">version := strings.TrimSpace(string(data))
-        if version == "" </span><span class="cov8" title="1">{
+        <span class="cov3" title="3">version := strings.TrimSpace(string(data))
+        if version == "" </span><span class="cov1" title="1">{
                 return buildfab.Result{
                         Status:  buildfab.StatusError,
                         Message: "VERSION file is empty",
@@ -278,20 +770,20 @@ func (a *VersionCheckAction) Run(ctx context.Context) (buildfab.Result, error) <
         }</span>
         
         // Basic version format validation
-        <span class="cov8" title="1">if !isValidVersion(version) </span><span class="cov8" title="1">{
+        <span class="cov2" title="2">if !isValidVersion(version) </span><span class="cov1" title="1">{
                 return buildfab.Result{
                         Status:  buildfab.StatusError,
                         Message: fmt.Sprintf("Invalid version format: %s", version),
                 }, fmt.Errorf("invalid version format: %s", version)
         }</span>
         
-        <span class="cov8" title="1">return buildfab.Result{
+        <span class="cov1" title="1">return buildfab.Result{
                 Status:  buildfab.StatusOK,
                 Message: fmt.Sprintf("Version format is valid: %s", version),
         }, nil</span>
 }
 
-func (a *VersionCheckAction) Description() string <span class="cov8" title="1">{
+func (a *VersionCheckAction) Description() string <span class="cov3" title="3">{
         return "Validate version format"
 }</span>
 
@@ -344,76 +836,76 @@ func (a *VersionCheckGreatestAction) Run(ctx context.Context) (buildfab.Result, 
         }, fmt.Errorf("current version is not the greatest")</span>
 }
 
-func (a *VersionCheckGreatestAction) Description() string <span class="cov8" title="1">{
+func (a *VersionCheckGreatestAction) Description() string <span class="cov3" title="3">{
         return "Check if current version is the greatest"
 }</span>
 
 // isValidVersion performs basic version format validation
-func isValidVersion(version string) bool <span class="cov8" title="1">{
+func isValidVersion(version string) bool <span class="cov7" title="16">{
         // Basic validation: should start with v and contain numbers
-        if !strings.HasPrefix(version, "v") </span><span class="cov8" title="1">{
+        if !strings.HasPrefix(version, "v") </span><span class="cov3" title="3">{
                 return false
         }</span>
         
         // Remove v prefix
-        <span class="cov8" title="1">version = version[1:]
+        <span class="cov6" title="13">version = version[1:]
         
         // Should contain at least one dot
-        if !strings.Contains(version, ".") </span><span class="cov8" title="1">{
+        if !strings.Contains(version, ".") </span><span class="cov2" title="2">{
                 return false
         }</span>
         
         // Split by dots and check each part
-        <span class="cov8" title="1">parts := strings.Split(version, ".")
-        if len(parts) &lt; 3 </span><span class="cov8" title="1">{
+        <span class="cov6" title="11">parts := strings.Split(version, ".")
+        if len(parts) &lt; 3 </span><span class="cov1" title="1">{
                 return false
         }</span>
         
         // Each part should be numeric or contain valid prerelease identifiers
-        <span class="cov8" title="1">for _, part := range parts </span><span class="cov8" title="1">{
-                if part == "" </span><span class="cov8" title="1">{
+        <span class="cov6" title="10">for _, part := range parts </span><span class="cov8" title="29">{
+                if part == "" </span><span class="cov3" title="3">{
                         return false
                 }</span>
                 // Allow numeric parts and prerelease identifiers
-                <span class="cov8" title="1">if !isValidVersionPart(part) </span><span class="cov0" title="0">{
+                <span class="cov8" title="26">if !isValidVersionPart(part) </span><span class="cov0" title="0">{
                         return false
                 }</span>
         }
         
-        <span class="cov8" title="1">return true</span>
+        <span class="cov5" title="7">return true</span>
 }
 
 // isValidVersionPart validates a version part
-func isValidVersionPart(part string) bool <span class="cov8" title="1">{
+func isValidVersionPart(part string) bool <span class="cov9" title="40">{
         // Allow numeric parts
-        if isNumeric(part) </span><span class="cov8" title="1">{
+        if isNumeric(part) </span><span class="cov8" title="25">{
                 return true
         }</span>
         
         // Allow prerelease identifiers (alpha, beta, rc, etc.)
-        <span class="cov8" title="1">lower := strings.ToLower(part)
+        <span class="cov6" title="15">lower := strings.ToLower(part)
         if strings.Contains(lower, "alpha") || strings.Contains(lower, "beta") || 
-           strings.Contains(lower, "rc") || strings.Contains(lower, "dev") </span><span class="cov8" title="1">{
+           strings.Contains(lower, "rc") || strings.Contains(lower, "dev") </span><span class="cov6" title="11">{
                 return true
         }</span>
         
-        <span class="cov8" title="1">return false</span>
+        <span class="cov4" title="4">return false</span>
 }
 
 // isNumeric checks if a string is numeric
-func isNumeric(s string) bool <span class="cov8" title="1">{
-        if s == "" </span><span class="cov8" title="1">{
+func isNumeric(s string) bool <span class="cov9" title="49">{
+        if s == "" </span><span class="cov2" title="2">{
                 return false
         }</span>
-        <span class="cov8" title="1">for _, r := range s </span><span class="cov8" title="1">{
-                if r &lt; '0' || r &gt; '9' </span><span class="cov8" title="1">{
+        <span class="cov9" title="47">for _, r := range s </span><span class="cov10" title="59">{
+                if r &lt; '0' || r &gt; '9' </span><span class="cov7" title="19">{
                         return false
                 }</span>
         }
-        <span class="cov8" title="1">return true</span>
+        <span class="cov8" title="28">return true</span>
 }</pre>
 		
-		<pre class="file" id="file1" style="display: none">// Package config provides configuration loading and validation functionality.
+		<pre class="file" id="file2" style="display: none">// Package config provides configuration loading and validation functionality.
 package config
 
 import (
@@ -435,31 +927,31 @@ type Loader struct {
 }
 
 // New creates a new configuration loader
-func New(configPath string) *Loader <span class="cov8" title="1">{
+func New(configPath string) *Loader <span class="cov6" title="5">{
         return &amp;Loader{
                 configPath: configPath,
         }
 }</span>
 
 // Load loads configuration from the specified file
-func Load(configPath string) (*buildfab.Config, error) <span class="cov8" title="1">{
+func Load(configPath string) (*buildfab.Config, error) <span class="cov5" title="4">{
         loader := New(configPath)
         return loader.Load()
 }</span>
 
 // Load loads and parses the configuration file
-func (l *Loader) Load() (*buildfab.Config, error) <span class="cov8" title="1">{
+func (l *Loader) Load() (*buildfab.Config, error) <span class="cov5" title="4">{
         // Check if file exists
-        if _, err := os.Stat(l.configPath); os.IsNotExist(err) </span><span class="cov8" title="1">{
+        if _, err := os.Stat(l.configPath); os.IsNotExist(err) </span><span class="cov1" title="1">{
                 return nil, fmt.Errorf("configuration file not found: %s", l.configPath)
         }</span>
 
         // Open file
-        <span class="cov8" title="1">file, err := os.Open(l.configPath)
+        <span class="cov4" title="3">file, err := os.Open(l.configPath)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to open configuration file: %w", err)
         }</span>
-        <span class="cov8" title="1">defer file.Close()
+        <span class="cov4" title="3">defer file.Close()
 
         // Read file content
         content, err := io.ReadAll(file)
@@ -468,21 +960,21 @@ func (l *Loader) Load() (*buildfab.Config, error) <span class="cov8" title="1">{
         }</span>
 
         // Parse YAML
-        <span class="cov8" title="1">var config buildfab.Config
+        <span class="cov4" title="3">var config buildfab.Config
         if err := yaml.Unmarshal(content, &amp;config); err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to parse YAML configuration: %w", err)
         }</span>
 
         // Validate configuration
-        <span class="cov8" title="1">if err := config.Validate(); err != nil </span><span class="cov0" title="0">{
+        <span class="cov4" title="3">if err := config.Validate(); err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("configuration validation failed: %w", err)
         }</span>
 
-        <span class="cov8" title="1">return &amp;config, nil</span>
+        <span class="cov4" title="3">return &amp;config, nil</span>
 }
 
 // LoadFromDir searches for configuration files in the specified directory
-func LoadFromDir(dir string) (*buildfab.Config, error) <span class="cov8" title="1">{
+func LoadFromDir(dir string) (*buildfab.Config, error) <span class="cov4" title="3">{
         // Common configuration file names
         configFiles := []string{
                 ".project.yml",
@@ -493,65 +985,65 @@ func LoadFromDir(dir string) (*buildfab.Config, error) <span class="cov8" title=
                 "buildfab.yaml",
         }
 
-        for _, filename := range configFiles </span><span class="cov8" title="1">{
+        for _, filename := range configFiles </span><span class="cov7" title="8">{
                 configPath := filepath.Join(dir, filename)
-                if _, err := os.Stat(configPath); err == nil </span><span class="cov8" title="1">{
+                if _, err := os.Stat(configPath); err == nil </span><span class="cov3" title="2">{
                         return Load(configPath)
                 }</span>
         }
 
-        <span class="cov8" title="1">return nil, fmt.Errorf("no configuration file found in directory: %s", dir)</span>
+        <span class="cov1" title="1">return nil, fmt.Errorf("no configuration file found in directory: %s", dir)</span>
 }
 
 // ResolveVariables resolves variable interpolation in configuration
-func ResolveVariables(config *buildfab.Config, variables map[string]string) error <span class="cov8" title="1">{
+func ResolveVariables(config *buildfab.Config, variables map[string]string) error <span class="cov4" title="3">{
         // Resolve variables in action run commands
-        for i := range config.Actions </span><span class="cov8" title="1">{
-                if config.Actions[i].Run != "" </span><span class="cov8" title="1">{
+        for i := range config.Actions </span><span class="cov4" title="3">{
+                if config.Actions[i].Run != "" </span><span class="cov4" title="3">{
                         resolved, err := resolveString(config.Actions[i].Run, variables)
-                        if err != nil </span><span class="cov8" title="1">{
+                        if err != nil </span><span class="cov3" title="2">{
                                 return fmt.Errorf("failed to resolve variables in action %s: %w", config.Actions[i].Name, err)
                         }</span>
-                        <span class="cov8" title="1">config.Actions[i].Run = resolved</span>
+                        <span class="cov1" title="1">config.Actions[i].Run = resolved</span>
                 }
         }
 
-        <span class="cov8" title="1">return nil</span>
+        <span class="cov1" title="1">return nil</span>
 }
 
 // resolveString resolves variable interpolation in a string
-func resolveString(s string, variables map[string]string) (string, error) <span class="cov8" title="1">{
+func resolveString(s string, variables map[string]string) (string, error) <span class="cov8" title="9">{
         result := s
         
         // Find all variable references in the format ${{ variable }}
-        for </span><span class="cov8" title="1">{
+        for </span><span class="cov10" title="15">{
                 start := strings.Index(result, "${{")
-                if start == -1 </span><span class="cov8" title="1">{
+                if start == -1 </span><span class="cov6" title="5">{
                         break</span>
                 }
                 
-                <span class="cov8" title="1">end := strings.Index(result[start:], "}}")
-                if end == -1 </span><span class="cov8" title="1">{
+                <span class="cov8" title="10">end := strings.Index(result[start:], "}}")
+                if end == -1 </span><span class="cov3" title="2">{
                         return "", fmt.Errorf("unclosed variable reference: %s", result[start:])
                 }</span>
                 
-                <span class="cov8" title="1">end += start + 2 // Adjust for the start position
+                <span class="cov7" title="8">end += start + 2 // Adjust for the start position
                 
                 variableName := strings.TrimSpace(result[start+3 : end-2])
                 
                 value, exists := variables[variableName]
-                if !exists </span><span class="cov8" title="1">{
+                if !exists </span><span class="cov3" title="2">{
                         return "", fmt.Errorf("undefined variable: %s", variableName)
                 }</span>
                 
-                <span class="cov8" title="1">result = result[:start] + value + result[end:]</span>
+                <span class="cov6" title="6">result = result[:start] + value + result[end:]</span>
         }
         
-        <span class="cov8" title="1">return result, nil</span>
+        <span class="cov6" title="5">return result, nil</span>
 }
 
 // GetDefaultVariables returns default variables available for interpolation
-func GetDefaultVariables() map[string]string <span class="cov8" title="1">{
+func GetDefaultVariables() map[string]string <span class="cov1" title="1">{
         return map[string]string{
                 "tag":    "", // Will be set by version detection
                 "branch": "", // Will be set by git detection
@@ -559,7 +1051,7 @@ func GetDefaultVariables() map[string]string <span class="cov8" title="1">{
 }</span>
 
 // DetectGitVariables detects Git-related variables from the current repository
-func DetectGitVariables(ctx context.Context) (map[string]string, error) <span class="cov8" title="1">{
+func DetectGitVariables(ctx context.Context) (map[string]string, error) <span class="cov1" title="1">{
         variables := make(map[string]string)
         
         // Detect current tag
@@ -568,34 +1060,934 @@ func DetectGitVariables(ctx context.Context) (map[string]string, error) <span cl
         }</span>
         
         // Detect current branch
-        <span class="cov8" title="1">if branch, err := detectGitBranch(ctx); err == nil </span><span class="cov0" title="0">{
+        <span class="cov1" title="1">if branch, err := detectGitBranch(ctx); err == nil </span><span class="cov0" title="0">{
                 variables["branch"] = branch
         }</span>
         
-        <span class="cov8" title="1">return variables, nil</span>
+        <span class="cov1" title="1">return variables, nil</span>
 }
 
 // detectGitTag detects the current Git tag
-func detectGitTag(ctx context.Context) (string, error) <span class="cov8" title="1">{
+func detectGitTag(ctx context.Context) (string, error) <span class="cov1" title="1">{
         cmd := exec.CommandContext(ctx, "git", "describe", "--tags", "--abbrev=0")
         output, err := cmd.Output()
-        if err != nil </span><span class="cov8" title="1">{
+        if err != nil </span><span class="cov1" title="1">{
                 return "", err
         }</span>
         <span class="cov0" title="0">return strings.TrimSpace(string(output)), nil</span>
 }
 
 // detectGitBranch detects the current Git branch
-func detectGitBranch(ctx context.Context) (string, error) <span class="cov8" title="1">{
+func detectGitBranch(ctx context.Context) (string, error) <span class="cov1" title="1">{
         cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
         output, err := cmd.Output()
-        if err != nil </span><span class="cov8" title="1">{
+        if err != nil </span><span class="cov1" title="1">{
                 return "", err
         }</span>
         <span class="cov0" title="0">return strings.TrimSpace(string(output)), nil</span>
 }</pre>
 		
-		<pre class="file" id="file2" style="display: none">// Package version provides version detection and variable integration
+		<pre class="file" id="file3" style="display: none">// Package executor provides DAG-based execution functionality for buildfab
+package executor
+
+import (
+        "context"
+        "fmt"
+        "os"
+        "os/exec"
+        "strings"
+        "sync"
+        "time"
+
+        "github.com/AlexBurnes/buildfab/internal/actions"
+        "github.com/AlexBurnes/buildfab/internal/version"
+        "github.com/AlexBurnes/buildfab/pkg/buildfab"
+)
+
+// Executor handles execution of buildfab stages and actions
+type Executor struct {
+        config         *buildfab.Config
+        opts           *buildfab.RunOptions
+        registry       *actions.Registry
+        versionDetector *version.Detector
+}
+
+// UI defines the interface for user interface operations
+type UI interface {
+        PrintCLIHeader(name, version string)
+        PrintProjectCheck(projectName, version string)
+        PrintStepStatus(stepName string, status buildfab.Status, message string)
+        PrintStageHeader(stageName string)
+        PrintStageResult(stageName string, success bool, duration time.Duration)
+        PrintCommand(command string)
+        PrintCommandOutput(output string)
+        PrintRepro(stepName, repro string)
+        PrintReproInline(stepName, repro string)
+        PrintSummary(results []buildfab.Result)
+        IsVerbose() bool
+        IsDebug() bool
+}
+
+// New creates a new executor
+func New(config *buildfab.Config, opts *buildfab.RunOptions, ui UI) *Executor <span class="cov10" title="6">{
+        return &amp;Executor{
+                config:         config,
+                opts:           opts,
+                registry:       actions.New(),
+                versionDetector: version.New(),
+        }
+}</span>
+
+// RunStage executes a specific stage
+func (e *Executor) RunStage(ctx context.Context, stageName string) error <span class="cov6" title="3">{
+        stage, exists := e.config.GetStage(stageName)
+        if !exists </span><span class="cov1" title="1">{
+                return fmt.Errorf("stage not found: %s", stageName)
+        }</span>
+
+        // Print CLI header and project check
+        <span class="cov4" title="2">version := e.getVersion()
+        if ui, ok := e.opts.Output.(UI); ok </span><span class="cov4" title="2">{
+                ui.PrintCLIHeader("buildfab", version)
+                ui.PrintProjectCheck(e.config.Project.Name, version)
+                ui.PrintStageHeader(stageName)
+        }</span>
+
+        <span class="cov4" title="2">start := time.Now()
+
+        // Build execution DAG
+        dag, err := e.buildDAG(stage.Steps)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to build execution DAG: %w", err)
+        }</span>
+
+        // Execute DAG with streaming output in declaration order
+        <span class="cov4" title="2">results, err := e.executeDAGWithStreaming(ctx, dag, stage.Steps)
+        
+        duration := time.Since(start)
+        success := err == nil &amp;&amp; !hasErrors(results)
+        
+        if ui, ok := e.opts.Output.(UI); ok </span><span class="cov4" title="2">{
+                ui.PrintStageResult(stageName, success, duration)
+                ui.PrintSummary(results)
+        }</span>
+
+        <span class="cov4" title="2">return err</span>
+}
+
+// RunAction executes a specific action
+func (e *Executor) RunAction(ctx context.Context, actionName string) error <span class="cov4" title="2">{
+        action, exists := e.config.GetAction(actionName)
+        if !exists </span><span class="cov1" title="1">{
+                return fmt.Errorf("action not found: %s", actionName)
+        }</span>
+
+        <span class="cov1" title="1">result, _ := e.executeAction(ctx, action)
+        if ui, ok := e.opts.Output.(UI); ok </span><span class="cov1" title="1">{
+                ui.PrintStepStatus(actionName, result.Status, result.Message)
+        }</span>
+        
+        <span class="cov1" title="1">if result.Error != nil </span><span class="cov0" title="0">{
+                return result.Error
+        }</span>
+        
+        <span class="cov1" title="1">return nil</span>
+}
+
+// RunStageStep executes a specific step within a stage
+func (e *Executor) RunStageStep(ctx context.Context, stageName, stepName string) error <span class="cov6" title="3">{
+        stage, exists := e.config.GetStage(stageName)
+        if !exists </span><span class="cov1" title="1">{
+                return fmt.Errorf("stage not found: %s", stageName)
+        }</span>
+
+        // Find the step
+        <span class="cov4" title="2">var targetStep *buildfab.Step
+        for i, step := range stage.Steps </span><span class="cov6" title="3">{
+                if step.Action == stepName </span><span class="cov1" title="1">{
+                        targetStep = &amp;stage.Steps[i]
+                        break</span>
+                }
+        }
+
+        <span class="cov4" title="2">if targetStep == nil </span><span class="cov1" title="1">{
+                return fmt.Errorf("step not found: %s in stage %s", stepName, stageName)
+        }</span>
+
+        // Get the action
+        <span class="cov1" title="1">action, exists := e.config.GetAction(targetStep.Action)
+        if !exists </span><span class="cov0" title="0">{
+                return fmt.Errorf("action not found: %s", targetStep.Action)
+        }</span>
+
+        // Execute the action
+        <span class="cov1" title="1">result, _ := e.executeAction(ctx, action)
+        if ui, ok := e.opts.Output.(UI); ok </span><span class="cov1" title="1">{
+                ui.PrintStepStatus(stepName, result.Status, result.Message)
+        }</span>
+        
+        <span class="cov1" title="1">if result.Error != nil </span><span class="cov0" title="0">{
+                return result.Error
+        }</span>
+        
+        <span class="cov1" title="1">return nil</span>
+}
+
+// ListActions returns all available actions
+func (e *Executor) ListActions() []buildfab.Action <span class="cov1" title="1">{
+        return e.config.Actions
+}</span>
+
+// DAGNode represents a node in the execution DAG
+type DAGNode struct {
+        Step         buildfab.Step
+        Action       buildfab.Action
+        Dependencies []string
+        Dependents   []string
+}
+
+// buildDAG builds the execution DAG from stage steps
+func (e *Executor) buildDAG(steps []buildfab.Step) (map[string]*DAGNode, error) <span class="cov4" title="2">{
+        dag := make(map[string]*DAGNode)
+        
+        // Create nodes for each step
+        for _, step := range steps </span><span class="cov6" title="3">{
+                action, exists := e.config.GetAction(step.Action)
+                if !exists </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("action not found: %s", step.Action)
+                }</span>
+                
+                <span class="cov6" title="3">node := &amp;DAGNode{
+                        Step:         step,
+                        Action:       action,
+                        Dependencies: step.Require,
+                        Dependents:   []string{},
+                }
+                
+                dag[step.Action] = node</span>
+        }
+        
+        // Build dependency relationships
+        <span class="cov4" title="2">for _, node := range dag </span><span class="cov6" title="3">{
+                for _, dep := range node.Dependencies </span><span class="cov0" title="0">{
+                        if depNode, exists := dag[dep]; exists </span><span class="cov0" title="0">{
+                                depNode.Dependents = append(depNode.Dependents, node.Step.Action)
+                        }</span> else<span class="cov0" title="0"> {
+                                return nil, fmt.Errorf("dependency not found: %s", dep)
+                        }</span>
+                }
+        }
+        
+        // Check for cycles
+        <span class="cov4" title="2">if err := e.detectCycles(dag); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("circular dependency detected: %w", err)
+        }</span>
+        
+        <span class="cov4" title="2">return dag, nil</span>
+}
+
+// detectCycles detects cycles in the DAG using DFS
+func (e *Executor) detectCycles(dag map[string]*DAGNode) error <span class="cov4" title="2">{
+        visited := make(map[string]bool)
+        recStack := make(map[string]bool)
+        
+        var dfs func(string) error
+        dfs = func(nodeName string) error </span><span class="cov6" title="3">{
+                if recStack[nodeName] </span><span class="cov0" title="0">{
+                        return fmt.Errorf("cycle detected involving node: %s", nodeName)
+                }</span>
+                <span class="cov6" title="3">if visited[nodeName] </span><span class="cov0" title="0">{
+                        return nil
+                }</span>
+                
+                <span class="cov6" title="3">visited[nodeName] = true
+                recStack[nodeName] = true
+                defer func() </span><span class="cov6" title="3">{ recStack[nodeName] = false }</span>()
+                
+                <span class="cov6" title="3">node := dag[nodeName]
+                for _, dep := range node.Dependencies </span><span class="cov0" title="0">{
+                        if err := dfs(dep); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+                
+                <span class="cov6" title="3">return nil</span>
+        }
+        
+        <span class="cov4" title="2">for nodeName := range dag </span><span class="cov6" title="3">{
+                if !visited[nodeName] </span><span class="cov6" title="3">{
+                        if err := dfs(nodeName); err != nil </span><span class="cov0" title="0">{
+                                return err
+                        }</span>
+                }
+        }
+        
+        <span class="cov4" title="2">return nil</span>
+}
+
+// executeDAGWithStreaming executes the DAG with streaming output in declaration order
+func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*DAGNode, steps []buildfab.Step) ([]buildfab.Result, error) <span class="cov4" title="2">{
+        var results []buildfab.Result
+        completed := make(map[string]bool)
+        failed := make(map[string]bool)
+        displayed := make(map[string]bool)
+        executing := make(map[string]bool)
+        
+        // Create a map of results by step name for quick lookup
+        resultMap := make(map[string]buildfab.Result)
+        
+        // Create channels for communication
+        resultChan := make(chan buildfab.Result, len(dag))
+        done := make(chan bool)
+        
+        // Mutex for thread-safe access to shared state
+        var mu sync.Mutex
+        
+        // Start a goroutine to handle results and display them
+        go func() </span><span class="cov4" title="2">{
+                defer close(done)
+                for result := range resultChan </span><span class="cov6" title="3">{
+                        mu.Lock()
+                        results = append(results, result)
+                        resultMap[result.Name] = result
+                        completed[result.Name] = true
+                        executing[result.Name] = false
+                        
+                        if result.Status == buildfab.StatusError </span><span class="cov0" title="0">{
+                                failed[result.Name] = true
+                        }</span>
+                        <span class="cov6" title="3">mu.Unlock()
+                        
+                        // Display immediately if it's ready in declaration order
+                        e.displayStepImmediately(result.Name, steps, resultMap, displayed, completed)</span>
+                }
+        }()
+        
+        // Start execution goroutine that continuously starts new steps
+        <span class="cov4" title="2">go func() </span><span class="cov4" title="2">{
+                defer func() </span><span class="cov4" title="2">{
+                        // Wait for all executing goroutines to complete before closing the channel
+                        for </span><span class="cov7" title="4">{
+                                mu.Lock()
+                                allDone := true
+                                for nodeName := range dag </span><span class="cov9" title="5">{
+                                        if executing[nodeName] </span><span class="cov4" title="2">{
+                                                allDone = false
+                                                break</span>
+                                        }
+                                }
+                                <span class="cov7" title="4">mu.Unlock()
+                                
+                                if allDone </span><span class="cov4" title="2">{
+                                        break</span>
+                                }
+                                
+                                <span class="cov4" title="2">time.Sleep(10 * time.Millisecond)</span>
+                        }
+                        <span class="cov4" title="2">close(resultChan)</span>
+                }()
+                
+                <span class="cov4" title="2">for </span><span class="cov7" title="4">{
+                        mu.Lock()
+                        readySteps := e.getReadyStepsLocked(dag, completed, failed, executing)
+                        mu.Unlock()
+                        
+                        if len(readySteps) == 0 </span><span class="cov4" title="2">{
+                                // Check if all steps are completed or executing
+                                mu.Lock()
+                                allDone := true
+                                for nodeName := range dag </span><span class="cov6" title="3">{
+                                        if !completed[nodeName] &amp;&amp; !executing[nodeName] </span><span class="cov0" title="0">{
+                                                allDone = false
+                                                break</span>
+                                        }
+                                }
+                                <span class="cov4" title="2">mu.Unlock()
+                                
+                                if allDone </span><span class="cov4" title="2">{
+                                        break</span>
+                                }
+                                
+                                // Wait a bit before checking again
+                                <span class="cov0" title="0">time.Sleep(10 * time.Millisecond)
+                                continue</span>
+                        }
+                        
+                        // Start ready steps immediately without waiting
+                        <span class="cov4" title="2">for _, nodeName := range readySteps </span><span class="cov6" title="3">{
+                                node := dag[nodeName]
+                                
+                                mu.Lock()
+                                executing[nodeName] = true
+                                mu.Unlock()
+                                
+                                // Skip if already failed and this node requires it
+                                if e.hasFailedDependency(node, failed) </span><span class="cov0" title="0">{
+                                        failedDeps := e.getFailedDependencyNames(node, failed)
+                                        result := buildfab.Result{
+                                                Name:   nodeName,
+                                                Status: buildfab.StatusSkipped,
+                                                Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
+                                        }
+                                        select </span>{
+                                        case resultChan &lt;- result:<span class="cov0" title="0"></span>
+                                        case &lt;-ctx.Done():<span class="cov0" title="0">
+                                                return</span>
+                                        }
+                                        <span class="cov0" title="0">continue</span>
+                                }
+                                
+                                // Check if step should be executed based on conditions
+                                <span class="cov6" title="3">if !e.shouldExecuteStep(ctx, node) </span><span class="cov0" title="0">{
+                                        result := buildfab.Result{
+                                                Name:   nodeName,
+                                                Status: buildfab.StatusOK,
+                                                Message: "skipped (condition not met)",
+                                        }
+                                        select </span>{
+                                        case resultChan &lt;- result:<span class="cov0" title="0"></span>
+                                        case &lt;-ctx.Done():<span class="cov0" title="0">
+                                                return</span>
+                                        }
+                                        <span class="cov0" title="0">continue</span>
+                                }
+                                
+                                // Execute the node in parallel
+                                <span class="cov6" title="3">go func(nodeName string, node *DAGNode) </span><span class="cov6" title="3">{
+                                        result, _ := e.executeAction(ctx, node.Action)
+                                        result.Name = nodeName
+                                        select </span>{
+                                        case resultChan &lt;- result:<span class="cov6" title="3"></span>
+                                        case &lt;-ctx.Done():<span class="cov0" title="0">
+                                                return</span>
+                                        }
+                                }(nodeName, node)
+                        }
+                }
+        }()
+        
+        <span class="cov4" title="2">&lt;-done
+        
+        // Display any remaining steps that weren't displayed yet
+        e.displayRemainingSteps(steps, resultMap, displayed)
+        
+        return results, nil</span>
+}
+
+// displayStepImmediately displays a step immediately if it can be shown (streaming)
+func (e *Executor) displayStepImmediately(stepName string, steps []buildfab.Step, resultMap map[string]buildfab.Result, displayed map[string]bool, completed map[string]bool) <span class="cov6" title="3">{
+        // Find the step in declaration order
+        for _, step := range steps </span><span class="cov7" title="4">{
+                if step.Action == stepName </span><span class="cov6" title="3">{
+                        // Check if all previous steps in declaration order have been completed
+                        if e.canDisplayStepImmediately(step, steps, displayed, completed) </span><span class="cov4" title="2">{
+                                if result, exists := resultMap[stepName]; exists </span><span class="cov4" title="2">{
+                                        if ui, ok := e.opts.Output.(UI); ok </span><span class="cov4" title="2">{
+                                                ui.PrintStepStatus(stepName, result.Status, result.Message)
+                                        }</span>
+                                        <span class="cov4" title="2">displayed[stepName] = true</span>
+                                }
+                        }
+                        <span class="cov6" title="3">break</span>
+                }
+        }
+}
+
+// canDisplayStepImmediately checks if a step can be displayed immediately (streaming)
+func (e *Executor) canDisplayStepImmediately(step buildfab.Step, steps []buildfab.Step, displayed map[string]bool, completed map[string]bool) bool <span class="cov6" title="3">{
+        // Find the position of this step in the declaration order
+        stepIndex := -1
+        for i, s := range steps </span><span class="cov7" title="4">{
+                if s.Action == step.Action </span><span class="cov6" title="3">{
+                        stepIndex = i
+                        break</span>
+                }
+        }
+        
+        <span class="cov6" title="3">if stepIndex == -1 </span><span class="cov0" title="0">{
+                return false
+        }</span>
+        
+        // Check if all previous steps in declaration order have been displayed
+        // This allows true streaming - steps can complete out of order but display in order
+        <span class="cov6" title="3">for i := 0; i &lt; stepIndex; i++ </span><span class="cov1" title="1">{
+                if !displayed[steps[i].Action] </span><span class="cov1" title="1">{
+                        return false
+                }</span>
+        }
+        
+        <span class="cov4" title="2">return true</span>
+}
+
+// getReadyStepsLocked returns steps that are ready to execute (thread-safe version)
+func (e *Executor) getReadyStepsLocked(dag map[string]*DAGNode, completed map[string]bool, failed map[string]bool, executing map[string]bool) []string <span class="cov7" title="4">{
+        var ready []string
+        
+        for nodeName, node := range dag </span><span class="cov10" title="6">{
+                if completed[nodeName] || executing[nodeName] </span><span class="cov6" title="3">{
+                        continue</span>
+                }
+                
+                // Check if all dependencies are completed
+                <span class="cov6" title="3">if e.allDependenciesCompleted(node, completed) </span><span class="cov6" title="3">{
+                        ready = append(ready, nodeName)
+                }</span>
+        }
+        
+        <span class="cov7" title="4">return ready</span>
+}
+
+// displayRemainingSteps displays any steps that weren't displayed yet
+func (e *Executor) displayRemainingSteps(steps []buildfab.Step, resultMap map[string]buildfab.Result, displayed map[string]bool) <span class="cov4" title="2">{
+        for _, step := range steps </span><span class="cov6" title="3">{
+                if !displayed[step.Action] </span><span class="cov1" title="1">{
+                        if result, exists := resultMap[step.Action]; exists </span><span class="cov1" title="1">{
+                                if ui, ok := e.opts.Output.(UI); ok </span><span class="cov1" title="1">{
+                                        ui.PrintStepStatus(step.Action, result.Status, result.Message)
+                                }</span>
+                                <span class="cov1" title="1">displayed[step.Action] = true</span>
+                        }
+                }
+        }
+}
+
+// allDependenciesCompleted checks if all dependencies are completed
+func (e *Executor) allDependenciesCompleted(node *DAGNode, completed map[string]bool) bool <span class="cov6" title="3">{
+        for _, dep := range node.Dependencies </span><span class="cov0" title="0">{
+                if !completed[dep] </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+        }
+        <span class="cov6" title="3">return true</span>
+}
+
+// hasFailedDependency checks if any required dependency has failed
+func (e *Executor) hasFailedDependency(node *DAGNode, failed map[string]bool) bool <span class="cov6" title="3">{
+        for _, dep := range node.Dependencies </span><span class="cov0" title="0">{
+                if failed[dep] </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov6" title="3">return false</span>
+}
+
+// getFailedDependencyNames returns the names of failed dependencies
+func (e *Executor) getFailedDependencyNames(node *DAGNode, failed map[string]bool) []string <span class="cov0" title="0">{
+        var failedDeps []string
+        for _, dep := range node.Dependencies </span><span class="cov0" title="0">{
+                if failed[dep] </span><span class="cov0" title="0">{
+                        failedDeps = append(failedDeps, dep)
+                }</span>
+        }
+        <span class="cov0" title="0">return failedDeps</span>
+}
+
+// executeAction executes a single action
+func (e *Executor) executeAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) <span class="cov9" title="5">{
+        if action.Uses != "" </span><span class="cov1" title="1">{
+                return e.executeBuiltInAction(ctx, action)
+        }</span>
+        
+        <span class="cov7" title="4">return e.executeCustomAction(ctx, action)</span>
+}
+
+// executeBuiltInAction executes a built-in action
+func (e *Executor) executeBuiltInAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) <span class="cov1" title="1">{
+        runner, exists := e.registry.GetRunner(action.Uses)
+        if !exists </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: fmt.Sprintf("unknown built-in action: %s", action.Uses),
+                }, fmt.Errorf("unknown built-in action: %s", action.Uses)
+        }</span>
+        
+        <span class="cov1" title="1">return runner.Run(ctx)</span>
+}
+
+// executeCustomAction executes a custom action with run command
+func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) <span class="cov7" title="4">{
+        if action.Run == "" </span><span class="cov0" title="0">{
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: "no run command specified",
+                }, fmt.Errorf("no run command specified for action %s", action.Name)
+        }</span>
+        
+        // Print command if verbose mode is enabled
+        <span class="cov7" title="4">if e.opts.Verbose </span><span class="cov0" title="0">{
+                if ui, ok := e.opts.Output.(UI); ok </span><span class="cov0" title="0">{
+                        ui.PrintCommand(action.Run)
+                }</span>
+        }
+        
+        // Execute the command
+        <span class="cov7" title="4">cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
+        output, err := cmd.CombinedOutput()
+        
+        // Only show output in verbose mode for custom actions
+        if e.opts.Verbose </span><span class="cov0" title="0">{
+                if ui, ok := e.opts.Output.(UI); ok </span><span class="cov0" title="0">{
+                        ui.PrintCommandOutput(string(output))
+                }</span>
+        }
+        
+        <span class="cov7" title="4">if err != nil </span><span class="cov0" title="0">{
+                // For custom actions, provide the exact command to run manually
+                return buildfab.Result{
+                        Status:  buildfab.StatusError,
+                        Message: fmt.Sprintf("Command failed. To debug run:\n%s", action.Run),
+                }, fmt.Errorf("command failed: %w", err)
+        }</span>
+        
+        <span class="cov7" title="4">return buildfab.Result{
+                Status:  buildfab.StatusOK,
+                Message: "command executed successfully",
+        }, nil</span>
+}
+
+// getVersion returns the current version from the VERSION file
+func (e *Executor) getVersion() string <span class="cov4" title="2">{
+        // Try to read from VERSION file first
+        if version, err := e.readVersionFile(); err == nil </span><span class="cov1" title="1">{
+                return version
+        }</span>
+        
+        // Fallback to git tag detection
+        <span class="cov1" title="1">if version, err := e.versionDetector.DetectCurrentVersion(context.Background()); err == nil </span><span class="cov1" title="1">{
+                return version
+        }</span>
+        
+        // Final fallback
+        <span class="cov0" title="0">return "unknown"</span>
+}
+
+// readVersionFile reads the version from the VERSION file
+func (e *Executor) readVersionFile() (string, error) <span class="cov4" title="2">{
+        data, err := os.ReadFile("VERSION")
+        if err != nil </span><span class="cov1" title="1">{
+                return "", err
+        }</span>
+        
+        <span class="cov1" title="1">version := strings.TrimSpace(string(data))
+        if version == "" </span><span class="cov0" title="0">{
+                return "", fmt.Errorf("VERSION file is empty")
+        }</span>
+        
+        <span class="cov1" title="1">return version, nil</span>
+}
+
+// shouldExecuteStep determines if a step should be executed based on conditions
+func (e *Executor) shouldExecuteStep(ctx context.Context, node *DAGNode) bool <span class="cov6" title="3">{
+        // Check 'if' condition
+        if node.Step.If != "" </span><span class="cov0" title="0">{
+                if !e.evaluateCondition(ctx, node.Step.If) </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+        }
+        
+        // Check 'only' conditions
+        <span class="cov6" title="3">if len(node.Step.Only) &gt; 0 </span><span class="cov0" title="0">{
+                if !e.matchesOnlyConditions(ctx, node.Step.Only) </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+        }
+        
+        <span class="cov6" title="3">return true</span>
+}
+
+// evaluateCondition evaluates a condition string
+func (e *Executor) evaluateCondition(ctx context.Context, condition string) bool <span class="cov0" title="0">{
+        // For now, support simple conditions like "version.type == 'release'"
+        // This is a simplified implementation - in a real system, you'd want a proper expression parser
+        
+        if condition == "version.type == 'release'" </span><span class="cov0" title="0">{
+                versionType, err := e.getVersionType(ctx)
+                return err == nil &amp;&amp; versionType == "release"
+        }</span>
+        
+        <span class="cov0" title="0">if condition == "version.type == 'prerelease'" </span><span class="cov0" title="0">{
+                versionType, err := e.getVersionType(ctx)
+                return err == nil &amp;&amp; versionType == "prerelease"
+        }</span>
+        
+        // Default to true for unknown conditions
+        <span class="cov0" title="0">return true</span>
+}
+
+// matchesOnlyConditions checks if current context matches any of the 'only' conditions
+func (e *Executor) matchesOnlyConditions(ctx context.Context, onlyConditions []string) bool <span class="cov0" title="0">{
+        versionType, err := e.getVersionType(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                // If we can't determine version type, don't execute steps with 'only' conditions
+                return false
+        }</span>
+        
+        <span class="cov0" title="0">for _, condition := range onlyConditions </span><span class="cov0" title="0">{
+                if condition == versionType </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        
+        <span class="cov0" title="0">return false</span>
+}
+
+// getVersionType determines the type of version (release, prerelease, patch, minor, major)
+func (e *Executor) getVersionType(ctx context.Context) (string, error) <span class="cov0" title="0">{
+        // Use version-go library to determine type
+        parsedVersion, err := e.versionDetector.DetectVersionInfo(ctx)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        
+        <span class="cov0" title="0">return parsedVersion.Type, nil</span>
+}
+
+// hasErrors checks if any results have errors
+func hasErrors(results []buildfab.Result) bool <span class="cov4" title="2">{
+        for _, result := range results </span><span class="cov6" title="3">{
+                if result.Status == buildfab.StatusError </span><span class="cov0" title="0">{
+                        return true
+                }</span>
+        }
+        <span class="cov4" title="2">return false</span>
+}</pre>
+		
+		<pre class="file" id="file4" style="display: none">// Package ui provides user interface functionality for buildfab
+package ui
+
+import (
+        "fmt"
+        "os"
+        "strings"
+        "time"
+
+        "github.com/AlexBurnes/buildfab/pkg/buildfab"
+)
+
+// UI provides user interface operations
+type UI struct {
+        verbose bool
+        debug   bool
+}
+
+// New creates a new UI instance
+func New(verbose, debug bool) *UI <span class="cov10" title="15">{
+        return &amp;UI{
+                verbose: verbose,
+                debug:   debug,
+        }
+}</span>
+
+// PrintCLIHeader prints the CLI header
+func (u *UI) PrintCLIHeader(name, version string) <span class="cov1" title="1">{
+        // Handle version that already has 'v' prefix
+        versionDisplay := version
+        if !strings.HasPrefix(version, "v") </span><span class="cov1" title="1">{
+                versionDisplay = "v" + version
+        }</span>
+        <span class="cov1" title="1">fmt.Fprintf(os.Stderr, "🚀 %s %s\n", name, versionDisplay)
+        fmt.Fprintf(os.Stderr, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")</span>
+}
+
+// PrintProjectCheck prints project information
+func (u *UI) PrintProjectCheck(projectName, version string) <span class="cov1" title="1">{
+        fmt.Fprintf(os.Stderr, "📦 Project: %s\n", projectName)
+        fmt.Fprintf(os.Stderr, "🏷️  Version: %s\n", version)
+        fmt.Fprintf(os.Stderr, "\n")
+}</span>
+
+// PrintStageHeader prints stage header
+func (u *UI) PrintStageHeader(stageName string) <span class="cov1" title="1">{
+        fmt.Fprintf(os.Stderr, "▶️  Running stage: %s\n", stageName)
+        fmt.Fprintf(os.Stderr, "\n")
+}</span>
+
+// PrintStepStatus prints step status
+func (u *UI) PrintStepStatus(stepName string, status buildfab.Status, message string) <span class="cov1" title="1">{
+        var icon string
+        var color string
+        
+        switch status </span>{
+        case buildfab.StatusOK:<span class="cov1" title="1">
+                icon = "✓"
+                color = "\033[32m"</span> // Green
+        case buildfab.StatusWarn:<span class="cov0" title="0">
+                icon = "!"
+                color = "\033[33m"</span> // Yellow
+        case buildfab.StatusError:<span class="cov0" title="0">
+                icon = "✗"
+                color = "\033[31m"</span> // Red
+        case buildfab.StatusSkipped:<span class="cov0" title="0">
+                icon = "→"
+                color = "\033[90m"</span> // Gray
+        case buildfab.StatusRunning:<span class="cov0" title="0">
+                icon = "○"
+                color = "\033[36m"</span> // Cyan
+        default:<span class="cov0" title="0">
+                icon = "?"
+                color = "\033[37m"</span> // White
+        }
+        
+        <span class="cov1" title="1">reset := "\033[0m"
+        
+        // Handle multi-line messages properly
+        lines := strings.Split(message, "\n")
+        if len(lines) == 1 </span><span class="cov1" title="1">{
+                // Single line message
+                fmt.Fprintf(os.Stderr, "  %s%s%s %s %s\n", color, icon, reset, stepName, message)
+        }</span> else<span class="cov0" title="0"> {
+                // Multi-line message - first line with step name, subsequent lines indented
+                fmt.Fprintf(os.Stderr, "  %s%s%s %s %s\n", color, icon, reset, stepName, lines[0])
+                for _, line := range lines[1:] </span><span class="cov0" title="0">{
+                        if strings.TrimSpace(line) != "" </span><span class="cov0" title="0">{
+                                // Indent subsequent lines with simple spacing
+                                fmt.Fprintf(os.Stderr, "    %s\n", line)
+                        }</span>
+                }
+        }
+}
+
+// PrintStageResult prints stage result
+func (u *UI) PrintStageResult(stageName string, success bool, duration time.Duration) <span class="cov1" title="1">{
+        fmt.Fprintf(os.Stderr, "\n")
+        
+        var icon string
+        var color string
+        var status string
+        
+        if success </span><span class="cov1" title="1">{
+                icon = "🎉"
+                color = "\033[32m" // Green
+                status = "SUCCESS"
+        }</span> else<span class="cov0" title="0"> {
+                icon = "💥"
+                color = "\033[31m" // Red
+                status = "FAILED"
+        }</span>
+        
+        <span class="cov1" title="1">reset := "\033[0m"
+        fmt.Fprintf(os.Stderr, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        fmt.Fprintf(os.Stderr, "%s %s%s%s - %s (%.2fs)\n", icon, color, status, reset, stageName, duration.Seconds())</span>
+}
+
+// PrintCommand prints a command being executed
+func (u *UI) PrintCommand(command string) <span class="cov1" title="1">{
+        if u.verbose </span><span class="cov1" title="1">{
+                fmt.Fprintf(os.Stderr, "  💻 %s\n", command)
+        }</span>
+}
+
+// PrintCommandOutput prints command output
+func (u *UI) PrintCommandOutput(output string) <span class="cov1" title="1">{
+        if u.verbose &amp;&amp; output != "" </span><span class="cov1" title="1">{
+                lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+                for _, line := range lines </span><span class="cov1" title="1">{
+                        fmt.Fprintf(os.Stderr, "    %s\n", line)
+                }</span>
+        }
+}
+
+// PrintRepro prints reproduction instructions
+func (u *UI) PrintRepro(stepName, repro string) <span class="cov1" title="1">{
+        fmt.Fprintf(os.Stderr, "\n")
+        fmt.Fprintf(os.Stderr, "🔧 To reproduce %s:\n", stepName)
+        
+        // Handle multi-line reproduction instructions
+        lines := strings.Split(strings.TrimRight(repro, "\n"), "\n")
+        for _, line := range lines </span><span class="cov1" title="1">{
+                if strings.TrimSpace(line) != "" </span><span class="cov1" title="1">{
+                        // Preserve the original indentation structure
+                        fmt.Fprintf(os.Stderr, "%s\n", line)
+                }</span>
+        }
+}
+
+// PrintReproInline prints inline reproduction instructions
+func (u *UI) PrintReproInline(stepName, repro string) <span class="cov1" title="1">{
+        fmt.Fprintf(os.Stderr, "   💡 %s\n", repro)
+}</span>
+
+// PrintSummary prints execution summary
+func (u *UI) PrintSummary(results []buildfab.Result) <span class="cov1" title="1">{
+        if len(results) == 0 </span><span class="cov0" title="0">{
+                return
+        }</span>
+        
+        <span class="cov1" title="1">fmt.Fprintf(os.Stderr, "\n")
+        fmt.Fprintf(os.Stderr, "📊 Summary:\n")
+        
+        statusCounts := make(map[buildfab.Status]int)
+        for _, result := range results </span><span class="cov3" title="2">{
+                statusCounts[result.Status]++
+        }</span>
+        
+        // Define status order for consistent display
+        <span class="cov1" title="1">statusOrder := []buildfab.Status{
+                buildfab.StatusError,
+                buildfab.StatusWarn,
+                buildfab.StatusOK,
+                buildfab.StatusSkipped,
+        }
+        
+        for _, status := range statusOrder </span><span class="cov5" title="4">{
+                count := statusCounts[status]
+                var icon string
+                var color string
+                
+                switch status </span>{
+                case buildfab.StatusOK:<span class="cov1" title="1">
+                        icon = "✓"
+                        if count &gt; 0 </span><span class="cov1" title="1">{
+                                color = "\033[32m" // Green
+                        }</span> else<span class="cov0" title="0"> {
+                                color = "\033[90m" // Gray
+                        }</span>
+                case buildfab.StatusWarn:<span class="cov1" title="1">
+                        icon = "!"
+                        if count &gt; 0 </span><span class="cov0" title="0">{
+                                color = "\033[33m" // Yellow
+                        }</span> else<span class="cov1" title="1"> {
+                                color = "\033[90m" // Gray
+                        }</span>
+                case buildfab.StatusError:<span class="cov1" title="1">
+                        icon = "✗"
+                        if count &gt; 0 </span><span class="cov1" title="1">{
+                                color = "\033[31m" // Red
+                        }</span> else<span class="cov0" title="0"> {
+                                color = "\033[90m" // Gray
+                        }</span>
+                case buildfab.StatusSkipped:<span class="cov1" title="1">
+                        icon = "→"
+                        if count &gt; 0 </span><span class="cov0" title="0">{
+                                color = "\033[90m" // Gray
+                        }</span> else<span class="cov1" title="1"> {
+                                color = "\033[90m" // Gray
+                        }</span>
+                default:<span class="cov0" title="0">
+                        icon = "?"
+                        if count &gt; 0 </span><span class="cov0" title="0">{
+                                color = "\033[37m" // White
+                        }</span> else<span class="cov0" title="0"> {
+                                color = "\033[90m" // Gray
+                        }</span>
+                }
+                
+                <span class="cov5" title="4">reset := "\033[0m"
+                fmt.Fprintf(os.Stderr, "   %s%s%s %s%-8s %3d%s\n", color, icon, reset, color, status.String(), count, reset)</span>
+        }
+}
+
+// IsVerbose returns true if verbose mode is enabled
+func (u *UI) IsVerbose() bool <span class="cov3" title="2">{
+        return u.verbose
+}</span>
+
+// IsDebug returns true if debug mode is enabled
+func (u *UI) IsDebug() bool <span class="cov3" title="2">{
+        return u.debug
+}</pre>
+		
+		<pre class="file" id="file5" style="display: none">// Package version provides version detection and variable integration
 package version
 
 import (
@@ -612,7 +2004,7 @@ import (
 type Detector struct{}
 
 // New creates a new version detector
-func New() *Detector <span class="cov8" title="1">{
+func New() *Detector <span class="cov10" title="4">{
         return &amp;Detector{}
 }</span>
 
@@ -629,23 +2021,23 @@ type VersionInfo struct {
 }
 
 // DetectCurrentVersion detects the current version from various sources
-func (d *Detector) DetectCurrentVersion(ctx context.Context) (string, error) <span class="cov8" title="1">{
+func (d *Detector) DetectCurrentVersion(ctx context.Context) (string, error) <span class="cov10" title="4">{
         // Try to read from VERSION file first
-        if version, err := d.readVersionFile(); err == nil </span><span class="cov8" title="1">{
+        if version, err := d.readVersionFile(); err == nil </span><span class="cov8" title="3">{
                 return version, nil
         }</span>
         
         // Fallback to git tag detection
-        <span class="cov8" title="1">if version, err := d.detectGitTag(ctx); err == nil </span><span class="cov0" title="0">{
+        <span class="cov1" title="1">if version, err := d.detectGitTag(ctx); err == nil </span><span class="cov0" title="0">{
                 return version, nil
         }</span>
         
         // Final fallback
-        <span class="cov8" title="1">return "unknown", nil</span>
+        <span class="cov1" title="1">return "unknown", nil</span>
 }
 
 // DetectVersionInfo detects comprehensive version information
-func (d *Detector) DetectVersionInfo(ctx context.Context) (*VersionInfo, error) <span class="cov8" title="1">{
+func (d *Detector) DetectVersionInfo(ctx context.Context) (*VersionInfo, error) <span class="cov5" title="2">{
         info := &amp;VersionInfo{}
         
         // Detect version
@@ -653,7 +2045,7 @@ func (d *Detector) DetectVersionInfo(ctx context.Context) (*VersionInfo, error) 
         if err != nil </span><span class="cov0" title="0">{
                 return nil, fmt.Errorf("failed to detect version: %w", err)
         }</span>
-        <span class="cov8" title="1">info.Version = versionStr
+        <span class="cov5" title="2">info.Version = versionStr
         
         // Parse version using version-go library
         parsedVersion, err := version.Parse(versionStr)
@@ -661,37 +2053,37 @@ func (d *Detector) DetectVersionInfo(ctx context.Context) (*VersionInfo, error) 
                 return nil, fmt.Errorf("failed to parse version: %w", err)
         }</span>
         
-        <span class="cov8" title="1">info.Major = parsedVersion.Major
+        <span class="cov5" title="2">info.Major = parsedVersion.Major
         info.Minor = parsedVersion.Minor
         info.Patch = parsedVersion.Patch
         info.Type = parsedVersion.Type.String()
         
         // Detect project name (from go.mod or directory)
         project, err := d.detectProjectName(ctx)
-        if err == nil </span><span class="cov8" title="1">{
+        if err == nil </span><span class="cov5" title="2">{
                 info.Project = project
         }</span>
         
         // Detect commit hash
-        <span class="cov8" title="1">commit, err := d.detectGitCommit(ctx)
+        <span class="cov5" title="2">commit, err := d.detectGitCommit(ctx)
         if err == nil </span><span class="cov0" title="0">{
                 info.Commit = commit
         }</span>
         
         // Detect build date
-        <span class="cov8" title="1">info.Date = d.detectBuildDate()
+        <span class="cov5" title="2">info.Date = d.detectBuildDate()
         
         return info, nil</span>
 }
 
 // GetVersionVariables returns version variables for interpolation
-func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, error) <span class="cov8" title="1">{
+func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, error) <span class="cov1" title="1">{
         info, err := d.DetectVersionInfo(ctx)
         if err != nil </span><span class="cov0" title="0">{
                 return nil, err
         }</span>
         
-        <span class="cov8" title="1">variables := map[string]string{
+        <span class="cov1" title="1">variables := map[string]string{
                 "version.version": info.Version,
                 "version.project": info.Project,
                 "version.commit":  info.Commit,
@@ -706,40 +2098,40 @@ func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, 
 }
 
 // readVersionFile reads the version from the VERSION file
-func (d *Detector) readVersionFile() (string, error) <span class="cov8" title="1">{
+func (d *Detector) readVersionFile() (string, error) <span class="cov10" title="4">{
         data, err := os.ReadFile("VERSION")
-        if err != nil </span><span class="cov8" title="1">{
+        if err != nil </span><span class="cov1" title="1">{
                 return "", err
         }</span>
         
-        <span class="cov8" title="1">version := strings.TrimSpace(string(data))
+        <span class="cov8" title="3">version := strings.TrimSpace(string(data))
         if version == "" </span><span class="cov0" title="0">{
                 return "", fmt.Errorf("VERSION file is empty")
         }</span>
         
-        <span class="cov8" title="1">return version, nil</span>
+        <span class="cov8" title="3">return version, nil</span>
 }
 
 // detectGitTag detects the current Git tag
-func (d *Detector) detectGitTag(ctx context.Context) (string, error) <span class="cov8" title="1">{
+func (d *Detector) detectGitTag(ctx context.Context) (string, error) <span class="cov1" title="1">{
         cmd := exec.CommandContext(ctx, "git", "describe", "--tags", "--abbrev=0")
         output, err := cmd.Output()
-        if err != nil </span><span class="cov8" title="1">{
+        if err != nil </span><span class="cov1" title="1">{
                 return "", err
         }</span>
         <span class="cov0" title="0">return strings.TrimSpace(string(output)), nil</span>
 }
 
 // detectProjectName detects the project name
-func (d *Detector) detectProjectName(ctx context.Context) (string, error) <span class="cov8" title="1">{
+func (d *Detector) detectProjectName(ctx context.Context) (string, error) <span class="cov5" title="2">{
         // Try to read from go.mod
         cmd := exec.CommandContext(ctx, "go", "list", "-m")
         output, err := cmd.Output()
-        if err == nil </span><span class="cov8" title="1">{
+        if err == nil </span><span class="cov5" title="2">{
                 module := strings.TrimSpace(string(output))
                 // Extract project name from module path
                 parts := strings.Split(module, "/")
-                if len(parts) &gt; 0 </span><span class="cov8" title="1">{
+                if len(parts) &gt; 0 </span><span class="cov5" title="2">{
                         return parts[len(parts)-1], nil
                 }</span>
         }
@@ -759,17 +2151,17 @@ func (d *Detector) detectProjectName(ctx context.Context) (string, error) <span 
 }
 
 // detectGitCommit detects the current Git commit hash
-func (d *Detector) detectGitCommit(ctx context.Context) (string, error) <span class="cov8" title="1">{
+func (d *Detector) detectGitCommit(ctx context.Context) (string, error) <span class="cov5" title="2">{
         cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
         output, err := cmd.Output()
-        if err != nil </span><span class="cov8" title="1">{
+        if err != nil </span><span class="cov5" title="2">{
                 return "", err
         }</span>
         <span class="cov0" title="0">return strings.TrimSpace(string(output)), nil</span>
 }
 
 // detectBuildDate detects the build date
-func (d *Detector) detectBuildDate() string <span class="cov8" title="1">{
+func (d *Detector) detectBuildDate() string <span class="cov5" title="2">{
         // For now, return current time
         // In a real implementation, this would be set at build time
         return "unknown"
@@ -784,7 +2176,7 @@ func (d *Detector) determineVersionType(versionStr string) string <span class="c
         <span class="cov0" title="0">return parsedVersion.Type.String()</span>
 }</pre>
 		
-		<pre class="file" id="file3" style="display: none">package buildfab
+		<pre class="file" id="file6" style="display: none">package buildfab
 
 import (
         "context"
@@ -849,21 +2241,21 @@ const (
 )
 
 // String returns the string representation of the status
-func (s Status) String() string <span class="cov8" title="1">{
+func (s Status) String() string <span class="cov8" title="7">{
         switch s </span>{
-        case StatusPending:<span class="cov8" title="1">
+        case StatusPending:<span class="cov1" title="1">
                 return "PENDING"</span>
-        case StatusRunning:<span class="cov8" title="1">
+        case StatusRunning:<span class="cov1" title="1">
                 return "RUNNING"</span>
-        case StatusOK:<span class="cov8" title="1">
+        case StatusOK:<span class="cov1" title="1">
                 return "OK"</span>
-        case StatusWarn:<span class="cov8" title="1">
+        case StatusWarn:<span class="cov1" title="1">
                 return "WARN"</span>
-        case StatusError:<span class="cov8" title="1">
+        case StatusError:<span class="cov1" title="1">
                 return "ERROR"</span>
-        case StatusSkipped:<span class="cov8" title="1">
+        case StatusSkipped:<span class="cov1" title="1">
                 return "SKIPPED"</span>
-        default:<span class="cov8" title="1">
+        default:<span class="cov1" title="1">
                 return "UNKNOWN"</span>
         }
 }
@@ -883,7 +2275,7 @@ type RunOptions struct {
 }
 
 // DefaultRunOptions returns default run options
-func DefaultRunOptions() *RunOptions <span class="cov8" title="1">{
+func DefaultRunOptions() *RunOptions <span class="cov6" title="5">{
         return &amp;RunOptions{
                 ConfigPath:  ".project.yml",
                 MaxParallel: runtime.NumCPU(),
@@ -905,64 +2297,64 @@ type Runner struct {
 }
 
 // NewRunner creates a new buildfab runner
-func NewRunner(config *Config, opts *RunOptions) *Runner <span class="cov8" title="1">{
-        if opts == nil </span><span class="cov8" title="1">{
+func NewRunner(config *Config, opts *RunOptions) *Runner <span class="cov6" title="5">{
+        if opts == nil </span><span class="cov6" title="4">{
                 opts = DefaultRunOptions()
         }</span>
-        <span class="cov8" title="1">return &amp;Runner{
+        <span class="cov6" title="5">return &amp;Runner{
                 config: config,
                 opts:   opts,
         }</span>
 }
 
 // RunStage executes a specific stage
-func (r *Runner) RunStage(ctx context.Context, stageName string) error <span class="cov8" title="1">{
+func (r *Runner) RunStage(ctx context.Context, stageName string) error <span class="cov3" title="2">{
         _, exists := r.config.GetStage(stageName)
-        if !exists </span><span class="cov8" title="1">{
+        if !exists </span><span class="cov1" title="1">{
                 return fmt.Errorf("stage not found: %s", stageName)
         }</span>
 
         // TODO: Implement stage execution with DAG
-        <span class="cov8" title="1">return fmt.Errorf("stage execution not yet implemented")</span>
+        <span class="cov1" title="1">return fmt.Errorf("stage execution not yet implemented")</span>
 }
 
 // RunAction executes a specific action
-func (r *Runner) RunAction(ctx context.Context, actionName string) error <span class="cov8" title="1">{
+func (r *Runner) RunAction(ctx context.Context, actionName string) error <span class="cov3" title="2">{
         _, exists := r.config.GetAction(actionName)
-        if !exists </span><span class="cov8" title="1">{
+        if !exists </span><span class="cov1" title="1">{
                 return fmt.Errorf("action not found: %s", actionName)
         }</span>
 
         // TODO: Implement action execution
-        <span class="cov8" title="1">return fmt.Errorf("action execution not yet implemented")</span>
+        <span class="cov1" title="1">return fmt.Errorf("action execution not yet implemented")</span>
 }
 
 // RunStageStep executes a specific step within a stage
-func (r *Runner) RunStageStep(ctx context.Context, stageName, stepName string) error <span class="cov8" title="1">{
+func (r *Runner) RunStageStep(ctx context.Context, stageName, stepName string) error <span class="cov4" title="3">{
         stage, exists := r.config.GetStage(stageName)
-        if !exists </span><span class="cov8" title="1">{
+        if !exists </span><span class="cov1" title="1">{
                 return fmt.Errorf("stage not found: %s", stageName)
         }</span>
 
         // Find the step
-        <span class="cov8" title="1">var targetStep *Step
-        for i, step := range stage.Steps </span><span class="cov8" title="1">{
-                if step.Action == stepName </span><span class="cov8" title="1">{
+        <span class="cov3" title="2">var targetStep *Step
+        for i, step := range stage.Steps </span><span class="cov4" title="3">{
+                if step.Action == stepName </span><span class="cov1" title="1">{
                         targetStep = &amp;stage.Steps[i]
                         break</span>
                 }
         }
 
-        <span class="cov8" title="1">if targetStep == nil </span><span class="cov8" title="1">{
+        <span class="cov3" title="2">if targetStep == nil </span><span class="cov1" title="1">{
                 return fmt.Errorf("step not found: %s in stage %s", stepName, stageName)
         }</span>
 
         // TODO: Implement step execution
-        <span class="cov8" title="1">return fmt.Errorf("step execution not yet implemented")</span>
+        <span class="cov1" title="1">return fmt.Errorf("step execution not yet implemented")</span>
 }
 
 // RunCLI executes the buildfab CLI with the given arguments
-func RunCLI(ctx context.Context, args []string) error <span class="cov8" title="1">{
+func RunCLI(ctx context.Context, args []string) error <span class="cov1" title="1">{
         // TODO: Implement CLI parsing and execution
         // This is a placeholder implementation
         fmt.Fprintf(os.Stderr, "buildfab CLI not yet implemented\n")
@@ -971,84 +2363,84 @@ func RunCLI(ctx context.Context, args []string) error <span class="cov8" title="
 }</span>
 
 // GetAction returns the action with the specified name
-func (c *Config) GetAction(name string) (Action, bool) <span class="cov8" title="1">{
-        for _, action := range c.Actions </span><span class="cov8" title="1">{
-                if action.Name == name </span><span class="cov8" title="1">{
+func (c *Config) GetAction(name string) (Action, bool) <span class="cov6" title="4">{
+        for _, action := range c.Actions </span><span class="cov6" title="5">{
+                if action.Name == name </span><span class="cov3" title="2">{
                         return action, true
                 }</span>
         }
-        <span class="cov8" title="1">return Action{}, false</span>
+        <span class="cov3" title="2">return Action{}, false</span>
 }
 
 // GetStage returns the stage with the specified name
-func (c *Config) GetStage(name string) (Stage, bool) <span class="cov8" title="1">{
+func (c *Config) GetStage(name string) (Stage, bool) <span class="cov8" title="7">{
         stage, exists := c.Stages[name]
         return stage, exists
 }</span>
 
 // Validate validates the configuration
-func (c *Config) Validate() error <span class="cov8" title="1">{
-        if c.Project.Name == "" </span><span class="cov8" title="1">{
+func (c *Config) Validate() error <span class="cov10" title="12">{
+        if c.Project.Name == "" </span><span class="cov1" title="1">{
                 return fmt.Errorf("project name is required")
         }</span>
         
-        <span class="cov8" title="1">if len(c.Actions) == 0 </span><span class="cov8" title="1">{
+        <span class="cov9" title="11">if len(c.Actions) == 0 </span><span class="cov1" title="1">{
                 return fmt.Errorf("at least one action is required")
         }</span>
         
         // Validate actions
-        <span class="cov8" title="1">actionNames := make(map[string]bool)
-        for _, action := range c.Actions </span><span class="cov8" title="1">{
-                if action.Name == "" </span><span class="cov8" title="1">{
+        <span class="cov9" title="10">actionNames := make(map[string]bool)
+        for _, action := range c.Actions </span><span class="cov9" title="11">{
+                if action.Name == "" </span><span class="cov1" title="1">{
                         return fmt.Errorf("action name is required")
                 }</span>
                 
-                <span class="cov8" title="1">if action.Run == "" &amp;&amp; action.Uses == "" </span><span class="cov8" title="1">{
+                <span class="cov9" title="10">if action.Run == "" &amp;&amp; action.Uses == "" </span><span class="cov1" title="1">{
                         return fmt.Errorf("action %s must have either 'run' or 'uses'", action.Name)
                 }</span>
                 
-                <span class="cov8" title="1">if action.Run != "" &amp;&amp; action.Uses != "" </span><span class="cov8" title="1">{
+                <span class="cov8" title="9">if action.Run != "" &amp;&amp; action.Uses != "" </span><span class="cov1" title="1">{
                         return fmt.Errorf("action %s cannot have both 'run' and 'uses'", action.Name)
                 }</span>
                 
-                <span class="cov8" title="1">if actionNames[action.Name] </span><span class="cov8" title="1">{
+                <span class="cov8" title="8">if actionNames[action.Name] </span><span class="cov1" title="1">{
                         return fmt.Errorf("duplicate action name: %s", action.Name)
                 }</span>
-                <span class="cov8" title="1">actionNames[action.Name] = true</span>
+                <span class="cov8" title="7">actionNames[action.Name] = true</span>
         }
         
         // Validate stages
-        <span class="cov8" title="1">for stageName, stage := range c.Stages </span><span class="cov8" title="1">{
-                if len(stage.Steps) == 0 </span><span class="cov8" title="1">{
+        <span class="cov7" title="6">for stageName, stage := range c.Stages </span><span class="cov7" title="6">{
+                if len(stage.Steps) == 0 </span><span class="cov1" title="1">{
                         return fmt.Errorf("stage %s must have at least one step", stageName)
                 }</span>
                 
-                <span class="cov8" title="1">for i, step := range stage.Steps </span><span class="cov8" title="1">{
-                        if step.Action == "" </span><span class="cov8" title="1">{
+                <span class="cov6" title="5">for i, step := range stage.Steps </span><span class="cov6" title="5">{
+                        if step.Action == "" </span><span class="cov1" title="1">{
                                 return fmt.Errorf("step %d in stage %s must have an action", i+1, stageName)
                         }</span>
                         
-                        <span class="cov8" title="1">if !actionNames[step.Action] </span><span class="cov8" title="1">{
+                        <span class="cov6" title="4">if !actionNames[step.Action] </span><span class="cov1" title="1">{
                                 return fmt.Errorf("step %d in stage %s references unknown action: %s", i+1, stageName, step.Action)
                         }</span>
                         
-                        <span class="cov8" title="1">if step.OnError != "" &amp;&amp; step.OnError != "stop" &amp;&amp; step.OnError != "warn" </span><span class="cov8" title="1">{
+                        <span class="cov4" title="3">if step.OnError != "" &amp;&amp; step.OnError != "stop" &amp;&amp; step.OnError != "warn" </span><span class="cov1" title="1">{
                                 return fmt.Errorf("step %d in stage %s has invalid onerror value: %s (must be 'stop' or 'warn')", i+1, stageName, step.OnError)
                         }</span>
                         
                         // Validate only field contains valid values
-                        <span class="cov8" title="1">for _, onlyValue := range step.Only </span><span class="cov8" title="1">{
-                                if onlyValue != "release" &amp;&amp; onlyValue != "prerelease" &amp;&amp; onlyValue != "patch" &amp;&amp; onlyValue != "minor" &amp;&amp; onlyValue != "major" </span><span class="cov8" title="1">{
+                        <span class="cov3" title="2">for _, onlyValue := range step.Only </span><span class="cov1" title="1">{
+                                if onlyValue != "release" &amp;&amp; onlyValue != "prerelease" &amp;&amp; onlyValue != "patch" &amp;&amp; onlyValue != "minor" &amp;&amp; onlyValue != "major" </span><span class="cov1" title="1">{
                                         return fmt.Errorf("step %d in stage %s has invalid only value: %s (must be 'release', 'prerelease', 'patch', 'minor', or 'major')", i+1, stageName, onlyValue)
                                 }</span>
                         }
                 }
         }
         
-        <span class="cov8" title="1">return nil</span>
+        <span class="cov1" title="1">return nil</span>
 }</pre>
 		
-		<pre class="file" id="file4" style="display: none">package buildfab
+		<pre class="file" id="file7" style="display: none">package buildfab
 
 import "fmt"
 
@@ -1060,11 +2452,11 @@ type ConfigurationError struct {
         Column  int
 }
 
-func (e *ConfigurationError) Error() string <span class="cov8" title="1">{
-        if e.Path != "" </span><span class="cov8" title="1">{
+func (e *ConfigurationError) Error() string <span class="cov10" title="2">{
+        if e.Path != "" </span><span class="cov1" title="1">{
                 return fmt.Sprintf("configuration error in %s at line %d, column %d: %s", e.Path, e.Line, e.Column, e.Message)
         }</span>
-        <span class="cov8" title="1">return fmt.Sprintf("configuration error: %s", e.Message)</span>
+        <span class="cov1" title="1">return fmt.Sprintf("configuration error: %s", e.Message)</span>
 }
 
 // ExecutionError represents errors during step execution
@@ -1075,7 +2467,7 @@ type ExecutionError struct {
         Output   string
 }
 
-func (e *ExecutionError) Error() string <span class="cov8" title="1">{
+func (e *ExecutionError) Error() string <span class="cov1" title="1">{
         return fmt.Sprintf("execution error in step %q (action %q): %s", e.StepName, e.Action, e.Message)
 }</span>
 
@@ -1085,11 +2477,11 @@ type DependencyError struct {
         Cycle   []string
 }
 
-func (e *DependencyError) Error() string <span class="cov8" title="1">{
-        if len(e.Cycle) &gt; 0 </span><span class="cov8" title="1">{
+func (e *DependencyError) Error() string <span class="cov10" title="2">{
+        if len(e.Cycle) &gt; 0 </span><span class="cov1" title="1">{
                 return fmt.Sprintf("dependency error: %s (cycle: %v)", e.Message, e.Cycle)
         }</span>
-        <span class="cov8" title="1">return fmt.Sprintf("dependency error: %s", e.Message)</span>
+        <span class="cov1" title="1">return fmt.Sprintf("dependency error: %s", e.Message)</span>
 }
 
 // VariableError represents errors in variable interpolation
@@ -1098,11 +2490,11 @@ type VariableError struct {
         Message  string
 }
 
-func (e *VariableError) Error() string <span class="cov8" title="1">{
+func (e *VariableError) Error() string <span class="cov1" title="1">{
         return fmt.Sprintf("variable error for %q: %s", e.Variable, e.Message)
 }</pre>
 		
-		<pre class="file" id="file5" style="display: none">package buildfab
+		<pre class="file" id="file8" style="display: none">package buildfab
 
 import "time"
 
@@ -1138,23 +2530,45 @@ const (
 )
 
 // String returns the string representation of StepStatus
-func (s StepStatus) String() string <span class="cov8" title="1">{
+func (s StepStatus) String() string <span class="cov10" title="7">{
         switch s </span>{
-        case StepStatusPending:<span class="cov8" title="1">
+        case StepStatusPending:<span class="cov1" title="1">
                 return "pending"</span>
-        case StepStatusRunning:<span class="cov8" title="1">
+        case StepStatusRunning:<span class="cov1" title="1">
                 return "running"</span>
-        case StepStatusOK:<span class="cov8" title="1">
+        case StepStatusOK:<span class="cov1" title="1">
                 return "ok"</span>
-        case StepStatusWarn:<span class="cov8" title="1">
+        case StepStatusWarn:<span class="cov1" title="1">
                 return "warn"</span>
-        case StepStatusError:<span class="cov8" title="1">
+        case StepStatusError:<span class="cov1" title="1">
                 return "error"</span>
-        case StepStatusSkipped:<span class="cov8" title="1">
+        case StepStatusSkipped:<span class="cov1" title="1">
                 return "skipped"</span>
-        default:<span class="cov8" title="1">
+        default:<span class="cov1" title="1">
                 return "unknown"</span>
         }
+}</pre>
+		
+		<pre class="file" id="file9" style="display: none">package main
+
+import (
+        "context"
+        "fmt"
+        "github.com/AlexBurnes/buildfab/internal/version"
+)
+
+func main() <span class="cov0" title="0">{
+        v := version.New()
+        vars, err := v.GetVersionVariables(context.Background())
+        if err != nil </span><span class="cov0" title="0">{
+                fmt.Printf("Error: %v\n", err)
+                return
+        }</span>
+        
+        <span class="cov0" title="0">fmt.Println("Version variables:")
+        for k, v := range vars </span><span class="cov0" title="0">{
+                fmt.Printf("  %s: %s\n", k, v)
+        }</span>
 }</pre>
 		
 		</div>

@@ -114,12 +114,9 @@ func TestExecutor_RunStage(t *testing.T) {
 	defer cancel()
 
 	err := executor.RunStage(ctx, "test-stage")
-	// Note: This will likely fail due to unimplemented DAG execution
-	// but we're testing the error handling and stage lookup
-	if err == nil {
-		t.Log("RunStage() completed successfully (unexpected)")
-	} else {
-		t.Logf("RunStage() returned error (expected): %v", err)
+	// The DAG execution should now work correctly
+	if err != nil {
+		t.Errorf("RunStage() failed: %v", err)
 	}
 
 	// Test with non-existing stage
@@ -159,12 +156,9 @@ func TestExecutor_RunAction(t *testing.T) {
 
 	// Test with existing action
 	err := executor.RunAction(ctx, "test-action")
-	// Note: This will likely fail due to unimplemented action execution
-	// but we're testing the error handling and action lookup
-	if err == nil {
-		t.Log("RunAction() completed successfully (unexpected)")
-	} else {
-		t.Logf("RunAction() returned error (expected): %v", err)
+	// The action execution should now work correctly
+	if err != nil {
+		t.Errorf("RunAction() failed: %v", err)
 	}
 
 	// Test with non-existing action
@@ -212,12 +206,9 @@ func TestExecutor_RunStageStep(t *testing.T) {
 
 	// Test with existing step
 	err := executor.RunStageStep(ctx, "test-stage", "test-action")
-	// Note: This will likely fail due to unimplemented step execution
-	// but we're testing the error handling and step lookup
-	if err == nil {
-		t.Log("RunStageStep() completed successfully (unexpected)")
-	} else {
-		t.Logf("RunStageStep() returned error (expected): %v", err)
+	// The step execution should now work correctly
+	if err != nil {
+		t.Errorf("RunStageStep() failed: %v", err)
 	}
 
 	// Test with non-existing stage
@@ -339,11 +330,8 @@ stages:
 
 	// Test running the stage
 	err = executor.RunStage(ctx, "test-stage")
-	// Note: This will likely fail due to unimplemented DAG execution
-	// but we're testing the integration flow
-	if err == nil {
-		t.Log("Integration test completed successfully (unexpected)")
-	} else {
-		t.Logf("Integration test returned error (expected): %v", err)
+	// The integration test should now work correctly
+	if err != nil {
+		t.Errorf("Integration test failed: %v", err)
 	}
 }

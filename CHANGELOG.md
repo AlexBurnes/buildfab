@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-09-21
+
+### Added
+- **CLI Test Suite**: Added comprehensive test coverage for cmd/buildfab package (68.8% coverage)
+  - `cmd/buildfab/main_test.go` - Complete CLI command testing
+  - Version detection testing with VERSION file handling
+  - Command execution testing for all CLI commands
+  - Error handling and output validation testing
+  - Flag validation and command structure testing
+
+### Fixed
+- **DAG Executor Tests**: Fixed channel panic issues in DAG execution with proper synchronization
+- **UI Test Formatting**: Updated test expectations to match current output formatting
+- **Test Coverage**: Improved overall project test coverage from 58.6% to 72.5%
+
+### Changed
+- **Test Infrastructure**: Expanded from 9 to 10 test files with comprehensive CLI testing
+- **Coverage Reporting**: Updated coverage metrics to reflect CLI test improvements
+
+## [0.4.0] - 2025-09-21
+
 ### Added
 - **Comprehensive Test Suite**: Implemented complete test coverage with 75.3% overall coverage across all packages
 - **Test Infrastructure**: Created 9 test files covering unit tests, integration tests, and end-to-end scenarios
