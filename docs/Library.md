@@ -36,6 +36,26 @@ type RunOptions struct {
     ErrorOutput   io.Writer         // Error output writer (default: os.Stderr)
     OnlyLabels    []string          // Labels for conditional execution
     WithRequires  bool              // Include dependencies when running single step
+    StepCallback  StepCallback      // Optional callback for step execution events
+}
+```
+
+### Step Callbacks
+
+```go
+// StepCallback defines the interface for step execution callbacks
+type StepCallback interface {
+    // OnStepStart is called when a step starts execution
+    OnStepStart(ctx context.Context, stepName string)
+    
+    // OnStepComplete is called when a step completes (success, warning, or error)
+    OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration)
+    
+    // OnStepOutput is called for step output (when verbose mode is enabled)
+    OnStepOutput(ctx context.Context, stepName string, output string)
+    
+    // OnStepError is called for step errors
+    OnStepError(ctx context.Context, stepName string, err error)
 }
 ```
 
@@ -158,6 +178,105 @@ func main() {
         fmt.Fprintf(os.Stderr, "Stage execution failed: %v\n", err)
         os.Exit(1)
     }
+}
+```
+
+### Step Callbacks for Real-time Progress
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    "time"
+    "github.com/burnes/buildfab"
+)
+
+// ExampleStepCallback demonstrates step-by-step progress reporting
+type ExampleStepCallback struct{}
+
+func (c *ExampleStepCallback) OnStepStart(ctx context.Context, stepName string) {
+    fmt.Printf("🔄 Running step: %s\n", stepName)
+}
+
+func (c *ExampleStepCallback) OnStepComplete(ctx context.Context, stepName string, status buildfab.StepStatus, message string, duration time.Duration) {
+    var icon string
+    switch status {
+    case buildfab.StepStatusOK:
+        icon = "✔"
+    case buildfab.StepStatusWarn:
+        icon = "⚠"
+    case buildfab.StepStatusError:
+        icon = "✖"
+    case buildfab.StepStatusSkipped:
+        icon = "○"
+    default:
+        icon = "?"
+    }
+    
+    fmt.Printf("%s %s: %s (%v)\n", icon, stepName, message, duration)
+}
+
+func (c *ExampleStepCallback) OnStepOutput(ctx context.Context, stepName string, output string) {
+    if output != "" {
+        fmt.Printf("📤 %s output:\n%s\n", stepName, output)
+    }
+}
+
+func (c *ExampleStepCallback) OnStepError(ctx context.Context, stepName string, err error) {
+    fmt.Printf("❌ %s failed: %v\n", stepName, err)
+}
+
+func main() {
+    ctx := context.Background()
+    
+    // Create run options with step callback
+    opts := &buildfab.RunOptions{
+        ConfigPath:   "project.yml",
+        Verbose:      true,
+        WorkingDir:   ".",
+        StepCallback: &ExampleStepCallback{},
+    }
+    
+    err := buildfab.RunStage(ctx, "pre-push", opts)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Stage execution failed: %v\n", err)
+        os.Exit(1)
+    }
+}
+```
+
+### Silent Step Callbacks (Errors Only)
+
+```go
+// SilentStepCallback provides minimal output, only showing errors
+type SilentStepCallback struct{}
+
+func (c *SilentStepCallback) OnStepStart(ctx context.Context, stepName string) {
+    // Silent - no output
+}
+
+func (c *SilentStepCallback) OnStepComplete(ctx context.Context, stepName string, status buildfab.StepStatus, message string, duration time.Duration) {
+    // Only show errors
+    if status == buildfab.StepStatusError {
+        fmt.Printf("Error in %s: %s\n", stepName, message)
+    }
+}
+
+func (c *SilentStepCallback) OnStepOutput(ctx context.Context, stepName string, output string) {
+    // Silent - no output
+}
+
+func (c *SilentStepCallback) OnStepError(ctx context.Context, stepName string, err error) {
+    fmt.Printf("Error in %s: %v\n", stepName, err)
+}
+
+// Usage
+opts := &buildfab.RunOptions{
+    ConfigPath:   "project.yml",
+    StepCallback: &SilentStepCallback{},
 }
 ```
 

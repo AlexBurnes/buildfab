@@ -1,9 +1,25 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-**VERSION v0.6.0 RELEASED!** Successfully implemented comprehensive built-in action support in the public buildfab library API and released version v0.6.0. The library now fully supports both `run:` and `uses:` fields in action configuration, enabling seamless integration with pre-push utilities and other automation tools. **All core functionality implemented** - library API, CLI interface, DAG execution engine, built-in actions, and version library integration. **Comprehensive test suite with 100% test success rate** - all core functionality thoroughly tested with unit tests, integration tests, and end-to-end scenarios. Version library integration fixed to use official AlexBurnes/version-go v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. **Library API completion** - Fixed RunStage(), RunAction(), RunStageStep(), and RunCLI() methods with proper implementations. Added error policy support, type safety improvements, and comprehensive test coverage. All methods now fully functional for embedding in pre-push utilities and other applications.
+**VERSION 0.7.0 RELEASED!** Successfully completed comprehensive step-by-step progress reporting system and version management improvements for the buildfab library. Added `StepCallback` interface with `OnStepStart`, `OnStepComplete`, `OnStepOutput`, and `OnStepError` methods for real-time step execution visibility. **All core functionality implemented** - library API, CLI interface, DAG execution engine, built-in actions, version library integration, step callbacks, and enhanced version validation. **Comprehensive test suite with 100% test success rate** - all core functionality thoroughly tested with unit tests, integration tests, and end-to-end scenarios. Step callback system provides perfect integration for CLI tools, CI/CD systems, and applications needing step-by-step progress reporting. **Backward compatible implementation** - callbacks are optional and default behavior unchanged, ensuring seamless integration with existing code. **Complete documentation and examples** - added comprehensive usage examples and API documentation for step callbacks. **Enhanced version management** - improved version check script with proper validation workflow.
 
 ## Recent Changes
+- **Step Callback System Implementation**: Added comprehensive step-by-step progress reporting for buildfab library
+  - Added `StepCallback` interface with `OnStepStart`, `OnStepComplete`, `OnStepOutput`, and `OnStepError` methods
+  - Added `StepStatus` types (Pending, Running, OK, Warn, Error, Skipped) for detailed status reporting
+  - Added `StepCallback` field to `RunOptions` for optional callback support
+  - Integrated step callbacks into all execution methods (`RunStage`, `RunAction`, `RunStageStep`)
+  - Added step callback support to both library API and internal executor
+  - Added comprehensive test coverage for step callback functionality
+  - Added example implementations and usage patterns in `examples/step_callbacks_example.go`
+  - Step callbacks provide real-time visibility into individual step execution progress
+  - Backward compatible - callbacks are optional and default behavior unchanged
+  - Perfect for CLI tools, CI/CD systems, and applications needing step-by-step progress reporting
+- **Version Check Script Enhancement**: Updated `scripts/check-version-status` to use proper version validation
+  - Now uses `scripts/version check-greatest` functionality instead of external dependencies
+  - Properly detects when VERSION file version is below the greatest git tag
+  - Provides clear error messages and suggestions for version bumping
+  - Improved development workflow by ensuring version consistency before changes
 - **Built-in Action Support in Public API**: Added comprehensive built-in action support to the buildfab library
   - Added `ActionRegistry` and `ActionRunner` interfaces for extensible action system
   - Implemented `DefaultActionRegistry` with all built-in actions (git@untracked, git@uncommitted, git@modified, version@check, version@check-greatest)

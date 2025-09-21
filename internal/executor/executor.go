@@ -495,11 +495,44 @@ func (e *Executor) getFailedDependencyNames(node *DAGNode, failed map[string]boo
 
 // executeAction executes a single action
 func (e *Executor) executeAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) {
-	if action.Uses != "" {
-		return e.executeBuiltInAction(ctx, action)
+	// Call step start callback if provided
+	if e.opts.StepCallback != nil {
+		e.opts.StepCallback.OnStepStart(ctx, action.Name)
 	}
-	
-	return e.executeCustomAction(ctx, action)
+
+	var result buildfab.Result
+	var err error
+
+	if action.Uses != "" {
+		result, err = e.executeBuiltInAction(ctx, action)
+	} else {
+		result, err = e.executeCustomAction(ctx, action)
+	}
+
+	// Call step complete callback if provided
+	if e.opts.StepCallback != nil {
+		status := buildfab.StepStatusOK
+		message := "executed successfully"
+		
+		if err != nil {
+			status = buildfab.StepStatusError
+			message = err.Error()
+			e.opts.StepCallback.OnStepError(ctx, action.Name, err)
+		} else if result.Status == buildfab.StatusWarn {
+			status = buildfab.StepStatusWarn
+			message = result.Message
+		} else if result.Status == buildfab.StatusError {
+			status = buildfab.StepStatusError
+			message = result.Message
+		} else if result.Status == buildfab.StatusSkipped {
+			status = buildfab.StepStatusSkipped
+			message = result.Message
+		}
+		
+		e.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
+	}
+
+	return result, err
 }
 
 // executeBuiltInAction executes a built-in action
@@ -512,7 +545,14 @@ func (e *Executor) executeBuiltInAction(ctx context.Context, action buildfab.Act
 		}, fmt.Errorf("unknown built-in action: %s", action.Uses)
 	}
 	
-	return runner.Run(ctx)
+	result, err := runner.Run(ctx)
+	
+	// Call step output callback if provided and verbose mode is enabled
+	if e.opts.StepCallback != nil && e.opts.Verbose && result.Message != "" {
+		e.opts.StepCallback.OnStepOutput(ctx, action.Name, result.Message)
+	}
+	
+	return result, err
 }
 
 // executeCustomAction executes a custom action with run command
@@ -534,6 +574,11 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 	// Execute the command
 	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
 	output, err := cmd.CombinedOutput()
+	
+	// Call step output callback if provided and verbose mode is enabled
+	if e.opts.StepCallback != nil && e.opts.Verbose && len(output) > 0 {
+		e.opts.StepCallback.OnStepOutput(ctx, action.Name, string(output))
+	}
 	
 	// Only show output in verbose mode for custom actions
 	if e.opts.Verbose {

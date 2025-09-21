@@ -13,6 +13,13 @@
 - **Built-in actions**: Git checks (untracked, uncommitted, modified) and version validation actions
 - **Version library integration**: Full integration with AlexBurnes/version-go v0.8.22 providing `${{version.version}}` variables
 - **CLI interface**: Complete cobra-based CLI with run, action, list-actions, list-stages, list-steps, and validate commands
+- **Step callback system**: Comprehensive step-by-step progress reporting with `StepCallback` interface
+  - Real-time step execution visibility with `OnStepStart`, `OnStepComplete`, `OnStepOutput`, `OnStepError` methods
+  - Detailed status reporting with `StepStatus` types (Pending, Running, OK, Warn, Error, Skipped)
+  - Optional callback support in `RunOptions` - backward compatible with existing code
+  - Integrated into all execution methods (`RunStage`, `RunAction`, `RunStageStep`)
+  - Perfect for CLI tools, CI/CD systems, and applications needing step-by-step progress reporting
+  - Comprehensive test coverage and example implementations
 - **CLI help improvements**: Fixed help usage to show `buildfab [flags] [command]` instead of duplicate usage lines
 - **Default run behavior**: Added default command behavior where first argument is treated as stage name for run command
 - **Enhanced listing commands**: Improved list-actions to show both defined and built-in actions, added list-stages and list-steps commands

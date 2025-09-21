@@ -97,6 +97,7 @@ type RunOptions struct {
 	ErrorOutput io.Writer         // Error output writer (default: os.Stderr)
 	Only        []string          // Only run steps matching these labels
 	WithRequires bool             // Include required dependencies when running single step
+	StepCallback StepCallback     // Optional callback for step execution events
 }
 
 // DefaultRunOptions returns default run options
@@ -171,8 +172,30 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 		return fmt.Errorf("action not found: %s", actionName)
 	}
 
-	// Execute the action directly
-	return r.runActionInternal(ctx, action)
+	// Call step start callback if provided
+	if r.opts.StepCallback != nil {
+		r.opts.StepCallback.OnStepStart(ctx, actionName)
+	}
+
+	start := time.Now()
+	err := r.runActionInternal(ctx, action)
+	duration := time.Since(start)
+
+	// Call step complete callback if provided
+	if r.opts.StepCallback != nil {
+		status := StepStatusOK
+		message := "executed successfully"
+		
+		if err != nil {
+			status = StepStatusError
+			message = err.Error()
+			r.opts.StepCallback.OnStepError(ctx, actionName, err)
+		}
+		
+		r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, duration)
+	}
+
+	return err
 }
 
 // RunStageStep executes a specific step within a stage
@@ -201,7 +224,30 @@ func (r *Runner) RunStageStep(ctx context.Context, stageName, stepName string) e
 		return fmt.Errorf("action not found: %s", targetStep.Action)
 	}
 
-	return r.runActionInternal(ctx, action)
+	// Call step start callback if provided
+	if r.opts.StepCallback != nil {
+		r.opts.StepCallback.OnStepStart(ctx, stepName)
+	}
+
+	start := time.Now()
+	err := r.runActionInternal(ctx, action)
+	duration := time.Since(start)
+
+	// Call step complete callback if provided
+	if r.opts.StepCallback != nil {
+		status := StepStatusOK
+		message := "executed successfully"
+		
+		if err != nil {
+			status = StepStatusError
+			message = err.Error()
+			r.opts.StepCallback.OnStepError(ctx, stepName, err)
+		}
+		
+		r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, duration)
+	}
+
+	return err
 }
 
 // RunCLI executes the buildfab CLI with the given arguments
@@ -375,7 +421,29 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 			return fmt.Errorf("action not found: %s", step.Action)
 		}
 		
+		// Call step start callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepStart(ctx, step.Action)
+		}
+		
+		start := time.Now()
 		err := r.runActionInternal(ctx, action)
+		duration := time.Since(start)
+		
+		// Call step complete callback if provided
+		if r.opts.StepCallback != nil {
+			status := StepStatusOK
+			message := "executed successfully"
+			
+			if err != nil {
+				status = StepStatusError
+				message = err.Error()
+				r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+			}
+			
+			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration)
+		}
+		
 		if err != nil {
 			// Check error policy
 			if step.OnError == "warn" {
@@ -416,6 +484,11 @@ func (r *Runner) runBuiltInAction(ctx context.Context, action Action) error {
 	result, err := runner.Run(ctx)
 	if err != nil {
 		return err
+	}
+	
+	// Call step output callback if provided and verbose mode is enabled
+	if r.opts.StepCallback != nil && r.opts.Verbose && result.Message != "" {
+		r.opts.StepCallback.OnStepOutput(ctx, action.Name, result.Message)
 	}
 	
 	// Print result if verbose mode is enabled
@@ -460,6 +533,16 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 	
 	// Execute command
 	err := cmd.Run()
+	
+	// Call step output callback if provided and verbose mode is enabled
+	if r.opts.StepCallback != nil && r.opts.Verbose {
+		if stdout.Len() > 0 {
+			r.opts.StepCallback.OnStepOutput(ctx, action.Name, stdout.String())
+		}
+		if stderr.Len() > 0 {
+			r.opts.StepCallback.OnStepOutput(ctx, action.Name, stderr.String())
+		}
+	}
 	
 	// Print output if verbose
 	if r.opts.Verbose {

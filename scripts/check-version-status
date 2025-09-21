@@ -2,6 +2,7 @@
 
 # Version status checking script
 # Used by AI assistant to check version status before making changes
+# Uses buildfab library's version check-greatest functionality
 
 set -e
 
@@ -18,109 +19,43 @@ fi
 
 echo -e "${BLUE}🔍 Checking version status...${NC}"
 
-# Download version utility from GitHub releases
-download_version_utility() {
-    echo -e "${BLUE}No version utility found, downloading latest from GitHub...${NC}"
-    
-    # Detect platform and architecture
-    local platform=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local arch=$(uname -m)
-    
-    # Map architecture names
-    case "$arch" in
-        x86_64) arch="amd64" ;;
-        arm64|aarch64) arch="arm64" ;;
-        *) echo -e "${RED}Unsupported architecture: $arch${NC}"; return 1 ;;
-    esac
-    
-    # Map platform names
-    case "$platform" in
-        darwin) platform="macos" ;;
-        linux) platform="linux" ;;
-        *) echo -e "${RED}Unsupported platform: $platform${NC}"; return 1 ;;
-    esac
-    
-    echo -e "${BLUE}Detected platform: ${platform}-${arch}${NC}"
-    
-    # Download URL using latest release (no version number in URL)
-    local download_url="https://github.com/AlexBurnes/version-go/releases/latest/download/version-${platform}-${arch}.tar.gz"
-    
-    # Create scripts directory
-    mkdir -p scripts
-    
-    # Download and install using pipe approach
-    echo -e "${BLUE}Downloading version utility from: $download_url${NC}"
-    if wget -q -O - "$download_url" | INSTALL_DIR="$(dirname "$0")/scripts" sh; then
-        if [[ -f "scripts/version" ]]; then
-            echo -e "${GREEN}Successfully downloaded version utility${NC}"
-            return 0
-        else
-            echo -e "${RED}Version binary not found after installation${NC}"
-            return 1
-        fi
-    else
-        echo -e "${RED}Failed to download and install version utility from GitHub${NC}"
-        return 1
-    fi
-}
-
-# Get current version with corrected priority order
-CURRENT_TAG=""
-
-# 1. Try to use built version utility first
-if [[ -f "scripts/version" ]]; then
-    CURRENT_TAG=$(scripts/version version 2>/dev/null || echo "")
-    if [[ -n "$CURRENT_TAG" ]]; then
-        echo -e "Current version (from built utility): ${GREEN}$CURRENT_TAG${NC}"
-    fi
-fi
-
-# 2. NEW: Auto-download latest version utility
-if [[ -z "$CURRENT_TAG" ]]; then
-    if download_version_utility; then
-        CURRENT_TAG=$(scripts/version version 2>/dev/null || echo "")
-        if [[ -n "$CURRENT_TAG" ]]; then
-            echo -e "Current version (from downloaded utility): ${GREEN}$CURRENT_TAG${NC}"
-        fi
-    fi
-fi
-
-# 3. Fallback to git describe if version utility not available or failed
-if [[ -z "$CURRENT_TAG" ]]; then
-    CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
-    echo -e "Current git tag: ${GREEN}$CURRENT_TAG${NC}"
-fi
-
-# Get VERSION file content
-if [[ -f "VERSION" ]]; then
-    VERSION_FILE=$(cat VERSION)
-    echo -e "VERSION file: ${GREEN}$VERSION_FILE${NC}"
-else
+# Check if VERSION file exists
+if [[ ! -f "VERSION" ]]; then
     echo -e "VERSION file: ${RED}NOT FOUND${NC}"
     echo -e "${RED}❌ VERSION file is required for this project${NC}"
-    
-    # Get current version to suggest proper VERSION file content
-    SUGGESTED_VERSION=""
-    if [[ -f "scripts/version" ]]; then
-        SUGGESTED_VERSION=$(scripts/version version 2>/dev/null || echo "")
-    fi
-    
-    if [[ -n "$SUGGESTED_VERSION" ]]; then
-        echo -e "${YELLOW}💡 Create VERSION file with: echo 'v$SUGGESTED_VERSION' > VERSION${NC}"
-    else
-        echo -e "${YELLOW}💡 Create VERSION file with: echo 'v1.0.0' > VERSION${NC}"
-    fi
+    echo -e "${YELLOW}💡 Create VERSION file with: echo 'v1.0.0' > VERSION${NC}"
     exit 1
 fi
 
-# Normalize versions for comparison (remove 'v' prefix if present)
-CURRENT_TAG_NORMALIZED=$(echo "$CURRENT_TAG" | sed 's/^v//')
-VERSION_FILE_NORMALIZED=$(echo "$VERSION_FILE" | sed 's/^v//')
+# Get VERSION file content
+VERSION_FILE=$(cat VERSION)
+echo -e "VERSION file: ${GREEN}$VERSION_FILE${NC}"
 
-# Check if versions match
-if [[ "$CURRENT_TAG_NORMALIZED" == "$VERSION_FILE_NORMALIZED" ]]; then
-    echo -e "${YELLOW}⚠️  VERSION file ($VERSION_FILE) matches current tag ($CURRENT_TAG)${NC}"
-    echo -e "${YELLOW}📝 Suggestion: Increment version before making changes:${NC}"
+# Use version utility to check if current version is the greatest
+echo -e "${BLUE}🔍 Checking if current version is the greatest...${NC}"
+
+# Check if version utility exists
+if [[ ! -f "scripts/version" ]]; then
+    echo -e "${YELLOW}⚠️  Version utility not found at scripts/version${NC}"
+    echo -e "${YELLOW}📝 Fallback: Please ensure VERSION file is greater than latest git tag${NC}"
+    echo -e "${GREEN}Ready to make changes!${NC}"
+    exit 0
+fi
+
+# Run version check-greatest command with VERSION file content
+CHECK_RESULT=$(scripts/version check-greatest "$VERSION_FILE" 2>&1 || true)
+
+if echo "$CHECK_RESULT" | grep -q "is the greatest among all tags"; then
+    echo -e "${GREEN}✅ Current version is the greatest${NC}"
+    echo -e "${GREEN}✅ Version status OK${NC}"
+    echo -e "${GREEN}Ready to make changes!${NC}"
+    exit 0
+elif echo "$CHECK_RESULT" | grep -q "is not the greatest among all tags"; then
+    # Get the greatest version using git tags
+    GREATEST_VERSION=$(git tag --sort=-version:refname | head -1)
+    echo -e "${RED}❌ Current version $VERSION_FILE is not the greatest${NC}"
+    echo -e "${RED}❌ Greatest version is: $GREATEST_VERSION${NC}"
+    echo -e "${YELLOW}📝 Suggestion: Update VERSION file to be greater than $GREATEST_VERSION${NC}"
     echo -e "   ${BLUE}scripts/version bump patch${NC}    # for bug fixes"
     echo -e "   ${BLUE}scripts/version bump minor${NC}    # for new features" 
     echo -e "   ${BLUE}scripts/version bump major${NC}    # for breaking changes"
@@ -128,8 +63,8 @@ if [[ "$CURRENT_TAG_NORMALIZED" == "$VERSION_FILE_NORMALIZED" ]]; then
     echo -e "${YELLOW}Then make your changes and follow the workflow in docs/Developer-workflow.md${NC}"
     exit 1
 else
-    echo -e "${GREEN}✅ Version status OK${NC}"
-    echo -e "VERSION file ($VERSION_FILE) differs from current tag ($CURRENT_TAG)"
+    echo -e "${YELLOW}⚠️  Could not determine version status using version utility${NC}"
+    echo -e "${YELLOW}📝 Fallback: Please ensure VERSION file is greater than latest git tag${NC}"
     echo -e "${GREEN}Ready to make changes!${NC}"
     exit 0
 fi

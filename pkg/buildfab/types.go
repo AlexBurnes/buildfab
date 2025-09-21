@@ -1,6 +1,9 @@
 package buildfab
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // StageResult contains execution results for a stage
 type StageResult struct {
@@ -51,4 +54,19 @@ func (s StepStatus) String() string {
 	default:
 		return "unknown"
 	}
+}
+
+// StepCallback defines the interface for step execution callbacks
+type StepCallback interface {
+	// OnStepStart is called when a step starts execution
+	OnStepStart(ctx context.Context, stepName string)
+	
+	// OnStepComplete is called when a step completes (success, warning, or error)
+	OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration)
+	
+	// OnStepOutput is called for step output (when verbose mode is enabled)
+	OnStepOutput(ctx context.Context, stepName string, output string)
+	
+	// OnStepError is called for step errors
+	OnStepError(ctx context.Context, stepName string, err error)
 }

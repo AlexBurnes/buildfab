@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-01-27
+
+### Added
+- **Step Callback System**: Added comprehensive step-by-step progress reporting for buildfab library
+  - Added `StepCallback` interface with `OnStepStart`, `OnStepComplete`, `OnStepOutput`, and `OnStepError` methods
+  - Added `StepStatus` types (Pending, Running, OK, Warn, Error, Skipped) for detailed status reporting
+  - Added `StepCallback` field to `RunOptions` for optional callback support
+  - Integrated step callbacks into all execution methods (`RunStage`, `RunAction`, `RunStageStep`)
+  - Added step callback support to both library API and internal executor
+  - Added comprehensive test coverage for step callback functionality
+  - Added example implementations and usage patterns in `examples/step_callbacks_example.go`
+  - Step callbacks provide real-time visibility into individual step execution progress
+  - Backward compatible - callbacks are optional and default behavior unchanged
+  - Perfect for CLI tools, CI/CD systems, and applications needing step-by-step progress reporting
+
+### Changed
+- **Version Check Script**: Updated `scripts/check-version-status` to use `scripts/version check-greatest` functionality
+  - Now properly detects when VERSION file version is below the greatest git tag
+  - Provides clear error messages and suggestions for version bumping
+  - Uses the project's own version utility instead of external dependencies
+  - Improved version validation workflow for development and release processes
+
+### Documentation
+- **Library API Updates**: Enhanced library documentation with step callback examples
+  - Added step callback interface documentation to `docs/Library.md`
+  - Added comprehensive usage examples for step callbacks
+  - Added examples for different callback patterns (verbose, silent, custom)
+  - Updated API reference to include new `StepCallback` field in `RunOptions`
+
 ## [0.6.0] - 2025-01-27
 
 ### Added
