@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.1.2] - 2025-01-21
+
+### Fixed
+- **DAG Executor Streaming**: Fixed critical bug where DAG executor was not properly implementing streaming output
+  - Removed wave-based execution with `wg.Wait()` that prevented true streaming
+  - Implemented continuous execution where steps start as soon as dependencies are satisfied
+  - Changed display logic to show results immediately when they complete, in declaration order
+  - Now properly supports true parallel execution with streaming output as specified in pre-push project
+
 ## [v0.1.1] - 2025-01-21
 
 ### Fixed

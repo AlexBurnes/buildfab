@@ -274,62 +274,77 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 		}
 	}()
 	
-	// Execute all ready steps in parallel
-	for {
-		mu.Lock()
-		readySteps := e.getReadyStepsLocked(dag, completed, failed, executing)
-		mu.Unlock()
+	// Start execution goroutine that continuously starts new steps
+	go func() {
+		defer close(resultChan)
 		
-		if len(readySteps) == 0 {
-			break
-		}
-		
-		// Execute ready steps in parallel
-		var wg sync.WaitGroup
-		for _, nodeName := range readySteps {
-			node := dag[nodeName]
-			
+		for {
 			mu.Lock()
-			executing[nodeName] = true
+			readySteps := e.getReadyStepsLocked(dag, completed, failed, executing)
 			mu.Unlock()
 			
-			// Skip if already failed and this node requires it
-			if e.hasFailedDependency(node, failed) {
-				failedDeps := e.getFailedDependencyNames(node, failed)
-				result := buildfab.Result{
-					Name:   nodeName,
-					Status: buildfab.StatusSkipped,
-					Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
+			if len(readySteps) == 0 {
+				// Check if all steps are completed or executing
+				mu.Lock()
+				allDone := true
+				for nodeName := range dag {
+					if !completed[nodeName] && !executing[nodeName] {
+						allDone = false
+						break
+					}
 				}
-				resultChan <- result
+				mu.Unlock()
+				
+				if allDone {
+					break
+				}
+				
+				// Wait a bit before checking again
+				time.Sleep(10 * time.Millisecond)
 				continue
 			}
 			
-			// Check if step should be executed based on conditions
-			if !e.shouldExecuteStep(ctx, node) {
-				result := buildfab.Result{
-					Name:   nodeName,
-					Status: buildfab.StatusOK,
-					Message: "skipped (condition not met)",
+			// Start ready steps immediately without waiting
+			for _, nodeName := range readySteps {
+				node := dag[nodeName]
+				
+				mu.Lock()
+				executing[nodeName] = true
+				mu.Unlock()
+				
+				// Skip if already failed and this node requires it
+				if e.hasFailedDependency(node, failed) {
+					failedDeps := e.getFailedDependencyNames(node, failed)
+					result := buildfab.Result{
+						Name:   nodeName,
+						Status: buildfab.StatusSkipped,
+						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
+					}
+					resultChan <- result
+					continue
 				}
-				resultChan <- result
-				continue
+				
+				// Check if step should be executed based on conditions
+				if !e.shouldExecuteStep(ctx, node) {
+					result := buildfab.Result{
+						Name:   nodeName,
+						Status: buildfab.StatusOK,
+						Message: "skipped (condition not met)",
+					}
+					resultChan <- result
+					continue
+				}
+				
+				// Execute the node in parallel
+				go func(nodeName string, node *DAGNode) {
+					result, _ := e.executeAction(ctx, node.Action)
+					result.Name = nodeName
+					resultChan <- result
+				}(nodeName, node)
 			}
-			
-			// Execute the node in parallel
-			wg.Add(1)
-			go func(nodeName string, node *DAGNode) {
-				defer wg.Done()
-				result, _ := e.executeAction(ctx, node.Action)
-				result.Name = nodeName
-				resultChan <- result
-			}(nodeName, node)
 		}
-		
-		wg.Wait()
-	}
+	}()
 	
-	close(resultChan)
 	<-done
 	
 	// Display any remaining steps that weren't displayed yet
@@ -372,9 +387,10 @@ func (e *Executor) canDisplayStepImmediately(step buildfab.Step, steps []buildfa
 		return false
 	}
 	
-	// Check if all previous steps in declaration order have been completed (not just displayed)
+	// Check if all previous steps in declaration order have been displayed
+	// This allows true streaming - steps can complete out of order but display in order
 	for i := 0; i < stepIndex; i++ {
-		if !completed[steps[i].Action] {
+		if !displayed[steps[i].Action] {
 			return false
 		}
 	}

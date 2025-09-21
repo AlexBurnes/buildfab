@@ -28,6 +28,8 @@
 - **Command error message indentation**: Removed extra indentation from custom action error messages to preserve original script indentation structure
 - **Summary number alignment**: Improved summary formatting with right-aligned numbers and consistent spacing for better readability (removed unnecessary colon)
 - **Version v0.1.1 release**: Released with comprehensive UI improvements, alignment fixes, and enhanced user experience
+- **DAG executor streaming fix**: Fixed critical bug in v0.1.2 where DAG executor was not properly implementing streaming output - removed wave-based execution with wg.Wait() and implemented true continuous execution with immediate result display
+- **Streaming output improvement**: Changed display logic to show results immediately when they complete, in declaration order, enabling true parallel execution with streaming output
 - **Release readiness**: All components tested and ready for production use
 
 ## What's Left to Build
@@ -55,7 +57,7 @@
 - **Variable system design**: Adopted GitHub-style `${{ }}` syntax for familiar variable interpolation
 
 ## Current Status
-**Phase**: Production Ready - v0.1.1 Released
+**Phase**: Production Ready - v0.1.2 Released
 **Next Milestone**: Testing Suite and Performance Optimization
 **Blockers**: None - fully functional and ready for production use
 **Priority**: Medium - focus on testing and optimization

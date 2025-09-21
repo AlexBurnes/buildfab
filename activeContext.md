@@ -1,7 +1,7 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-Core implementation phase completed successfully! All major components have been implemented including the library API, CLI interface, DAG execution engine, built-in actions, and version library integration. The project is now fully functional and ready for production use. Version library integration has been fixed to use the official release v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. Version v0.1.1 released with UI improvements and alignment fixes.
+Core implementation phase completed successfully! All major components have been implemented including the library API, CLI interface, DAG execution engine, built-in actions, and version library integration. The project is now fully functional and ready for production use. Version library integration has been fixed to use the official release v0.8.22 from GitHub. Build system testing completed successfully with all cross-platform builds working correctly. Version v0.1.1 released with UI improvements and alignment fixes. Critical DAG executor streaming bug fixed in v0.1.2 - now properly implements true streaming output with parallel execution while maintaining declaration order.
 
 ## Recent Changes
 - **Core library implementation**: Complete library API with Config, Action, Stage, Step, and Result types
@@ -27,6 +27,8 @@ Core implementation phase completed successfully! All major components have been
 - **Command error message indentation**: Removed extra indentation from custom action error messages to preserve original script indentation structure
 - **Summary number alignment**: Improved summary formatting with right-aligned numbers and consistent spacing for better readability (removed unnecessary colon)
 - **Version v0.1.1 release**: Released with comprehensive UI improvements, alignment fixes, and enhanced user experience
+- **DAG executor streaming fix**: Fixed critical bug in v0.1.2 where DAG executor was not properly implementing streaming output - removed wave-based execution with wg.Wait() and implemented true continuous execution with immediate result display
+- **Streaming output improvement**: Changed display logic to show results immediately when they complete, in declaration order, enabling true parallel execution with streaming output
 
 ## Next Steps
 - **Testing suite**: Add comprehensive unit tests, integration tests, and E2E tests
@@ -37,7 +39,7 @@ Core implementation phase completed successfully! All major components have been
 ## Active Decisions and Considerations
 - **Version library integration**: Successfully integrated AlexBurnes/version-go v0.8.22 for `${{version.version}}` variables
 - **Pre-push compatibility**: Maintained full compatibility with existing pre-push YAML schema
-- **DAG execution**: Implemented streaming output that respects declaration order while enabling parallel execution
+- **DAG execution**: Fixed streaming output implementation to properly respect declaration order while enabling true parallel execution with immediate result display
 - **Variable interpolation**: Support for both Git variables (`${{tag}}`, `${{branch}}`) and version variables (`${{version.version}}`, etc.)
 - **Built-in actions**: Extensible registry system for common automation tasks
 - **Action execution**: Built-in actions can be executed directly without configuration file
@@ -52,7 +54,7 @@ Core implementation phase completed successfully! All major components have been
 
 ## Learnings and Project Insights
 - **Version-go integration**: Successfully integrated external version library v0.8.22 for comprehensive version information
-- **DAG complexity**: Streaming output with parallel execution requires careful synchronization
+- **DAG complexity**: Streaming output with parallel execution requires careful synchronization - fixed critical bug where wave-based execution prevented true streaming
 - **Variable interpolation**: GitHub-style `${{ }}` syntax provides familiar and flexible variable system
 - **Pre-push compatibility**: Maintaining exact YAML schema compatibility ensures seamless migration
 - **CLI design**: Cobra provides excellent foundation for complex CLI applications with subcommands
