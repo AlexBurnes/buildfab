@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2025-01-27
+
+### Added
+- **Buildfab Migration**: Complete migration from bash scripts to buildfab actions
+  - Added tool check actions: `check-conan`, `check-cmake`, `check-goreleaser`
+  - Added dependency installation action: `install-conan-deps` with golang package creation
+  - Added build actions: `configure-cmake`, `build-binaries`, `build-all-platforms`
+  - Added installer creation action: `create-installers`
+  - Added GoReleaser actions: `goreleaser-dry-run`, `goreleaser-release`
+  - Enhanced build process with proper CMake preset support and fallback configuration
+  - Added automatic GoReleaser installation and PATH setup for Go environment
+
+### Changed
+- **Project Configuration**: Reorganized `.project.yml` with stages first, actions at end
+  - Improved readability with logical grouping of actions by category
+  - Enhanced dependency management with proper `require` relationships
+  - Updated build and release stages to use new buildfab actions
+  - Removed legacy bash script references from project configuration
+
+### Removed
+- **Legacy Build Scripts**: Removed old bash scripts that are no longer needed
+  - Removed `buildtools/build-conan.sh` (448 lines)
+  - Removed `buildtools/build-and-package.sh` (350 lines)  
+  - Removed `buildtools/build-goreleaser.sh` (232 lines)
+  - Removed legacy build actions from project configuration
+  - Verified CI/CD pipelines don't use removed scripts to prevent breakage
+
+### Documentation
+- **README Updates**: Enhanced development section with buildfab installation instructions
+  - Added buildfab installation commands for Linux, macOS, and Windows
+  - Updated build section to recommend buildfab-based workflow
+  - Added platform-specific installation instructions for both amd64 and arm64
+  - Improved developer workflow documentation
+
 ## [0.7.3] - 2025-01-27
 
 ### Added

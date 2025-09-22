@@ -3,7 +3,63 @@ project:
   modules: ["buildfab"]
   bin: "bin"
 
+stages:
+  pre-push:
+    steps:
+      - action: version-check
+      - action: version-greatest
+
+      # Always run version module validation
+      - action: version-module
+      
+      # Run tests after version module validation
+      - action: run-tests
+        require: [version-module]
+      
+      # Run Git checks for all versions      
+      - action: git-untracked
+      - action: git-uncommitted
+      - action: git-modified
+        onerror: warn
+
+  build:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: check-goreleaser
+      - action: install-conan-deps
+        require: [check-conan, check-cmake]
+      - action: configure-cmake
+        require: [install-conan-deps]
+      - action: build-binaries
+        require: [configure-cmake]
+      - action: run-tests
+        require: [build-binaries]
+      - action: create-installers
+        require: [build-binaries]
+      - action: goreleaser-dry-run
+        require: [create-installers, check-goreleaser]
+
+  release:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: check-goreleaser
+      - action: install-conan-deps
+        require: [check-conan, check-cmake]
+      - action: configure-cmake
+        require: [install-conan-deps]
+      - action: build-all-platforms
+        require: [configure-cmake]
+      - action: run-tests
+        require: [build-all-platforms]
+      - action: create-installers
+        require: [build-all-platforms]
+      - action: goreleaser-release
+        require: [create-installers, check-goreleaser]
+
 actions:
+  # Version and validation actions
   - name: version-check
     run: scripts/version check
 
@@ -34,6 +90,7 @@ actions:
   - name: run-tests
     run: go test ./... -v -race
 
+  # Git actions
   - name: git-untracked
     uses: git@untracked
 
@@ -43,56 +100,101 @@ actions:
   - name: git-modified
     uses: git@modified
 
-  - name: build-conan
-    run: ./buildtools/build-conan.sh build
-
-  - name: build-conan-all
-    run: ./buildtools/build-conan.sh build-all
-
-  - name: package-dry-run
+  # Tool check actions
+  - name: check-conan
     run: |
-      ./buildtools/build-and-package.sh clean
-      ./buildtools/build-and-package.sh dry-run
+      if ! which conan >/dev/null 2>&1; then
+        echo "Conan is not installed. Install with: pip install conan"
+        exit 1
+      fi
+      conan --version
 
-  - name: package-release
+  - name: check-cmake
     run: |
-      ./buildtools/build-and-package.sh clean
-      ./buildtools/build-and-package.sh release
+      if ! which cmake >/dev/null 2>&1; then
+        echo "CMake not found in PATH, will use Conan's CMake"
+      else
+        cmake --version
+      fi
 
-stages:
-  pre-push:
-    steps:
-      - action: version-check
-      - action: version-greatest
+  - name: check-goreleaser
+    run: |
+      if ! which goreleaser >/dev/null 2>&1; then
+        echo "GoReleaser not found, checking Go environment..."
+        if ! which go >/dev/null 2>&1; then
+          echo "Go is not installed. Please install Go first"
+          exit 1
+        fi
+        echo "Installing GoReleaser..."
+        go install github.com/goreleaser/goreleaser@latest
+        # Add Go bin to PATH
+        export PATH="$(go env GOPATH)/bin:$PATH"
+        if ! which goreleaser >/dev/null 2>&1; then
+          echo "Failed to install GoReleaser"
+          exit 1
+        fi
+      fi
+      goreleaser --version
 
-      # Always run version module validation
-      - action: version-module
-      
-      # Run tests after version module validation
-      - action: run-tests
-        require: [version-module]
-      
-      # Run Git checks for all versions      
-      - action: git-untracked
-      - action: git-uncommitted
-      - action: git-modified
-        onerror: warn
+  # Dependency installation actions
+  - name: install-conan-deps
+    run: |
+      # Check for golang package in Conan
+      if ! conan search golang --remote=all 2>/dev/null | grep -q "golang/"; then
+        echo "Creating golang package locally..."
+        conan create conanfile-golang.py --build=missing
+      fi
+      conan install . --build=missing --profile=default
 
-  build:
-    steps:
-      - action: build-conan
-      - action: run-tests
-        require: [build-conan]
-      - action: package-dry-run
-        require: [run-tests]
+  # Build actions
+  - name: configure-cmake
+    run: |
+      # Configure CMake with Conan preset
+      mkdir -p .build
+      # Try to use Conan preset first (CMake 3.23+)
+      if cmake --version | grep -q "3\.2[3-9]\|3\.[3-9]\|[4-9]\." && [ -f "./CMakeUserPresets.json" ]; then
+        echo "Using Conan CMake preset"
+        cmake --preset conan-release
+      else
+        echo "Using manual CMake configuration"
+        cmake -B .build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="/usr/local" -G "Unix Makefiles"
+      fi
 
-  release:
-    steps:
-      - action: build-conan
-      - action: run-tests
-        require: [build-conan]
-      - action: build-conan-all
-        require: [run-tests]
-      - action: package-release
-        require: [build-conan-all]
-        
+  - name: build-binaries
+    run: |
+      # Build for current platform
+      if cmake --version | grep -q "3\.2[3-9]\|3\.[3-9]\|[4-9]\." && [ -f "./CMakeUserPresets.json" ]; then
+        echo "Building with CMake preset"
+        cmake --build --preset conan-release --target buildfab
+      else
+        echo "Building with manual configuration"
+        cmake --build .build --target buildfab
+      fi
+
+  - name: build-all-platforms
+    run: |
+      # Build for all platforms
+      if cmake --version | grep -q "3\.2[3-9]\|3\.[3-9]\|[4-9]\." && [ -f "./CMakeUserPresets.json" ]; then
+        echo "Building with CMake preset"
+        cmake --build --preset conan-release --target buildfab-all
+      else
+        echo "Building with manual configuration"
+        cmake --build .build --target buildfab-all
+      fi
+
+  # Installer creation actions
+  - name: create-installers
+    run: |
+      # Create install scripts
+      ./buildtools/create-all-installers.sh "$(scripts/version version)" "installers"
+
+  # GoReleaser actions
+  - name: goreleaser-dry-run
+    run: |
+      export PATH="$(go env GOPATH)/bin:$PATH"
+      goreleaser release --snapshot --skip-publish --clean
+
+  - name: goreleaser-release
+    run: |
+      export PATH="$(go env GOPATH)/bin:$PATH"
+      goreleaser release --clean
