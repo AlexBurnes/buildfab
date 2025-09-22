@@ -43,6 +43,22 @@ actions:
   - name: git-modified
     uses: git@modified
 
+  - name: build-conan
+    run: ./buildtools/build-conan.sh build
+
+  - name: build-conan-all
+    run: ./buildtools/build-conan.sh build-all
+
+  - name: package-dry-run
+    run: |
+      ./buildtools/build-and-package.sh clean
+      ./buildtools/build-and-package.sh dry-run
+
+  - name: package-release
+    run: |
+      ./buildtools/build-and-package.sh clean
+      ./buildtools/build-and-package.sh release
+
 stages:
   pre-push:
     steps:
@@ -61,3 +77,22 @@ stages:
       - action: git-uncommitted
       - action: git-modified
         onerror: warn
+
+  build:
+    steps:
+      - action: build-conan
+      - action: run-tests
+        require: [build-conan]
+      - action: package-dry-run
+        require: [run-tests]
+
+  release:
+    steps:
+      - action: build-conan
+      - action: run-tests
+        require: [build-conan]
+      - action: build-conan-all
+        require: [run-tests]
+      - action: package-release
+        require: [build-conan-all]
+        
