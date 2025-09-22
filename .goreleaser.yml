@@ -53,7 +53,7 @@ release:
 scoop:
   bucket:
     owner: AlexBurnes
-    name: buildfab-scoop-bucket
+    name: scoop-bucket
     branch: main
   homepage: "https://github.com/AlexBurnes/buildfab"
   description: "Go-based automation runner with DAG executor"
