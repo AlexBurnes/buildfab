@@ -216,6 +216,9 @@ const (
 func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
 	if c.verbose {
 		fmt.Fprintf(c.output, "  💻 %s\n", stepName)
+	} else {
+		// In silence mode, show running indicator
+		fmt.Fprintf(c.output, "  %s%s%s %s running...\r", colorCyan, "○", colorReset, stepName)
 	}
 }
 
@@ -248,7 +251,15 @@ func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string
 		
 		// Show step results with enhanced error messages
 		displayMessage := c.enhanceMessage(stepName, status, message)
-		fmt.Fprintf(c.output, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
+		
+		if c.verbose {
+			// In verbose mode, just print the result
+			fmt.Fprintf(c.output, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
+		} else {
+			// In silence mode, replace the running indicator with the result
+			// Clear the running line and print the final result
+			fmt.Fprintf(c.output, "\r  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
+		}
 		c.displayed[stepName] = true
 	}
 	

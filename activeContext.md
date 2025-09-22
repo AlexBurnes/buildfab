@@ -1,6 +1,8 @@
 # Active Context: buildfab
 
 ## Current Work Focus
+**VERSION 0.7.3 RELEASED!** Successfully implemented running step indicators in silence mode to improve user experience. Added real-time feedback showing which steps are currently executing with `○ step-name running...` indicators that get replaced with final results when steps complete. **Enhanced silence mode** - users now get clear visual feedback about current execution progress instead of wondering if the executor is stuck. **Perfect line replacement** - uses carriage return (`\r`) for clean output without duplicate lines. **Maintained verbose mode** - existing verbose behavior unchanged with detailed command output and step notifications. **Improved user experience** - silence mode now provides the perfect balance between clean output and real-time progress visibility.
+
 **VERSION 0.7.2 RELEASED!** Successfully completed comprehensive API simplification and error message improvements. Implemented beautiful v0.5.0 style formatting with proper headers, stage headers, step execution display, and summary statistics. Fixed all major UI issues including correct summary counts, duplicate step display, skipped step visibility, and CLI flag parsing. **Complete v0.5.0 output compatibility** - header with project info, stage headers, step execution with proper icons and indentation, footer summary with statistics. **Fixed summary counting** - now correctly shows successful step counts instead of 0. **Fixed duplicate steps** - eliminated duplicate version-module step display issue. **Fixed skipped steps** - run-tests now properly shows as skipped when version-module fails. **Fixed CLI flag parsing** - -v pre-push now works correctly with proper argument handling. **Library API integration** - all functionality uses modern buildfab library while maintaining beautiful output formatting.
 
 **TEST FIXES COMPLETED!** Successfully fixed all test failures and build issues. **Fixed examples package build failure** - resolved duplicate main function declarations by commenting out one main function and adding proper main function that calls the example functions. **Fixed built-in action support** - updated RunAction method in both Runner and SimpleRunner to properly check action registry for built-in actions like version@check before falling back to custom actions. **Fixed test mode behavior** - modified CLI functions to return errors instead of calling os.Exit(1) when running in test mode using testing.Testing() check. **All tests now passing** - go test ./... -v -race completes successfully with 100% test pass rate across all packages.
@@ -14,6 +16,17 @@
 **COMMAND ALIGNMENT AND DUPLICATE OUTPUT FIXES COMPLETED!** Successfully fixed command alignment and eliminated duplicate output issues. **Fixed command indentation** - multi-line commands now properly preserve relative indentation structure with 6-space base indentation. **Fixed duplicate output** - eliminated duplicate "FAILED - stage" messages by removing redundant `printSimpleResult` calls from CLI. **Perfect alignment** - commands maintain their original YAML indentation structure while being properly aligned with "to check run:" prefix. **Clean output** - single result message per stage execution with proper summary statistics.
 
 ## Recent Changes
+- **Silence Mode Enhancement**: Successfully implemented running step indicators in silence mode
+  - Added `○ step-name running...` indicators that show when steps start executing
+  - Implemented line replacement using carriage return (`\r`) for clean output
+  - Running indicators are replaced with final results when steps complete
+  - Only shows in silence mode - verbose mode maintains existing behavior
+  - Perfect user experience with real-time progress feedback
+  - No duplicate lines or messy terminal output
+  - Users can now see exactly which step is currently executing
+  - Enhanced `SimpleStepCallback.OnStepStart()` to show running indicators in silence mode
+  - Modified `SimpleStepCallback.OnStepComplete()` to replace running indicators with results
+  - All tests passing with improved silence mode behavior
 - **Test Fixes**: Successfully fixed all test failures and build issues
   - Fixed examples package build failure by resolving duplicate main function declarations
   - Updated RunAction method in both Runner and SimpleRunner to properly check action registry for built-in actions

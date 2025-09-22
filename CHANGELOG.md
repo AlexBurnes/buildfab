@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2025-01-27
+
+### Added
+- **Silence Mode Enhancement**: Added running step indicators for improved user experience
+  - Real-time feedback showing `○ step-name running...` when steps start executing
+  - Clean line replacement using carriage return (`\r`) for professional output
+  - Running indicators are replaced with final results when steps complete
+  - Only active in silence mode - verbose mode maintains existing detailed behavior
+  - Perfect balance between clean output and progress visibility
+  - Users can now see exactly which step is currently executing instead of wondering if executor is stuck
+
 ### Fixed
 - **Test Suite Issues**: Fixed all test failures and build issues
   - Fixed examples package build failure by resolving duplicate main function declarations

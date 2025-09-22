@@ -6,7 +6,7 @@
 - **Go project structure**: Complete cmd/, pkg/, internal/ directories with proper layout
 - **Documentation framework**: All required documentation created following naming conventions
 - **Build infrastructure**: Updated CMake/Conan/GoReleaser configuration for buildfab
-- **Version management**: VERSION file (v0.7.2) and CHANGELOG.md established
+- **Version management**: VERSION file (v0.7.3) and CHANGELOG.md established
 - **Core library implementation**: Complete library API with Config, Action, Stage, Step, and Result types
 - **YAML configuration system**: Full parsing, validation, and variable interpolation with `${{ }}` syntax
 - **DAG execution engine**: Parallel execution with dependency management, cycle detection, and streaming output
@@ -28,6 +28,12 @@
   - Perfect for consumers who just want to run stages/actions with verbose output
   - Advanced callback API remains available for complex use cases
 - **CLI help improvements**: Fixed help usage to show `buildfab [flags] [command]` instead of duplicate usage lines
+- **Silence mode enhancement**: Running step indicators for improved user experience
+  - Real-time feedback showing `○ step-name running...` when steps start executing
+  - Clean line replacement using carriage return (`\r`) for professional output
+  - Running indicators replaced with final results when steps complete
+  - Perfect balance between clean output and progress visibility
+  - Only active in silence mode - verbose mode maintains existing detailed behavior
 - **Default run behavior**: Added default command behavior where first argument is treated as stage name for run command
 - **Enhanced listing commands**: Improved list-actions to show both defined and built-in actions, added list-stages and list-steps commands
 - **UI system**: Beautiful v0.5.0 style output with proper headers, stage headers, step execution display, and summary statistics
