@@ -48,6 +48,13 @@
 - **Error message improvements**: Enhanced dependency failure messages and command error formatting
 - **Execution order fixes**: Fixed run-tests execution order and removed release-only condition
 - **UI display improvements**: Fixed version display duplicate 'v' prefix and summary color formatting
+- **README enhancement**: Comprehensive installation and git hook setup documentation
+  - Added detailed installation instructions for Linux, Windows, and macOS using install scripts and Scoop
+  - Added git hook setup guide with step-by-step instructions for automated project validation
+  - Added version utility installation instructions for development and testing requirements
+  - Added project configuration examples showing how to set up `.project.yml` for git hooks
+  - Added reference to version-go project for complete version utility documentation
+  - Reorganized installation sections to avoid duplication and improve user experience
 - **Output formatting enhancements**: Fixed multi-line message alignment and simplified git-modified action messages
 - **Multi-line indentation**: Fixed indentation for subsequent lines in multi-line messages to align properly with message content (improved to use 25 spaces for better emoji alignment)
 - **Icon alignment**: Replaced emoji icons with monospace symbols (✓, !, ✗, →, ○, ?) to ensure consistent alignment across all status indicators

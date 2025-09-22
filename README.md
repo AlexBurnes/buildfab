@@ -21,20 +21,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 ### Installation
 
-#### Linux
-```bash
-# Download and install
-curl -sSL https://github.com/burnes/buildfab/releases/latest/download/install.sh | bash
-
-# Or download specific version
-curl -sSL https://github.com/burnes/buildfab/releases/download/v0.1.0/install.sh | bash
-```
-
-#### Windows (Scoop)
-```powershell
-scoop bucket add buildfab https://github.com/burnes/buildfab-scoop-bucket
-scoop install buildfab
-```
+See the [Installation and Git Hook Setup](#installation-and-git-hook-setup) section below for detailed installation instructions.
 
 ### Basic Usage
 
@@ -75,6 +62,107 @@ buildfab action git@untracked
 # List all available actions
 buildfab list-actions
 ```
+
+## Installation and Git Hook Setup
+
+### Installing buildfab
+
+#### Linux
+```bash
+# Download and install using the install script
+curl -sSL https://github.com/burnes/buildfab/releases/latest/download/install.sh | bash
+
+# Or download specific version
+curl -sSL https://github.com/burnes/buildfab/releases/download/v0.7.0/install.sh | bash
+```
+
+#### Windows (Scoop)
+```powershell
+# Add the bucket (if not already added)
+scoop bucket add buildfab https://github.com/burnes/buildfab-scoop-bucket
+
+# Install buildfab
+scoop install buildfab
+
+# Update buildfab
+scoop update buildfab
+```
+
+#### macOS
+```bash
+# Download and install using the install script
+curl -sSL https://github.com/burnes/buildfab/releases/latest/download/install.sh | bash
+
+# Or download specific version
+curl -sSL https://github.com/burnes/buildfab/releases/download/v0.7.0/install.sh | bash
+```
+
+### Setting up Git Hooks
+
+Once installed, you can set up buildfab as a git hook for automated project validation:
+
+#### 1. Install as Git Hook
+```bash
+# Run once to install buildfab as a pre-push hook
+buildfab install-hook
+
+# Or manually create the hook
+echo '#!/bin/bash
+buildfab run pre-push' > .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
+
+#### 2. Configure Your Project
+Create a `.project.yml` file in your project root (see example from this project):
+
+```yaml
+project:
+  name: "your-project-name"
+
+actions:
+  - name: test
+    run: |
+      go test ./...
+  
+  - name: lint
+    run: |
+      golangci-lint run
+
+  - name: version-check
+    uses: version@check
+
+  - name: git-untracked
+    uses: git@untracked
+
+stages:
+  pre-push:
+    steps:
+      - action: test
+      - action: lint
+      - action: version-check
+      - action: git-untracked
+```
+
+#### 3. Test the Setup
+```bash
+# Test the pre-push stage manually
+buildfab run pre-push
+
+# Test individual actions
+buildfab action version@check
+buildfab action git@untracked
+```
+
+### Version Utility for Testing
+
+This project uses the `version` CLI utility for testing and validation. Installation instructions for the `version` utility can be found in the [Build section](#installing-version-utility) above. The `version` utility provides:
+
+- Version format validation
+- Version comparison and sorting
+- Git tag integration
+- CMake build type detection
+
+For complete documentation and usage examples, see the [version-go project README](https://github.com/AlexBurnes/version-go).
 
 ## Built-in Actions
 
@@ -178,6 +266,35 @@ func main() {
 - Go 1.23.1+
 - CMake
 - Conan
+- Version utility (for testing and build requirements)
+
+### Installing Version Utility
+
+buildfab requires the `version` utility from the [version-go project](https://github.com/AlexBurnes/version-go) for testing and build requirements. Install it into the `./scripts/` directory:
+
+#### Linux/macOS
+```bash
+# Download and install to ./scripts/ directory
+# For x86_64/amd64 systems:
+wget -O - https://github.com/AlexBurnes/version-go/releases/latest/download/version-linux-amd64-install.sh | INSTALL_DIR=./scripts sh
+
+# For ARM64 systems:
+wget -O - https://github.com/AlexBurnes/version-go/releases/latest/download/version-linux-arm64-install.sh | INSTALL_DIR=./scripts sh
+```
+
+#### Windows
+```powershell
+# Download and install to ./scripts/ directory
+# For x86_64/amd64 systems:
+Invoke-WebRequest -Uri "https://github.com/AlexBurnes/version-go/releases/latest/download/version-windows-amd64.zip" -OutFile "version.zip"
+Expand-Archive -Path "version.zip" -DestinationPath "./scripts/"
+Remove-Item "version.zip"
+
+# For ARM64 systems:
+Invoke-WebRequest -Uri "https://github.com/AlexBurnes/version-go/releases/latest/download/version-windows-arm64.zip" -OutFile "version.zip"
+Expand-Archive -Path "version.zip" -DestinationPath "./scripts/"
+Remove-Item "version.zip"
+```
 
 ### Build
 ```bash

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- **README Enhancement**: Added comprehensive installation and git hook setup instructions
+  - Added detailed installation instructions for Linux, Windows, and macOS using install scripts and Scoop
+  - Added git hook setup guide with step-by-step instructions for automated project validation
+  - Added version utility installation instructions for development and testing requirements
+  - Added project configuration examples showing how to set up `.project.yml` for git hooks
+  - Added reference to version-go project for complete version utility documentation
+  - Reorganized installation sections to avoid duplication and improve user experience
+
 ## [0.7.2] - 2025-01-27
 
 ### Fixed
