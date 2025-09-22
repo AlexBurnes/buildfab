@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-01-27
+
+### Added
+- **Automated Version Bump Script**: Created `scripts/version-bump-with-file` for comprehensive version management
+  - Automatically updates VERSION file when bumping version
+  - Updates Windows Scoop configuration (`packaging/windows/scoop-bucket/version.json`) with new version and URLs
+  - Updates macOS Homebrew formula (`packaging/macos/version.rb`) with new URLs
+  - Provides clear next steps for git operations
+  - Ensures version consistency across all packaging files
+
+### Changed
+- **Version Management Rules**: Updated versioning rules to use automated version bump script
+  - `scripts/version-bump-with-file` is now the recommended method for version bumps
+  - Updated complete changes shortcut rule to use automated version bump
+  - Added packaging file update requirements to versioning rules
+  - Enhanced error handling for packaging file updates
+
 ## [0.7.5] - 2025-01-27
 
 ### Fixed

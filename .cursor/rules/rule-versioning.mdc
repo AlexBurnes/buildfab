@@ -59,17 +59,38 @@ fi
 # Check current version status
 ./scripts/check-version-status
 
-# If needed, increment version
+# If needed, increment version (RECOMMENDED - updates VERSION file and packaging files)
+scripts/version-bump-with-file patch    # for bug fixes
+scripts/version-bump-with-file minor    # for new features
+scripts/version-bump-with-file major    # for breaking changes
+
+# Alternative: manual version bump (requires manual VERSION file update)
 scripts/version bump patch    # for bug fixes
 scripts/version bump minor    # for new features
 scripts/version bump major    # for breaking changes
 ```
+
+### Packaging File Updates
+When version changes, the following files must be updated:
+- **VERSION file**: Always updated by `scripts/version-bump-with-file`
+- **Windows Scoop config** (`packaging/windows/scoop-bucket/version.json`): Version number and URLs
+- **macOS Homebrew formula** (`packaging/macos/version.rb`): URLs in download links
+- **GoReleaser configuration** (`.goreleaser.yml`): Uses VERSION file automatically
+
+### Automated Version Bump Workflow
+The `scripts/version-bump-with-file` script automatically:
+1. **Bumps version** using the version utility
+2. **Updates VERSION file** with new version
+3. **Updates Windows Scoop config** with new version and URLs
+4. **Updates macOS Homebrew formula** with new URLs
+5. **Provides next steps** for git operations
 
 ### Error Handling
 - **VERSION file missing**: Create with current version
 - **Version format invalid**: Fix format to `vX.Y.Z`
 - **Version matches tag**: Suggest increment before changes
 - **Git tag issues**: Help user resolve git state
+- **Packaging file updates**: Use `scripts/version-bump-with-file` for automatic updates
 
 ## Integration with Git Hooks
 - **Pre-push hook**: Automatically validates version before push

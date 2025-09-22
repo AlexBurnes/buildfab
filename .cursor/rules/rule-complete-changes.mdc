@@ -26,9 +26,9 @@ When any of these shortcuts are detected, automatically execute:
 
 2. **Bump version** (if needed)
    ```bash
-   scripts/version bump patch  # for bug fixes
-   scripts/version bump minor  # for new features
-   scripts/version bump major  # for breaking changes
+scripts/version-bump-with-file patch  # for bug fixes (updates VERSION file and packaging files)
+scripts/version-bump-with-file minor  # for new features (updates VERSION file and packaging files)
+scripts/version-bump-with-file major  # for breaking changes (updates VERSION file and packaging files)
    ```
 
 3. **Update memory bank documents**
@@ -109,9 +109,9 @@ When any of these shortcuts are detected, automatically execute:
 
 2. **Bump version** (if needed)
    ```bash
-   scripts/version bump patch  # for bug fixes
-   scripts/version bump minor  # for new features
-   scripts/version bump major  # for breaking changes
+scripts/version-bump-with-file patch  # for bug fixes (updates VERSION file and packaging files)
+scripts/version-bump-with-file minor  # for new features (updates VERSION file and packaging files)
+scripts/version-bump-with-file major  # for breaking changes (updates VERSION file and packaging files)
    ```
 
 3. **Update memory bank documents**

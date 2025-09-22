@@ -1,0 +1,82 @@
+#!/bin/bash
+set -euo pipefail
+
+# Version bump script that also updates VERSION file
+# Usage: ./version-bump-with-file <type>
+# Types: patch, minor, major, smart
+
+BUMP_TYPE="${1:-smart}"
+
+echo "[INFO] Bumping version with type: $BUMP_TYPE"
+
+# Get current version from git or VERSION file
+CURRENT_VERSION=""
+if [[ -f "VERSION" ]]; then
+    CURRENT_VERSION=$(cat VERSION)
+    echo "[INFO] Current version from VERSION file: $CURRENT_VERSION"
+else
+    # Try to get from git tags
+    CURRENT_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+    echo "[INFO] Current version from git: $CURRENT_VERSION"
+fi
+
+# Bump the version
+echo "[INFO] Bumping version..."
+NEW_VERSION=$(scripts/version bump "$CURRENT_VERSION" "$BUMP_TYPE")
+
+if [[ -z "$NEW_VERSION" ]]; then
+    echo "[ERROR] Failed to bump version"
+    exit 1
+fi
+
+echo "[INFO] New version: $NEW_VERSION"
+
+# Update VERSION file
+echo "[INFO] Updating VERSION file..."
+# Ensure version has 'v' prefix
+if [[ ! "$NEW_VERSION" =~ ^v ]]; then
+    NEW_VERSION="v$NEW_VERSION"
+fi
+echo "$NEW_VERSION" > VERSION
+
+# Update packaging files
+echo "[INFO] Updating packaging files..."
+
+# Update Windows Scoop configuration
+if [[ -f "packaging/windows/scoop-bucket/version.json" ]]; then
+    echo "[INFO] Updating Windows Scoop configuration..."
+    # Extract version without 'v' prefix for JSON
+    VERSION_NUMBER=$(echo "$NEW_VERSION" | sed 's/^v//')
+    
+    # Update version in JSON
+    sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION_NUMBER\"/" packaging/windows/scoop-bucket/version.json
+    
+    # Update URLs
+    sed -i "s|/v[0-9]\+\.[0-9]\+\.[0-9]\+/|/$NEW_VERSION/|g" packaging/windows/scoop-bucket/version.json
+    sed -i "s|/[0-9]\+\.[0-9]\+\.[0-9]\+/|/$NEW_VERSION/|g" packaging/windows/scoop-bucket/version.json
+    
+    echo "[SUCCESS] Updated Windows Scoop configuration to $VERSION_NUMBER"
+fi
+
+# Update macOS Homebrew formula
+if [[ -f "packaging/macos/version.rb" ]]; then
+    echo "[INFO] Updating macOS Homebrew formula..."
+    # Extract version without 'v' prefix for URLs
+    VERSION_NUMBER=$(echo "$NEW_VERSION" | sed 's/^v//')
+    
+    # Update URLs in Ruby file
+    sed -i "s|/v[0-9]\+\.[0-9]\+\.[0-9]\+/|/$NEW_VERSION/|g" packaging/macos/version.rb
+    sed -i "s|/[0-9]\+\.[0-9]\+\.[0-9]\+/|/$NEW_VERSION/|g" packaging/macos/version.rb
+    
+    echo "[SUCCESS] Updated macOS Homebrew formula to $VERSION_NUMBER"
+fi
+
+echo "[SUCCESS] Version bump completed!"
+echo "[SUCCESS] VERSION file updated to: $NEW_VERSION"
+echo "[SUCCESS] Packaging files updated"
+echo ""
+echo "Next steps:"
+echo "1. Review changes: git diff"
+echo "2. Commit changes: git add . && git commit -m \"chore(version): bump to $NEW_VERSION\""
+echo "3. Create tag: git tag $NEW_VERSION"
+echo "4. Push: git push origin master --tags"
