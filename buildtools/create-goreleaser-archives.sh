@@ -40,8 +40,8 @@ get_version() {
     fi
     
     # Try to get version from built utility
-    if [[ -f "bin/version" ]]; then
-        version=$(bin/version version 2>/dev/null || echo "")
+    if [[ -f "bin/buildfab" ]]; then
+        version=$(bin/buildfab --version 2>/dev/null || echo "")
         if [[ -n "$version" ]]; then
             echo "$version"
             return

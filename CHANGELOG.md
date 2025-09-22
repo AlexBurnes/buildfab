@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Binary Name Consistency**: Fixed all buildtools scripts to reference `buildfab` binary instead of `version` binary
+  - Updated `buildtools/create-goreleaser-archives.sh` to use `bin/buildfab --version` for version detection
+  - Updated `buildtools/create-goreleaser-backup.sh` to use `buildfab-*` binary names and backup file naming
+  - Ensured all binary references are consistent across buildtools directory
+- **Packaging Documentation**: Updated all packaging README files to reference buildfab instead of version
+  - Fixed `packaging/macos/README.md` to use buildfab CLI commands and repository URLs
+  - Fixed `packaging/windows/scoop-bucket/README.md` to use buildfab package name
+  - Fixed `packaging/linux/README.md` to use buildfab download URLs and installation paths
+  - Updated all installation commands and repository references to use buildfab project
+- **Documentation URLs**: Ensured all download URLs point to latest releases
+  - Updated README.md version badge from v0.7.4 to v0.8.0
+  - Updated specific version download examples from v0.7.0 to v0.8.0
+  - Updated packaging/linux/README.md manual installation example to use latest URL pattern
+  - Verified all "latest" URLs are correctly pointing to current releases
+
 ## [0.8.0] - 2025-01-27
 
 ### Added

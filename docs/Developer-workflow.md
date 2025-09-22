@@ -16,7 +16,7 @@ This document describes the development setup, workflow, and contribution guidel
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/burnes/buildfab.git
+   git clone https://github.com/AlexBurnes/buildfab.git
    cd buildfab
    ```
 

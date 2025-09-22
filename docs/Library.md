@@ -161,7 +161,7 @@ import (
     "context"
     "fmt"
     "os"
-    "github.com/burnes/buildfab"
+    "github.com/AlexBurnes/buildfab"
 )
 
 func main() {
@@ -191,7 +191,7 @@ import (
     "fmt"
     "os"
     "time"
-    "github.com/burnes/buildfab"
+    "github.com/AlexBurnes/buildfab"
 )
 
 // ExampleStepCallback demonstrates step-by-step progress reporting
@@ -321,7 +321,7 @@ package main
 import (
     "context"
     "os"
-    "github.com/burnes/buildfab"
+    "github.com/AlexBurnes/buildfab"
 )
 
 func main() {

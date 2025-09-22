@@ -40,8 +40,8 @@ get_version() {
     fi
     
     # Try to get version from built utility
-    if [[ -f "bin/version" ]]; then
-        version=$(bin/version version 2>/dev/null || echo "")
+    if [[ -f "bin/buildfab" ]]; then
+        version=$(bin/buildfab --version 2>/dev/null || echo "")
         if [[ -n "$version" ]]; then
             echo "$version"
             return
@@ -70,43 +70,43 @@ main() {
     log_info "Copying binaries to .goreleaser-binaries/ directory..."
     
     # Linux amd64
-    if [[ -f "bin/version-linux-amd64" ]]; then
-        cp bin/version-linux-amd64 ".goreleaser-binaries/version_${version}_linux_amd64"
-        log_info "Copied version-linux-amd64"
+    if [[ -f "bin/buildfab-linux-amd64" ]]; then
+        cp bin/buildfab-linux-amd64 ".goreleaser-binaries/buildfab_${version}_linux_amd64"
+        log_info "Copied buildfab-linux-amd64"
     else
-        log_warning "bin/version-linux-amd64 not found, skipping"
+        log_warning "bin/buildfab-linux-amd64 not found, skipping"
     fi
     
     # Linux arm64
-    if [[ -f "bin/version-linux-arm64" ]]; then
-        cp bin/version-linux-arm64 ".goreleaser-binaries/version_${version}_linux_arm64"
-        log_info "Copied version-linux-arm64"
+    if [[ -f "bin/buildfab-linux-arm64" ]]; then
+        cp bin/buildfab-linux-arm64 ".goreleaser-binaries/buildfab_${version}_linux_arm64"
+        log_info "Copied buildfab-linux-arm64"
     else
-        log_warning "bin/version-linux-arm64 not found, skipping"
+        log_warning "bin/buildfab-linux-arm64 not found, skipping"
     fi
     
     # Darwin amd64
-    if [[ -f "bin/version-darwin-amd64" ]]; then
-        cp bin/version-darwin-amd64 ".goreleaser-binaries/version_${version}_darwin_amd64"
-        log_info "Copied version-darwin-amd64"
+    if [[ -f "bin/buildfab-darwin-amd64" ]]; then
+        cp bin/buildfab-darwin-amd64 ".goreleaser-binaries/buildfab_${version}_darwin_amd64"
+        log_info "Copied buildfab-darwin-amd64"
     else
-        log_warning "bin/version-darwin-amd64 not found, skipping"
+        log_warning "bin/buildfab-darwin-amd64 not found, skipping"
     fi
     
     # Darwin arm64
-    if [[ -f "bin/version-darwin-arm64" ]]; then
-        cp bin/version-darwin-arm64 ".goreleaser-binaries/version_${version}_darwin_arm64"
-        log_info "Copied version-darwin-arm64"
+    if [[ -f "bin/buildfab-darwin-arm64" ]]; then
+        cp bin/buildfab-darwin-arm64 ".goreleaser-binaries/buildfab_${version}_darwin_arm64"
+        log_info "Copied buildfab-darwin-arm64"
     else
-        log_warning "bin/version-darwin-arm64 not found, skipping"
+        log_warning "bin/buildfab-darwin-arm64 not found, skipping"
     fi
     
     # Windows amd64
-    if [[ -f "bin/version-windows-amd64.exe" ]]; then
-        cp bin/version-windows-amd64.exe ".goreleaser-binaries/version_${version}_windows_amd64.exe"
-        log_info "Copied version-windows-amd64.exe"
+    if [[ -f "bin/buildfab-windows-amd64.exe" ]]; then
+        cp bin/buildfab-windows-amd64.exe ".goreleaser-binaries/buildfab_${version}_windows_amd64.exe"
+        log_info "Copied buildfab-windows-amd64.exe"
     else
-        log_warning "bin/version-windows-amd64.exe not found, skipping"
+        log_warning "bin/buildfab-windows-amd64.exe not found, skipping"
     fi
     
     log_success "GoReleaser binary backup created successfully"

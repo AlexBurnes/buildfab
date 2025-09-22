@@ -1,6 +1,12 @@
 # Progress: buildfab
 
 ## What Works
+- **Documentation and Packaging Consistency**: All binary name references and documentation URLs now consistent
+  - Fixed all buildtools scripts to reference `buildfab` binary instead of `version` binary
+  - Updated all packaging README files to reference buildfab instead of version
+  - Ensured all download URLs point to latest releases with current v0.8.0 version
+  - Comprehensive verification across buildtools, scripts, packaging, and documentation directories
+  - Perfect consistency in binary names, archive name prefixes, and installer script prefixes
 - **Automated Version Management**: Comprehensive version management system with automatic packaging file updates
   - `scripts/version-bump-with-file` script automatically bumps version and updates all packaging files
   - Updates VERSION file, Windows Scoop configuration, and macOS Homebrew formula in one command
@@ -11,7 +17,7 @@
 - **Installer Scripts**: All installer scripts and packaging configurations now correctly configured
   - Linux installer script (`packaging/linux/install.sh`) looks for `buildfab` binary
   - Installer template (`packaging/linux/installer-template.sh`) downloads from `burnes/buildfab` repository
-  - Windows Scoop configuration (`packaging/windows/scoop-bucket/version.json`) uses current version v0.7.5
+  - Windows Scoop configuration (`packaging/windows/scoop-bucket/version.json`) uses current version v0.8.0
   - macOS Homebrew formula (`packaging/macos/version.rb`) uses correct repository and binary name
   - All installer scripts correctly download and install the `buildfab` binary from the correct repository
 - **Project specifications**: Comprehensive requirements documented in two complementary specs

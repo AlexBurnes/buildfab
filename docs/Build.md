@@ -109,7 +109,7 @@ The main CMake configuration includes:
 #### install.sh Script
 ```bash
 # Install buildfab
-curl -sSL https://github.com/burnes/buildfab/releases/latest/download/install.sh | bash
+curl -sSL https://github.com/AlexBurnes/buildfab/releases/latest/download/install.sh | bash
 ```
 
 ### Windows Packaging
@@ -121,7 +121,7 @@ curl -sSL https://github.com/burnes/buildfab/releases/latest/download/install.sh
 
 ```powershell
 # Install via Scoop
-scoop bucket add buildfab https://github.com/burnes/buildfab-scoop-bucket
+scoop bucket add buildfab https://github.com/AlexBurnes/buildfab-scoop-bucket
 scoop install buildfab
 ```
 

@@ -55,12 +55,12 @@ scoop:
     owner: burnes
     name: buildfab-scoop-bucket
     branch: main
-  homepage: "https://github.com/burnes/buildfab"
+  homepage: "https://github.com/AlexBurnes/buildfab"
   description: "Go-based automation runner with DAG executor"
   license: "MIT"
   name: buildfab
   commit_msg_template: "chore(scoop): update buildfab to {{ .Tag }}"
-  url_template: "https://github.com/burnes/buildfab/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+  url_template: "https://github.com/AlexBurnes/buildfab/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
   skip_upload: false
   folder: "packaging/windows/scoop-bucket"
 
@@ -69,12 +69,12 @@ brews:
       owner: burnes
       name: homebrew-tap
       branch: main
-    homepage: "https://github.com/burnes/buildfab"
+    homepage: "https://github.com/AlexBurnes/buildfab"
     description: "Go-based automation runner with DAG-based execution"
     license: "MIT"
     name: buildfab
     commit_msg_template: "chore(homebrew): update buildfab to {{ .Tag }}"
-    url_template: "https://github.com/burnes/buildfab/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    url_template: "https://github.com/AlexBurnes/buildfab/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
     skip_upload: false
     folder: "packaging/macos"
     test: |

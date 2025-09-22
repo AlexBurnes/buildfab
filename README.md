@@ -4,7 +4,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.7.4-orange.svg)](https://github.com/burnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.8.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Features
 
@@ -70,16 +70,16 @@ buildfab list-actions
 #### Linux
 ```bash
 # Download and install using the install script
-curl -sSL https://github.com/burnes/buildfab/releases/latest/download/install.sh | bash
+curl -sSL https://github.com/AlexBurnes/buildfab/releases/latest/download/install.sh | bash
 
 # Or download specific version
-curl -sSL https://github.com/burnes/buildfab/releases/download/v0.7.0/install.sh | bash
+curl -sSL https://github.com/AlexBurnes/buildfab/releases/download/v0.8.0/install.sh | bash
 ```
 
 #### Windows (Scoop)
 ```powershell
 # Add the bucket (if not already added)
-scoop bucket add buildfab https://github.com/burnes/buildfab-scoop-bucket
+scoop bucket add buildfab https://github.com/AlexBurnes/buildfab-scoop-bucket
 
 # Install buildfab
 scoop install buildfab
@@ -91,10 +91,10 @@ scoop update buildfab
 #### macOS
 ```bash
 # Download and install using the install script
-curl -sSL https://github.com/burnes/buildfab/releases/latest/download/install.sh | bash
+curl -sSL https://github.com/AlexBurnes/buildfab/releases/latest/download/install.sh | bash
 
 # Or download specific version
-curl -sSL https://github.com/burnes/buildfab/releases/download/v0.7.0/install.sh | bash
+curl -sSL https://github.com/AlexBurnes/buildfab/releases/download/v0.8.0/install.sh | bash
 ```
 
 ### Setting up Git Hooks
@@ -242,7 +242,7 @@ package main
 
 import (
     "context"
-    "github.com/burnes/buildfab"
+    "github.com/AlexBurnes/buildfab"
 )
 
 func main() {
@@ -277,22 +277,22 @@ To build this project, you need to install the latest version of buildfab from G
 ```bash
 # Download and install to ./scripts/ directory
 # For x86_64/amd64 systems:
-wget -O - https://github.com/burnes/buildfab/releases/latest/download/buildfab-linux-amd64-install.sh | INSTALL_DIR=./scripts sh
+wget -O - https://github.com/AlexBurnes/buildfab/releases/latest/download/buildfab-linux-amd64-install.sh | INSTALL_DIR=./scripts sh
 
 # For ARM64 systems:
-wget -O - https://github.com/burnes/buildfab/releases/latest/download/buildfab-linux-arm64-install.sh | INSTALL_DIR=./scripts sh
+wget -O - https://github.com/AlexBurnes/buildfab/releases/latest/download/buildfab-linux-arm64-install.sh | INSTALL_DIR=./scripts sh
 ```
 
 #### Windows
 ```powershell
 # Download and install to ./scripts/ directory
 # For x86_64/amd64 systems:
-Invoke-WebRequest -Uri "https://github.com/burnes/buildfab/releases/latest/download/buildfab-windows-amd64.zip" -OutFile "buildfab.zip"
+Invoke-WebRequest -Uri "https://github.com/AlexBurnes/buildfab/releases/latest/download/buildfab-windows-amd64.zip" -OutFile "buildfab.zip"
 Expand-Archive -Path "buildfab.zip" -DestinationPath "./scripts/"
 Remove-Item "buildfab.zip"
 
 # For ARM64 systems:
-Invoke-WebRequest -Uri "https://github.com/burnes/buildfab/releases/latest/download/buildfab-windows-arm64.zip" -OutFile "buildfab.zip"
+Invoke-WebRequest -Uri "https://github.com/AlexBurnes/buildfab/releases/latest/download/buildfab-windows-arm64.zip" -OutFile "buildfab.zip"
 Expand-Archive -Path "buildfab.zip" -DestinationPath "./scripts/"
 Remove-Item "buildfab.zip"
 ```
