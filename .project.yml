@@ -19,8 +19,12 @@ actions:
           echo "Could not get version from bin/$module -V"
           exit 1
         fi
-        if [ "$module_version" != "${{ version.version }}"]; then
-          echo "Version mismatch: bin/$module reports $module_version, expected ${{ version.version }}"
+        # Strip 'v' prefix from module version for comparison
+        module_version_clean=$(echo "$module_version" | sed 's/^v//')
+        # Get expected version directly from scripts/version
+        expected_version=$(scripts/version version)
+        if [ "$module_version_clean" != "$expected_version" ]; then
+          echo "Version mismatch: bin/$module reports $module_version, expected $expected_version"
           echo "To check manually run: bin/$module -V"
           exit 1
         fi

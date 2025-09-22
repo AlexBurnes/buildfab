@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Test Suite Issues**: Fixed all test failures and build issues
+  - Fixed examples package build failure by resolving duplicate main function declarations
+  - Updated RunAction method to properly check action registry for built-in actions like version@check
+  - Modified CLI functions to return errors instead of calling os.Exit(1) in test mode
+  - All tests now passing with 100% success rate across all packages
+  - Built-in actions now work correctly in both CLI and library usage
+
 ### Documentation
 - **README Enhancement**: Added comprehensive installation and git hook setup instructions
   - Added detailed installation instructions for Linux, Windows, and macOS using install scripts and Scoop

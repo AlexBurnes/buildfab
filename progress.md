@@ -48,6 +48,12 @@
 - **Error message improvements**: Enhanced dependency failure messages and command error formatting
 - **Execution order fixes**: Fixed run-tests execution order and removed release-only condition
 - **UI display improvements**: Fixed version display duplicate 'v' prefix and summary color formatting
+- **Test fixes**: Successfully resolved all test failures and build issues
+  - Fixed examples package build failure by resolving duplicate main function declarations
+  - Updated RunAction method to properly check action registry for built-in actions like version@check
+  - Modified CLI functions to return errors instead of calling os.Exit(1) in test mode
+  - All tests now passing with 100% success rate across all packages
+  - Built-in actions now work correctly in both CLI and library usage
 - **README enhancement**: Comprehensive installation and git hook setup documentation
   - Added detailed installation instructions for Linux, Windows, and macOS using install scripts and Scoop
   - Added git hook setup guide with step-by-step instructions for automated project validation

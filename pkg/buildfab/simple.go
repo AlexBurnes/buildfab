@@ -117,11 +117,6 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 
 // RunAction executes a specific action with automatic output handling
 func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
-	_, exists := r.config.GetAction(actionName)
-	if !exists {
-		return fmt.Errorf("action not found: %s", actionName)
-	}
-
 	// Print action header
 	fmt.Fprintf(r.opts.Output, "▶️  Running action: %s\n\n", actionName)
 

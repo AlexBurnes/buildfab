@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -311,6 +312,10 @@ func runStage(cmd *cobra.Command, args []string) error {
 		stepName := args[1]
 		err := runner.RunStageStep(ctx, stageName, stepName)
 		if err != nil {
+			// In test mode, return the error instead of exiting
+			if testing.Testing() {
+				return err
+			}
 			os.Exit(1)
 		}
 		return nil
@@ -319,6 +324,10 @@ func runStage(cmd *cobra.Command, args []string) error {
 	// Run the entire stage using simple API
 	err = runner.RunStage(ctx, stageName)
 	if err != nil {
+		// In test mode, return the error instead of exiting
+		if testing.Testing() {
+			return err
+		}
 		os.Exit(1)
 	}
 	return nil

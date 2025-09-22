@@ -167,6 +167,35 @@ func (r *Runner) RunStage(ctx context.Context, stageName string) error {
 
 // RunAction executes a specific action
 func (r *Runner) RunAction(ctx context.Context, actionName string) error {
+	// Check if it's a built-in action first
+	if runner, exists := r.registry.GetRunner(actionName); exists {
+		// Call step start callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepStart(ctx, actionName)
+		}
+
+		start := time.Now()
+		_, err := runner.Run(ctx)
+		duration := time.Since(start)
+
+		// Call step complete callback if provided
+		if r.opts.StepCallback != nil {
+			status := StepStatusOK
+			message := "executed successfully"
+			
+			if err != nil {
+				status = StepStatusError
+				message = err.Error()
+				r.opts.StepCallback.OnStepError(ctx, actionName, err)
+			}
+			
+			r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, duration)
+		}
+
+		return err
+	}
+
+	// Check if it's a custom action
 	action, exists := r.config.GetAction(actionName)
 	if !exists {
 		return fmt.Errorf("action not found: %s", actionName)

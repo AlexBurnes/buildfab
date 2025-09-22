@@ -127,7 +127,7 @@ func (c *SilentStepCallback) OnStepError(ctx context.Context, stepName string, e
 	fmt.Printf("Error in %s: %v\n", stepName, err)
 }
 
-func main() {
+func mainStepCallbacks() {
 	// Example 1: Basic usage with step callbacks
 	fmt.Println("=== Example 1: Basic Step Callbacks ===")
 	
@@ -209,3 +209,8 @@ func main() {
 		}
 	}
 }
+
+// Uncomment the main function below to run this example
+// func main() {
+// 	mainStepCallbacks()
+// }
