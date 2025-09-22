@@ -33,10 +33,12 @@ stages:
         require: [install-conan-deps]
       - action: build-binaries
         require: [configure-cmake]
+      - action: install-binary
+        require: [build-binaries]
       - action: run-tests
-        require: [build-binaries]
+        require: [install-binary]
       - action: create-installers
-        require: [build-binaries]
+        require: [install-binary]
       - action: goreleaser-dry-run
         require: [create-installers, check-goreleaser]
 
@@ -51,10 +53,12 @@ stages:
         require: [install-conan-deps]
       - action: build-all-platforms
         require: [configure-cmake]
+      - action: install-binary
+        require: [build-all-platforms]
       - action: run-tests
-        require: [build-all-platforms]
+        require: [install-binary]
       - action: create-installers
-        require: [build-all-platforms]
+        require: [install-binary]
       - action: goreleaser-release
         require: [create-installers, check-goreleaser]
 
@@ -169,6 +173,26 @@ actions:
       else
         echo "Building with manual configuration"
         cmake --build .build --target buildfab
+      fi
+
+  - name: install-binary
+    run: |
+      # Install binary to project bin directory using CMake
+      if cmake --version | grep -q "3\.2[3-9]\|3\.[3-9]\|[4-9]\." && [ -f "./CMakeUserPresets.json" ]; then
+        echo "Installing with CMake preset"
+        cmake --build --preset conan-release --target install-current
+      else
+        echo "Installing with manual configuration"
+        cmake --build .build --target install-current
+      fi
+      
+      # Verify installation
+      if [[ -f "bin/buildfab" ]]; then
+        echo "✓ Binary installed successfully: bin/buildfab"
+        bin/buildfab --version
+      else
+        echo "✗ Binary installation failed"
+        exit 1
       fi
 
   - name: build-all-platforms

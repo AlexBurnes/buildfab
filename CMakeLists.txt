@@ -156,8 +156,6 @@ if(NOT GO_EXECUTABLE)
     message(FATAL_ERROR "Go compiler not found. Please install Go ${GO_VERSION_REQUIRED} or later.")
 endif()
 
-# Version utility is already available in scripts/version
-
 # Check Go version
 execute_process(
     COMMAND ${GO_EXECUTABLE} version
@@ -179,7 +177,6 @@ message(STATUS "Found Go version: ${GO_VERSION_NUMBER}")
 # Build configuration
 set(BINARY_NAME "buildfab")
 set(BUILD_DIR "${CMAKE_SOURCE_DIR}/bin")
-set(CONFIG_DIR "${CMAKE_SOURCE_DIR}/etc")
 
 # Create build directory
 file(MAKE_DIRECTORY ${BUILD_DIR})
@@ -257,16 +254,6 @@ foreach(PLATFORM ${PLATFORMS})
     endif()
 endforeach()
 
-# Static Linux build target for maximum compatibility
-add_custom_target(${BINARY_NAME}-linux-amd64-static
-    COMMAND ${CMAKE_COMMAND} -E env CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-    ${GO_EXECUTABLE} build -a -ldflags "-extldflags \"-static\"" ${GO_BUILD_FLAGS} -o ${BUILD_DIR}/${BINARY_NAME}-linux-amd64 .
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cmd/version
-    COMMENT "Building static ${BINARY_NAME} for linux/amd64 (maximum compatibility)"
-    DEPENDS bootstrap-version
-    VERBATIM
-)
-
 # Build all platforms target
 add_custom_target(${BINARY_NAME}-all
     DEPENDS ${BINARY_NAME}-linux-amd64
@@ -280,7 +267,7 @@ add_custom_target(${BINARY_NAME}-all
 # Test target
 add_custom_target(test
     COMMAND ${GO_EXECUTABLE} test ${GO_TEST_FLAGS} .
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cmd/version
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Running tests"
     VERBATIM
 )
@@ -289,7 +276,7 @@ add_custom_target(test
 add_custom_target(test-coverage
     COMMAND ${GO_EXECUTABLE} test ${GO_TEST_FLAGS} .
     COMMAND ${GO_EXECUTABLE} tool cover -html=coverage.out -o coverage.html
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cmd/version
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     COMMENT "Running tests with coverage"
     VERBATIM
 )
@@ -307,7 +294,7 @@ find_program(GOLANGCI_LINT_EXECUTABLE golangci-lint)
 if(GOLANGCI_LINT_EXECUTABLE)
     add_custom_target(lint
         COMMAND ${GOLANGCI_LINT_EXECUTABLE} run
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cmd/buildfab
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Linting code"
         VERBATIM
     )
@@ -340,9 +327,7 @@ add_custom_target(clean-build
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_custom_target(install-current
         COMMAND ${CMAKE_COMMAND} -E make_directory ${BUILD_DIR}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CONFIG_DIR}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-linux-amd64-static ${BUILD_DIR}/
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/config/version.yaml ${CONFIG_DIR}/
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-linux-amd64-static ${BUILD_DIR}/${BINARY_NAME}
         DEPENDS ${BINARY_NAME}
         COMMENT "Installing current OS binary (static Linux) to project bin directory"
         VERBATIM
@@ -351,9 +336,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     if(CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
         add_custom_target(install-current
             COMMAND ${CMAKE_COMMAND} -E make_directory ${BUILD_DIR}
-            COMMAND ${CMAKE_COMMAND} -E make_directory ${CONFIG_DIR}
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-darwin-arm64 ${BUILD_DIR}/
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/config/version.yaml ${CONFIG_DIR}/
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-darwin-arm64 ${BUILD_DIR}/${BINARY_NAME}
             DEPENDS ${BINARY_NAME}
             COMMENT "Installing current OS binary (macOS ARM64) to project bin directory"
             VERBATIM
@@ -361,9 +344,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     else()
         add_custom_target(install-current
             COMMAND ${CMAKE_COMMAND} -E make_directory ${BUILD_DIR}
-            COMMAND ${CMAKE_COMMAND} -E make_directory ${CONFIG_DIR}
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-darwin-amd64 ${BUILD_DIR}/
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/config/version.yaml ${CONFIG_DIR}/
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-darwin-amd64 ${BUILD_DIR}/${BINARY_NAME}
             DEPENDS ${BINARY_NAME}
             COMMENT "Installing current OS binary (macOS Intel) to project bin directory"
             VERBATIM
@@ -372,9 +353,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     add_custom_target(install-current
         COMMAND ${CMAKE_COMMAND} -E make_directory ${BUILD_DIR}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CONFIG_DIR}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-windows-amd64.exe ${BUILD_DIR}/
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/config/version.yaml ${CONFIG_DIR}/
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-windows-amd64.exe ${BUILD_DIR}/${BINARY_NAME}.exe
         DEPENDS ${BINARY_NAME}
         COMMENT "Installing current OS binary (Windows) to project bin directory"
         VERBATIM
@@ -382,9 +361,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 else()
     add_custom_target(install-current
         COMMAND ${CMAKE_COMMAND} -E make_directory ${BUILD_DIR}
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${CONFIG_DIR}
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME} ${BUILD_DIR}/
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/config/version.yaml ${CONFIG_DIR}/
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME} ${BUILD_DIR}/${BINARY_NAME}
         DEPENDS ${BINARY_NAME}
         COMMENT "Installing current OS binary to project bin directory"
         VERBATIM
@@ -394,13 +371,11 @@ endif()
 # Install all target - install all platform binaries to project bin directory
 add_custom_target(install-all
     COMMAND ${CMAKE_COMMAND} -E make_directory ${BUILD_DIR}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CONFIG_DIR}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-linux-amd64 ${BUILD_DIR}/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-linux-amd64-static ${BUILD_DIR}/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-darwin-amd64 ${BUILD_DIR}/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-darwin-arm64 ${BUILD_DIR}/
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${BUILD_DIR}/${BINARY_NAME}-windows-amd64.exe ${BUILD_DIR}/
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_CURRENT_SOURCE_DIR}/config/version.yaml ${CONFIG_DIR}/
     DEPENDS ${BINARY_NAME}-all
     COMMENT "Installing all platform binaries to project bin directory"
     VERBATIM
@@ -420,29 +395,11 @@ add_custom_target(run
     VERBATIM
 )
 
-# Package target
-set(CPACK_PACKAGE_NAME "version")
-set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY ${PROJECT_DESCRIPTION})
-set(CPACK_PACKAGE_VENDOR "Svyazcom")
-set(CPACK_PACKAGE_CONTACT "support@svyazcom.ru")
-
-# Create package
-include(CPack)
-
-# Custom package target
-add_custom_target(create-package
-    COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target package
-    COMMENT "Creating package"
-    VERBATIM
-)
-
 # Show configuration
 message(STATUS "Project: ${PROJECT_NAME} ${PROJECT_VERSION}")
 message(STATUS "Go executable: ${GO_EXECUTABLE}")
 message(STATUS "Go version: ${GO_VERSION_NUMBER}")
 message(STATUS "Build directory: ${BUILD_DIR}")
-message(STATUS "Config directory: ${CONFIG_DIR}")
 
 # Print available targets
 message(STATUS "")
@@ -464,5 +421,4 @@ message(STATUS "  install-current         - Install current OS binary to project
 message(STATUS "  install-all             - Install all platform binaries to project bin directory")
 message(STATUS "  dev                     - Development build")
 message(STATUS "  run                     - Run the application")
-message(STATUS "  create-package          - Create package")
 message(STATUS "")
