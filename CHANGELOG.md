@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **GoReleaser Configuration**: Fixed GitHub repository owner references in GoReleaser configuration
+  - Updated `.goreleaser.yml` to use `AlexBurnes` instead of `burnes` for both Scoop and Homebrew tap owners
+  - Updated `docs/Deploy.md` to reference correct `AlexBurnes/buildfab-scoop-bucket` repository
+  - Resolves 404 errors when GoReleaser tries to check default branches for package repositories
 - **Binary Name Consistency**: Fixed all buildtools scripts to reference `buildfab` binary instead of `version` binary
   - Updated `buildtools/create-goreleaser-archives.sh` to use `bin/buildfab --version` for version detection
   - Updated `buildtools/create-goreleaser-backup.sh` to use `buildfab-*` binary names and backup file naming

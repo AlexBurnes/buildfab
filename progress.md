@@ -1,6 +1,13 @@
 # Progress: buildfab
 
 ## What Works
+- **GoReleaser Configuration**: Successfully resolved GitHub repository owner reference issues
+  - Updated `.goreleaser.yml` to use `AlexBurnes` instead of `burnes` for both Scoop and Homebrew tap owners
+  - Fixed `docs/Deploy.md` to reference correct `AlexBurnes/buildfab-scoop-bucket` repository
+  - Resolved 404 errors when GoReleaser tries to check default branches for package repositories
+  - Successfully tested GoReleaser dry run with `./bin/buildfab action goreleaser-dry-run -v`
+  - Dry run now completes successfully with no 404 errors and proper artifact creation
+  - GoReleaser configuration now correctly points to AlexBurnes repositories
 - **Documentation and Packaging Consistency**: All binary name references and documentation URLs now consistent
   - Fixed all buildtools scripts to reference `buildfab` binary instead of `version` binary
   - Updated all packaging README files to reference buildfab instead of version

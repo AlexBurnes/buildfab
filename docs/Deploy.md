@@ -162,7 +162,7 @@ git push origin master
 ### Package Managers
 
 #### Scoop (Windows)
-- **Repository**: `burnes/buildfab-scoop-bucket`
+- **Repository**: `AlexBurnes/buildfab-scoop-bucket`
 - **Manifest**: `packaging/windows/scoop-bucket/version.json`
 - **Installation**: `scoop install buildfab`
 

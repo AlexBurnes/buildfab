@@ -187,7 +187,7 @@ actions:
       fi
       
       # Verify installation
-      if [[ -f "bin/buildfab" ]]; then
+      if [ -f "bin/buildfab" ]; then
         echo "✓ Binary installed successfully: bin/buildfab"
         bin/buildfab --version
       else
