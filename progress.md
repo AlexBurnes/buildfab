@@ -1,12 +1,18 @@
 # Progress: buildfab
 
 ## What Works
+- **Installer Scripts**: All installer scripts and packaging configurations now correctly configured
+  - Linux installer script (`packaging/linux/install.sh`) looks for `buildfab` binary
+  - Installer template (`packaging/linux/installer-template.sh`) downloads from `burnes/buildfab` repository
+  - Windows Scoop configuration (`packaging/windows/scoop-bucket/version.json`) uses current version v0.7.5
+  - macOS Homebrew formula (`packaging/macos/version.rb`) uses correct repository and binary name
+  - All installer scripts correctly download and install the `buildfab` binary from the correct repository
 - **Project specifications**: Comprehensive requirements documented in two complementary specs
 - **Memory bank system**: Complete memory bank files created for project tracking
 - **Go project structure**: Complete cmd/, pkg/, internal/ directories with proper layout
 - **Documentation framework**: All required documentation created following naming conventions
 - **Build infrastructure**: Updated CMake/Conan/GoReleaser configuration for buildfab
-- **Version management**: VERSION file (v0.7.3) and CHANGELOG.md established
+- **Version management**: VERSION file (v0.7.5) and CHANGELOG.md established
 - **Core library implementation**: Complete library API with Config, Action, Stage, Step, and Result types
 - **YAML configuration system**: Full parsing, validation, and variable interpolation with `${{ }}` syntax
 - **DAG execution engine**: Parallel execution with dependency management, cycle detection, and streaming output

@@ -1,25 +1,23 @@
-class Version < Formula
-  desc "Cross-platform semantic version parsing, validation, and ordering CLI utility"
-  homepage "https://github.com/AlexBurnes/version-go"
-  url "https://github.com/AlexBurnes/version-go/releases/download/v0.5.9/version-0.5.9-darwin-amd64.tar.gz"
+class Buildfab < Formula
+  desc "Go-based automation runner with DAG executor"
+  homepage "https://github.com/burnes/buildfab"
+  url "https://github.com/burnes/buildfab/releases/download/v0.7.5/buildfab_macos_amd64.tar.gz"
   sha256 "PLACEHOLDER_SHA256"
-  license "Apache-2.0"
+  license "MIT"
   
   if Hardware::CPU.arm?
-    url "https://github.com/AlexBurnes/version-go/releases/download/v0.5.9/version-0.5.9-darwin-arm64.tar.gz"
+    url "https://github.com/burnes/buildfab/releases/download/v0.7.5/buildfab_macos_arm64.tar.gz"
     sha256 "PLACEHOLDER_SHA256_ARM64"
   end
 
   def install
-    bin.install "version"
-    man1.install "version.1" if File.exist?("version.1")
+    bin.install "buildfab"
+    man1.install "buildfab.1" if File.exist?("buildfab.1")
   end
 
   test do
-    assert_equal "0.5.4", shell_output("#{bin}/version --version").strip
-    assert_equal "release", shell_output("#{bin}/version type 1.2.3").strip
-    assert_equal "prerelease", shell_output("#{bin}/version type 1.2.3~alpha.1").strip
-    assert_equal "postrelease", shell_output("#{bin}/version type 1.2.3.fix.1").strip
-    assert_equal "intermediate", shell_output("#{bin}/version type 1.2.3_feature_1").strip
+    assert_match "buildfab", shell_output("#{bin}/buildfab --version").strip
+    assert_match "buildfab", shell_output("#{bin}/buildfab --help").strip
+    assert_match "list-actions", shell_output("#{bin}/buildfab list-actions").strip
   end
 end

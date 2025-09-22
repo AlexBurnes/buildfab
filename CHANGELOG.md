@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2025-01-27
+
+### Fixed
+- **Installer Scripts**: Fixed installer scripts to use correct binary name and repository
+  - Fixed Linux installer script (`packaging/linux/install.sh`) to look for `buildfab` binary instead of `version`
+  - Fixed installer template (`packaging/linux/installer-template.sh`) to download from `burnes/buildfab` repository
+  - Updated Windows Scoop configuration (`packaging/windows/scoop-bucket/version.json`) to use current version v0.7.5
+  - Updated macOS Homebrew formula (`packaging/macos/version.rb`) to use correct repository and binary name
+  - All installer scripts now correctly download and install the `buildfab` binary from the correct repository
+
 ## [0.7.4] - 2025-01-27
 
 ### Added

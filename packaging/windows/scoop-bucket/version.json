@@ -1,15 +1,15 @@
 {
-  "version": "0.1.0",
+  "version": "0.7.5",
   "description": "Go-based automation runner with DAG executor",
   "homepage": "https://github.com/burnes/buildfab",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/burnes/buildfab/releases/download/v0.1.0/buildfab_windows_amd64.zip",
+      "url": "https://github.com/burnes/buildfab/releases/download/v0.7.5/buildfab_windows_amd64.zip",
       "hash": "sha256-REPLACE_FROM_checksums.txt"
     },
     "arm64": {
-      "url": "https://github.com/burnes/buildfab/releases/download/v0.1.0/buildfab_windows_arm64.zip",
+      "url": "https://github.com/burnes/buildfab/releases/download/v0.7.5/buildfab_windows_arm64.zip",
       "hash": "sha256-REPLACE_FROM_checksums.txt"
     }
   },

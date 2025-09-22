@@ -1,6 +1,8 @@
 # Active Context: buildfab
 
 ## Current Work Focus
+**INSTALLER SCRIPTS FIXED!** Successfully fixed all installer scripts and packaging configurations to use correct binary name and repository. **Fixed Linux installer script** - updated `packaging/linux/install.sh` to look for `buildfab` binary instead of `version`. **Fixed installer template** - updated `packaging/linux/installer-template.sh` to download from `burnes/buildfab` repository instead of `AlexBurnes/version-go`. **Updated Windows Scoop configuration** - fixed `packaging/windows/scoop-bucket/version.json` to use current version v0.7.5 and correct URLs. **Updated macOS Homebrew formula** - fixed `packaging/macos/version.rb` to use correct repository, binary name, and version. **All packaging now consistent** - installer scripts correctly download and install the `buildfab` binary from the correct repository with proper versioning.
+
 **BUILDFAB MIGRATION COMPLETED!** Successfully migrated all build functionality from bash scripts to buildfab actions. **Complete build script replacement** - removed `build-conan.sh`, `build-and-package.sh`, and `build-goreleaser.sh` and replaced with native buildfab actions. **CI/CD safety verified** - confirmed GitHub Actions workflows don't use the removed scripts, ensuring no release pipeline breakage. **Enhanced build process** - now uses buildfab's DAG execution with proper dependencies, error handling, and parallel processing. **Improved maintainability** - all build logic now in YAML configuration instead of complex bash scripts. **Updated documentation** - README now includes instructions for installing buildfab from GitHub releases for development.
 
 **VERSION 0.7.2 RELEASED!** Successfully completed comprehensive API simplification and error message improvements. Implemented beautiful v0.5.0 style formatting with proper headers, stage headers, step execution display, and summary statistics. Fixed all major UI issues including correct summary counts, duplicate step display, skipped step visibility, and CLI flag parsing. **Complete v0.5.0 output compatibility** - header with project info, stage headers, step execution with proper icons and indentation, footer summary with statistics. **Fixed summary counting** - now correctly shows successful step counts instead of 0. **Fixed duplicate steps** - eliminated duplicate version-module step display issue. **Fixed skipped steps** - run-tests now properly shows as skipped when version-module fails. **Fixed CLI flag parsing** - -v pre-push now works correctly with proper argument handling. **Library API integration** - all functionality uses modern buildfab library while maintaining beautiful output formatting.
@@ -16,6 +18,14 @@
 **COMMAND ALIGNMENT AND DUPLICATE OUTPUT FIXES COMPLETED!** Successfully fixed command alignment and eliminated duplicate output issues. **Fixed command indentation** - multi-line commands now properly preserve relative indentation structure with 6-space base indentation. **Fixed duplicate output** - eliminated duplicate "FAILED - stage" messages by removing redundant `printSimpleResult` calls from CLI. **Perfect alignment** - commands maintain their original YAML indentation structure while being properly aligned with "to check run:" prefix. **Clean output** - single result message per stage execution with proper summary statistics.
 
 ## Recent Changes
+- **Installer Scripts Fix**: Successfully fixed all installer scripts and packaging configurations
+  - Fixed Linux installer script (`packaging/linux/install.sh`) to look for `buildfab` binary instead of `version`
+  - Fixed installer template (`packaging/linux/installer-template.sh`) to download from `burnes/buildfab` repository
+  - Updated Windows Scoop configuration (`packaging/windows/scoop-bucket/version.json`) to use current version v0.7.5
+  - Updated macOS Homebrew formula (`packaging/macos/version.rb`) to use correct repository and binary name
+  - All installer scripts now correctly download and install the `buildfab` binary from the correct repository
+  - Updated CHANGELOG.md to document installer script fixes
+  - Updated memory bank files to reflect installer script corrections
 - **Silence Mode Enhancement**: Successfully implemented running step indicators in silence mode
   - Added `○ step-name running...` indicators that show when steps start executing
   - Implemented line replacement using carriage return (`\r`) for clean output

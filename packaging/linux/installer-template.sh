@@ -29,9 +29,9 @@ if ! echo "$INSTALL_DIR" | grep -q '^/'; then
 fi
 
 # GitHub release URL
-RELEASE_URL="https://github.com/AlexBurnes/version-go/releases/download/v${VERSION}/version_${PLATFORM}_${ARCH}.tar.gz"
+RELEASE_URL="https://github.com/burnes/buildfab/releases/download/v${VERSION}/buildfab_${PLATFORM}_${ARCH}.tar.gz"
 
-echo "[*] Installing version CLI v${VERSION} for ${PLATFORM}-${ARCH}"
+echo "[*] Installing buildfab CLI v${VERSION} for ${PLATFORM}-${ARCH}"
 echo "[*] Target directory: ${INSTALL_DIR}"
 
 # Create temp directory
