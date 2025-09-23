@@ -45,6 +45,7 @@ scripts/version-bump-with-file major  # for breaking changes (updates VERSION fi
    - Commit with proper format: `git commit -m "type(scope): vX.Y.Z, description" -m "and write change description on new line"`
    - Create tag: `git tag vX.Y.Z`
    - Push with tag: `git push origin master --tags`
+   - **NEVER** push with flag --no-verify
 
 ## Commit Format
 Follow the established pattern from git log with semantic formatting:
