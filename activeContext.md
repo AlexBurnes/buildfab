@@ -1,6 +1,8 @@
 # Active Context: buildfab
 
 ## Current Work Focus
+**VERSION DISPLAY FIX COMPLETED!** Successfully fixed version commands returning "unknown" when binary is installed globally or run from bin directory. **Fixed version display issue** - updated `getVersion()` function to use build-time `appVersion` variable set via ldflags only, completely removing VERSION file fallback. **Proper build-time versioning** - built application never reads VERSION file at runtime, version is compiled into binary at build time. **Resolved global installation issue** - version commands now work correctly regardless of working directory or installation location. **Fixed both version flags** - both `--version` and `-V` flags now display proper version information. **Comprehensive testing** - verified fix works when binary is run from different directories and when installed globally. **Updated test suite** - modified TestGetVersion to reflect new behavior where version is compiled into binary. **Perfect user experience** - users get correct version information regardless of how they run the binary. **Updated CHANGELOG.md** - documented version display fix in Unreleased section with detailed technical information. **VERSION 0.8.8 RELEASED!** Successfully completed version display fix with proper build-time versioning and comprehensive testing.
+
 **CLI PARSER FIX AND RULES UPDATE COMPLETED!** Successfully fixed CLI argument parsing to handle stage/action names when no run command is specified and updated rules files for proper changelog date management. **Fixed unknown command error** - when no subcommand is provided, first argument is now treated as stage or action name instead of unknown command. **Implemented priority system** - stage names have higher priority than action names when both exist with same name. **Added comprehensive support** - supports both custom actions and built-in actions (version@check, git@untracked, etc.). **Resolved user issue** - `buildfab test-streaming` now works correctly instead of showing "unknown command" error. **Maintained backward compatibility** - explicit `run` and `action` commands continue to work as before. **Enhanced user experience** - users can now run stages and actions directly without specifying subcommands. **Comprehensive testing** - verified with test-streaming.yml and priority testing with same-named stage/action. **Perfect CLI behavior** - intuitive command-line interface that matches user expectations. **Updated rules files** - enhanced versioning and complete changes rules with changelog date requirements using git log for historical versions and terminal date for current version. **Fixed all changelog dates** - corrected all version dates using accurate git log information. **VERSION 0.8.7 RELEASED!** Successfully completed CLI parser fix and rules enhancement with comprehensive testing and documentation.
 
 **CTRL+C SIGNAL HANDLING AND COMMAND OUTPUT FIXES COMPLETED!** Successfully implemented comprehensive Ctrl+C signal handling and command output display improvements. **Fixed Ctrl+C hanging issue** - executor now properly handles context cancellation and terminates promptly without hanging. **Added TERMINATED status display** - when Ctrl+C is pressed, shows "⚠️ TERMINATED" instead of misleading "SUCCESS" status. **Fixed command output display** - executor now shows real-time command output during execution instead of just command content. **Suppressed command content** - command content from YAML configuration is no longer displayed to keep output clean, but preserved in error messages for debugging. **Enhanced UI integration** - CLI now uses internal executor with proper UI interface for consistent output formatting. **Comprehensive testing** - added extensive test coverage for signal handling, command output, and error scenarios. **Perfect user experience** - users get clean output with real-time feedback and proper termination handling. **VERSION 0.8.6 RELEASED!** Successfully completed Ctrl+C signal handling and command output improvements with comprehensive testing and documentation.
@@ -212,6 +214,23 @@
 - **Error handling improvements**: Enhanced error messages and recovery suggestions
 - **Production deployment**: Release preparation and distribution setup
 - **Test suite maintenance**: Continue monitoring test coverage and reliability
+
+## Immediate Actions (From Static Analysis)
+- **Improve Test Coverage**: Target 80%+ coverage for production readiness
+  - Current coverage: 57.5% overall
+  - Focus areas: cmd/buildfab (50.9%), internal/actions (50.5%), pkg/buildfab (57.9%)
+  - Add comprehensive test cases for edge conditions and error paths
+  - Implement integration tests for complex workflows
+- **Performance Testing**: Profile DAG execution with large dependency graphs
+  - Test with 100+ step dependency graphs
+  - Measure memory usage and execution time
+  - Optimize parallel execution bottlenecks
+  - Add performance benchmarks to CI/CD
+- **Git Action Tests**: Create test git repositories for full action testing
+  - Set up isolated test git repositories with various states
+  - Test git@untracked, git@uncommitted, git@modified actions
+  - Ensure tests work in CI/CD environments
+  - Add git state manipulation utilities for testing
 
 ## Active Decisions and Considerations
 - **Version library integration**: Successfully integrated AlexBurnes/version-go v0.8.22 for `${{version.version}}` variables

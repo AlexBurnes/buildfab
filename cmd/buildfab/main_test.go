@@ -29,50 +29,11 @@ func createTestConfig(t *testing.T, content string) string {
 }
 
 func TestGetVersion(t *testing.T) {
-	// Test with existing VERSION file
-	tempDir := t.TempDir()
-	oldDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-	defer os.Chdir(oldDir)
-	
-	err = os.Chdir(tempDir)
-	if err != nil {
-		t.Fatalf("Failed to change to temp directory: %v", err)
-	}
-	
-	// Test with valid VERSION file
-	err = os.WriteFile("VERSION", []byte("v1.2.3"), 0644)
-	if err != nil {
-		t.Fatalf("Failed to write VERSION file: %v", err)
-	}
-	
+	// Test that getVersion() returns "unknown" when appVersion is not set at build time
+	// This is the expected behavior for development builds without ldflags
 	version := getVersion()
-	if version != "v1.2.3" {
-		t.Errorf("getVersion() = %v, want %v", version, "v1.2.3")
-	}
-	
-	// Test with empty VERSION file
-	err = os.WriteFile("VERSION", []byte(""), 0644)
-	if err != nil {
-		t.Fatalf("Failed to write empty VERSION file: %v", err)
-	}
-	
-	version = getVersion()
 	if version != "unknown" {
-		t.Errorf("getVersion() with empty file = %v, want %v", version, "unknown")
-	}
-	
-	// Test with missing VERSION file
-	err = os.Remove("VERSION")
-	if err != nil {
-		t.Fatalf("Failed to remove VERSION file: %v", err)
-	}
-	
-	version = getVersion()
-	if version != "unknown" {
-		t.Errorf("getVersion() with missing file = %v, want %v", version, "unknown")
+		t.Errorf("getVersion() = %v, want %v", version, "unknown")
 	}
 }
 

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- **Memory Bank Updates**: Added Immediate Actions from static analysis as future development tasks
+  - Added test coverage improvement targets (80%+ coverage for production readiness)
+  - Added performance testing requirements for large dependency graphs
+  - Added git action testing setup requirements
+  - Updated activeContext.md and progress.md with specific action items and metrics
+  - Documented current test coverage by package for targeted improvements
+
+## [0.8.8] - 2025-01-27
+
+### Fixed
+- **Version Display Issue**: Fixed version commands returning "unknown" when binary is installed globally or run from bin directory
+  - Updated `getVersion()` function to use build-time `appVersion` variable set via ldflags only
+  - Removed VERSION file fallback - built application never reads VERSION file at runtime
+  - Version commands now work correctly regardless of working directory
+  - Fixed both `--version` and `-V` flags to display proper version information
+  - Resolved issue where globally installed buildfab showed "unknown" version
+  - Updated test to reflect new behavior - version is compiled into binary at build time
+
 ## [0.8.7] - 2025-09-23
 
 ### Fixed

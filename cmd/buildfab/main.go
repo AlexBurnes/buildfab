@@ -19,19 +19,18 @@ const (
 	appName = "buildfab"
 )
 
-// getVersion reads the version from the VERSION file
+// appVersion is set at build time via ldflags
+var appVersion = ""
+
+// getVersion returns the version from build-time variable
 func getVersion() string {
-	data, err := os.ReadFile("VERSION")
-	if err != nil {
-		return "unknown"
+	// Use build-time variable only
+	if appVersion != "" {
+		return appVersion
 	}
 	
-	version := strings.TrimSpace(string(data))
-	if version == "" {
-		return "unknown"
-	}
-	
-	return version
+	// If not set at build time, return unknown
+	return "unknown"
 }
 
 // Global flags
