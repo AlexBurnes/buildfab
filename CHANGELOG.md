@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.11] - 2025-09-23
+
+### Fixed
+- **GitHub Release**: Fixed release process on GitHub
+  - Bumped version to v0.8.11 to resolve release issues
+  - Updated packaging files for Windows Scoop and macOS Homebrew
+  - Ensured proper version synchronization across all platforms
+
 ## [0.8.10] - 2025-09-23
 
 ### Added
