@@ -31,16 +31,21 @@ scripts/version-bump-with-file minor  # for new features (updates VERSION file a
 scripts/version-bump-with-file major  # for breaking changes (updates VERSION file and packaging files)
    ```
 
-3. **Update memory bank documents**
+3. **Rebuild module with version ldflags**
+   ```bash
+go build -ldflags "-X main.appVersion=$(cat VERSION)" -o bin/buildfab ./cmd/buildfab
+   ```
+
+4. **Update memory bank documents**
    - `activeContext.md` - Add recent changes and current work focus
    - `progress.md` - Update what works and current status
 
-4. **Update documentation**
+5. **Update documentation**
    - `README.md` - Update version badge and release info
    - `CHANGELOG.md` - Add new version entry with changes
    - **Use correct dates**: Historical versions from git log, current version from terminal
 
-5. **Git operations**
+6. **Git operations**
    - Stage all changes: `git add .`
    - Commit with proper format: `git commit -m "type(scope): vX.Y.Z, description" -m "and write change description on new line"`
    - Create tag: `git tag vX.Y.Z`
