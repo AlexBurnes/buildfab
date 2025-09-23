@@ -199,9 +199,9 @@ func TestUI_PrintCommand(t *testing.T) {
 	n, _ := r.Read(buf)
 	output := string(buf[:n])
 
-	// Check that output contains expected content
-	if !strings.Contains(output, "echo hello") {
-		t.Errorf("PrintCommand() output should contain command, got: %s", output)
+	// Check that output is empty (command content is suppressed)
+	if output != "" {
+		t.Errorf("PrintCommand() should suppress output, got: %s", output)
 	}
 }
 
