@@ -1,0 +1,256 @@
+# Debug Output Rule
+
+## Rule Description
+When implementing complex logic or making significant changes, always add comprehensive debug output to understand what's happening in the code. Use the `-d|--debug` flag to enable debug logging.
+
+## When to Use Debug Output
+
+### Mandatory Debug Output
+- **Complex logic implementation** - When implementing new algorithms or complex business logic
+- **Queue-based systems** - When implementing queuing, buffering, or ordering logic
+- **State management** - When managing complex state transitions
+- **Parallel execution** - When implementing concurrent or parallel processing
+- **Error handling** - When implementing complex error handling and recovery
+- **Output management** - When implementing output ordering, streaming, or formatting
+- **Callback systems** - When implementing callback or event-driven systems
+
+### Optional Debug Output
+- **Simple functions** - Basic utility functions may not need debug output
+- **Well-tested code** - Stable code that's already working correctly
+- **Performance-critical code** - Where debug output might impact performance
+
+## Debug Output Requirements
+
+### 1. Debug Flag Support
+- **Always add debug flag** - Support `-d|--debug` flag in CLI commands
+- **Pass debug flag through** - Ensure debug flag is passed to all relevant components
+- **Debug flag propagation** - Pass debug flag from CLI → Runner → Executor → Components
+
+### 2. Debug Output Format
+- **Consistent format** - Use `[DEBUG] Component: Message` format
+- **Include context** - Show relevant state, variables, and decision points
+- **Show state changes** - Log when state changes occur
+- **Show decision points** - Log why decisions are made
+- **Show data flow** - Log data passing between components
+
+### 3. Debug Output Examples
+```go
+// Good debug output
+if o.debug {
+    fmt.Fprintf(o.errorOutput, "[DEBUG] OnStepStart: %s\n", stepName)
+    o.debugPrintState()
+}
+
+// Good debug output with context
+if o.debug {
+    fmt.Fprintf(o.errorOutput, "[DEBUG] canShowStepStart: %s cannot show start, previous step %s not completed (exists: %v, completed: %v)\n", 
+        stepName, prevStepName, exists, exists && data.Completed)
+}
+
+// Good debug output with state
+if o.debug {
+    fmt.Fprintf(o.errorOutput, "[DEBUG] Output Manager State:\n")
+    fmt.Fprintf(o.errorOutput, "  Current Step: %s\n", o.currentStep)
+    fmt.Fprintf(o.errorOutput, "  Steps in order: %s\n", strings.Join(stepNames, ", "))
+}
+```
+
+### 4. Debug State Printers
+- **Create debug state printers** - Add methods to print current state
+- **Print relevant data** - Show all relevant variables and state
+- **Print decision context** - Show why decisions are made
+- **Print data flow** - Show how data flows through the system
+
+## Implementation Guidelines
+
+### 1. Debug Flag Structure
+```go
+type Component struct {
+    // ... other fields
+    debug       bool
+    errorOutput io.Writer
+}
+
+// Constructor should accept debug flag
+func NewComponent(debug bool, errorOutput io.Writer) *Component {
+    return &Component{
+        debug:       debug,
+        errorOutput: errorOutput,
+    }
+}
+```
+
+### 2. Debug Output Methods
+```go
+// Debug state printer
+func (c *Component) debugPrintState() {
+    if !c.debug {
+        return
+    }
+    fmt.Fprintf(c.errorOutput, "[DEBUG] Component State:\n")
+    // Print relevant state
+}
+
+// Debug decision logging
+func (c *Component) debugDecision(decision string, context ...interface{}) {
+    if c.debug {
+        fmt.Fprintf(c.errorOutput, "[DEBUG] %s: %v\n", decision, context)
+    }
+}
+```
+
+### 3. Debug Output Best Practices
+- **Use consistent prefixes** - `[DEBUG] Component: Message`
+- **Include step names** - Always include relevant step/action names
+- **Show boolean decisions** - Log true/false decisions with context
+- **Show state transitions** - Log when state changes
+- **Show data flow** - Log data passing between components
+- **Use structured output** - Use consistent formatting for state output
+
+## Testing with Debug Output
+
+### 1. Always Test with Debug
+- **Test with `-d` flag** - Always test complex changes with debug output
+- **Verify debug output** - Ensure debug output shows expected behavior
+- **Check debug state** - Verify debug state output is accurate
+- **Test decision logic** - Ensure debug output shows correct decision making
+
+### 2. Debug Output Validation
+- **Verify debug flow** - Ensure debug output shows correct execution flow
+- **Check state consistency** - Verify debug state output matches actual state
+- **Validate decisions** - Ensure debug output shows correct decision logic
+- **Test edge cases** - Test debug output with edge cases and error conditions
+
+## Debug Output Examples
+
+### 1. Queue-Based Output Manager
+```go
+// OnStepStart with debug
+func (o *OrderedOutputManager) OnStepStart(ctx context.Context, stepName string) {
+    o.mu.Lock()
+    defer o.mu.Unlock()
+    
+    if o.debug {
+        fmt.Fprintf(o.errorOutput, "[DEBUG] OnStepStart: %s\n", stepName)
+        o.debugPrintState()
+    }
+    
+    // ... implementation
+}
+
+// Debug state printer
+func (o *OrderedOutputManager) debugPrintState() {
+    fmt.Fprintf(o.errorOutput, "[DEBUG] Output Manager State:\n")
+    fmt.Fprintf(o.errorOutput, "  Current Step: %s\n", o.currentStep)
+    fmt.Fprintf(o.errorOutput, "  Steps in order: ")
+    for i, step := range o.steps {
+        if i > 0 {
+            fmt.Fprintf(o.errorOutput, ", ")
+        }
+        fmt.Fprintf(o.errorOutput, "%s", step.Action)
+    }
+    fmt.Fprintf(o.errorOutput, "\n")
+    fmt.Fprintf(o.errorOutput, "  Step Data:\n")
+    for stepName, data := range o.stepData {
+        fmt.Fprintf(o.errorOutput, "    %s: started=%v, completed=%v, status=%s\n", 
+            stepName, data.Started, data.Completed, data.Status)
+    }
+}
+```
+
+### 2. Decision Logic Debug
+```go
+// Decision logic with debug
+func (o *OrderedOutputManager) canShowStepStart(stepName string) bool {
+    // ... logic
+    
+    if stepIndex == 0 {
+        if o.debug {
+            fmt.Fprintf(o.errorOutput, "[DEBUG] canShowStepStart: %s is first step, can show start\n", stepName)
+        }
+        return true
+    }
+    
+    // Check previous steps
+    for i := 0; i < stepIndex; i++ {
+        prevStepName := o.steps[i].Action
+        if data, exists := o.stepData[prevStepName]; !exists || !data.Completed {
+            if o.debug {
+                fmt.Fprintf(o.errorOutput, "[DEBUG] canShowStepStart: %s cannot show start, previous step %s not completed (exists: %v, completed: %v)\n", 
+                    stepName, prevStepName, exists, exists && data.Completed)
+            }
+            return false
+        }
+    }
+    
+    if o.debug {
+        fmt.Fprintf(o.errorOutput, "[DEBUG] canShowStepStart: %s can show start, all previous steps completed\n", stepName)
+    }
+    return true
+}
+```
+
+## Integration with Existing Code
+
+### 1. CLI Integration
+- **Add debug flag** - Ensure CLI supports `-d|--debug` flag
+- **Pass debug flag** - Pass debug flag through all components
+- **Debug flag propagation** - Ensure debug flag reaches all relevant components
+
+### 2. Component Integration
+- **Add debug field** - Add debug field to relevant structs
+- **Update constructors** - Update constructors to accept debug flag
+- **Add debug methods** - Add debug output methods to components
+
+### 3. Testing Integration
+- **Test with debug** - Always test complex changes with debug output
+- **Verify debug output** - Ensure debug output shows expected behavior
+- **Check debug state** - Verify debug state output is accurate
+
+## Benefits of Debug Output
+
+### 1. Development Benefits
+- **Faster debugging** - Debug output helps identify issues quickly
+- **Better understanding** - Debug output shows how code actually works
+- **Easier testing** - Debug output helps verify correct behavior
+- **Better maintenance** - Debug output helps maintain complex code
+
+### 2. User Benefits
+- **Better troubleshooting** - Users can use debug output to troubleshoot issues
+- **Better understanding** - Users can understand what the tool is doing
+- **Better support** - Debug output helps provide better support
+
+### 3. Code Quality Benefits
+- **Better code structure** - Debug output encourages better code organization
+- **Better error handling** - Debug output helps identify error conditions
+- **Better testing** - Debug output helps create better tests
+
+## Rule Enforcement
+
+### 1. Code Review
+- **Check debug output** - Ensure debug output is added for complex changes
+- **Verify debug format** - Ensure debug output follows consistent format
+- **Check debug state** - Ensure debug state output is accurate
+
+### 2. Testing
+- **Test with debug** - Always test complex changes with debug output
+- **Verify debug flow** - Ensure debug output shows correct execution flow
+- **Check debug state** - Verify debug state output matches actual state
+
+### 3. Documentation
+- **Document debug output** - Document debug output format and usage
+- **Update examples** - Update examples to show debug output usage
+- **Maintain debug docs** - Keep debug output documentation up to date
+
+## Conclusion
+
+Debug output is essential for complex logic implementation. Always add comprehensive debug output when implementing complex changes, and use the `-d|--debug` flag to enable it. This helps understand what's happening in the code and makes debugging much easier.
+
+The debug output should be:
+- **Comprehensive** - Show all relevant state and decisions
+- **Consistent** - Use consistent format and structure
+- **Informative** - Provide useful information for debugging
+- **Well-structured** - Use clear, readable format
+- **Testable** - Easy to test and verify
+
+This rule ensures that complex changes are implemented with proper debug support, making the code easier to understand, debug, and maintain.

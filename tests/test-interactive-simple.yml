@@ -1,0 +1,15 @@
+project:
+  name: "test-interactive-simple"
+
+actions:
+  - name: "interactive-simple"
+    run: |
+      echo "What is your name?"
+      read name
+      echo "Hello, $name!"
+      echo "Interactive command completed!"
+
+stages:
+  test-interactive-simple:
+    steps:
+      - action: "interactive-simple"

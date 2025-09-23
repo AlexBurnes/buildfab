@@ -456,6 +456,11 @@ func (c *Config) Validate() error {
 func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	stage, _ := r.config.GetStage(stageName)
 	
+	// If we have a step callback, use it for execution
+	if r.opts.StepCallback != nil {
+		return r.executeStageWithCallback(ctx, stage.Steps)
+	}
+	
 	// Build execution DAG
 	dag, err := r.buildDAG(stage.Steps)
 	if err != nil {
@@ -465,11 +470,14 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	// Execute DAG with parallel execution but ordered streaming output
 	results, err := r.executeDAGWithOrderedStreaming(ctx, dag, stage.Steps)
 	
+	// Check if execution was terminated due to context cancellation
+	terminated := ctx.Err() != nil
+	
 	// Check for errors in results
 	for _, result := range results {
 		if result.Status == StatusError {
 			// Find the step to check error policy
-	for _, step := range stage.Steps {
+			for _, step := range stage.Steps {
 				if step.Action == result.Name {
 					if step.OnError == "warn" {
 						// Log warning but continue
@@ -489,7 +497,276 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 		}
 	}
 	
+	// If terminated, return the context error
+	if terminated {
+		return ctx.Err()
+	}
+	
 	return err
+}
+
+// executeStageWithCallback executes a stage using the step callback for output management
+func (r *Runner) executeStageWithCallback(ctx context.Context, steps []Step) error {
+	// Build execution DAG
+	dag, err := r.buildDAG(steps)
+	if err != nil {
+		return fmt.Errorf("failed to build execution DAG: %w", err)
+	}
+	
+	// Execute DAG with step callback
+	results, err := r.executeDAGWithCallback(ctx, dag, steps)
+	
+	// Check if execution was terminated due to context cancellation
+	terminated := ctx.Err() != nil
+	
+	// Check for errors in results
+	for _, result := range results {
+		if result.Status == StatusError {
+			// Find the step to check error policy
+			for _, step := range steps {
+				if step.Action == result.Name {
+					if step.OnError == "warn" {
+						// Log warning but continue
+						if r.opts.Verbose {
+							fmt.Fprintf(r.opts.ErrorOutput, "Warning: step %s failed: %v\n", step.Action, result.Error)
+						}
+						continue
+					}
+					// Default is "stop" - return error
+					if result.Error != nil {
+						return fmt.Errorf("step %s failed: %w", step.Action, result.Error)
+					} else {
+						return fmt.Errorf("step %s failed: %s", step.Action, result.Message)
+					}
+				}
+			}
+		}
+	}
+	
+	// If terminated, return the context error
+	if terminated {
+		return ctx.Err()
+	}
+	
+	return err
+}
+
+// executeDAGWithCallback executes the DAG using step callbacks for output management
+func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAGNode, steps []Step) ([]Result, error) {
+	var results []Result
+	completed := make(map[string]bool)
+	failed := make(map[string]bool)
+	executing := make(map[string]bool)
+	
+	// Create a map of results by step name for quick lookup
+	resultMap := make(map[string]Result)
+	
+	// Create channels for communication
+	resultChan := make(chan Result, len(dag))
+	done := make(chan bool)
+	ctxDone := ctx.Done()
+	
+	// Mutex for thread-safe access to shared state
+	var mu sync.Mutex
+	
+	// Start a goroutine to handle results
+	go func() {
+		defer close(done)
+		for result := range resultChan {
+			mu.Lock()
+			results = append(results, result)
+			resultMap[result.Name] = result
+			completed[result.Name] = true
+			executing[result.Name] = false
+			
+			if result.Status == StatusError {
+				failed[result.Name] = true
+			}
+			mu.Unlock()
+		}
+	}()
+	
+	// Start execution goroutine that continuously starts new steps
+	go func() {
+		defer func() {
+			// Wait for all executing goroutines to complete before closing the channel
+			for {
+				mu.Lock()
+				anyExecuting := false
+				for _, isExecuting := range executing {
+					if isExecuting {
+						anyExecuting = true
+						break
+					}
+				}
+				mu.Unlock()
+				
+				if !anyExecuting {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			close(resultChan)
+		}()
+		
+		for {
+			// Check for context cancellation
+			select {
+			case <-ctxDone:
+				return
+			default:
+			}
+			
+			// Find ready steps
+			var readySteps []string
+			mu.Lock()
+			for nodeName, node := range dag {
+				if !completed[nodeName] && !executing[nodeName] && !failed[nodeName] {
+					// Check if all dependencies are completed
+					allDepsCompleted := true
+					for _, dep := range node.Dependencies {
+						if !completed[dep] {
+							allDepsCompleted = false
+							break
+						}
+					}
+					
+					if allDepsCompleted {
+						readySteps = append(readySteps, nodeName)
+					}
+				}
+			}
+			mu.Unlock()
+			
+			// If no ready steps, we're done
+			if len(readySteps) == 0 {
+				// Check if all steps are completed or failed
+				mu.Lock()
+				allDone := true
+				for nodeName := range dag {
+					if !completed[nodeName] && !failed[nodeName] {
+						allDone = false
+						break
+					}
+				}
+				mu.Unlock()
+				
+				if allDone {
+					return
+				}
+				
+				// Wait a bit before checking again
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			
+			// Start ready steps immediately without waiting
+			for _, nodeName := range readySteps {
+				// Check for context cancellation before starting each step
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// Continue with step execution
+				}
+				
+				node := dag[nodeName]
+				
+				mu.Lock()
+				executing[nodeName] = true
+				mu.Unlock()
+				
+				// Skip if already failed and this node requires it
+				if r.hasFailedDependency(node, failed) {
+					failedDeps := r.getFailedDependencyNames(node, failed)
+					result := Result{
+						Name:   nodeName,
+						Status: StatusSkipped,
+						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
+					}
+					resultChan <- result
+					continue
+				}
+				
+				// Check if step should be executed based on conditions
+				if !r.shouldExecuteStep(ctx, node) {
+					result := Result{
+						Name:   nodeName,
+						Status: StatusOK,
+						Message: "skipped (condition not met)",
+					}
+					resultChan <- result
+					continue
+				}
+				
+				// Execute the node in parallel
+				go func(nodeName string, node *DAGNode) {
+					result, _ := r.executeActionForDAGWithCallback(ctx, node.Action)
+					result.Name = nodeName
+					// Check if context was cancelled during execution
+					if ctx.Err() != nil {
+						result.Status = StatusError
+						result.Message = "cancelled"
+						result.Error = ctx.Err()
+					}
+					resultChan <- result
+				}(nodeName, node)
+			}
+		}
+	}()
+	
+	<-done
+	
+	return results, nil
+}
+
+// executeActionForDAGWithCallback executes a single action for DAG execution using step callbacks
+func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Action) (Result, error) {
+	// Call step start callback if provided
+	if r.opts.StepCallback != nil {
+		r.opts.StepCallback.OnStepStart(ctx, action.Name)
+	}
+
+	var result Result
+	var err error
+
+	if action.Uses != "" {
+		result, err = r.runBuiltInActionForDAG(ctx, action)
+	} else {
+		result, err = r.runCustomActionForDAG(ctx, action)
+	}
+
+	// Call step complete callback if provided
+	if r.opts.StepCallback != nil {
+		status := StepStatusOK
+		message := "executed successfully"
+		
+		if err != nil {
+			status = StepStatusError
+			message = err.Error()
+			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+		} else if result.Status == StatusWarn {
+			status = StepStatusWarn
+			message = result.Message
+		} else if result.Status == StatusError {
+			status = StepStatusError
+			message = result.Message
+		} else if result.Status == StatusSkipped {
+			status = StepStatusSkipped
+			message = result.Message
+		}
+		
+		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
+	}
+
+	return result, err
+}
+
+// shouldExecuteStep checks if a step should be executed based on conditions
+func (r *Runner) shouldExecuteStep(ctx context.Context, node *DAGNode) bool {
+	// For now, always execute steps
+	// In the future, this could check conditions, labels, etc.
+	return true
 }
 
 // DAGNode represents a node in the execution DAG

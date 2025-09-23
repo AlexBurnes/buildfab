@@ -312,14 +312,20 @@ func (s *StreamingOutputManager) ShouldShowStepStart(stepName string) bool {
 		return false
 	}
 	
-	// Allow all steps to start immediately, but only show start message for the first one
 	// Check if this step itself has been started - if so, don't show start
 	if s.started[stepName] {
 		return false
 	}
 	
-	// Only show start message for the first step in declaration order
-	return stepIndex == 0
+	// For the first step, always show start when it begins
+	if stepIndex == 0 {
+		return true
+	}
+	
+	// For subsequent steps, check if the immediately previous step has been displayed
+	// This allows step start messages to appear as soon as the previous step's success is shown
+	prevStepName := s.steps[stepIndex-1].Action
+	return s.displayed[prevStepName]
 }
 
 // MarkStepStarted marks a step as started
@@ -385,9 +391,11 @@ func (s *StreamingOutputManager) ShouldShowStepStartWhenActive(stepName string) 
 		return false
 	}
 	
-	// Check if all previous steps in declaration order have finished streaming
-	for i := 0; i < stepIndex; i++ {
-		if !s.doneStreaming[s.steps[i].Action] {
+	// Check if the immediately previous step has been displayed
+	// This allows step start messages to appear as soon as the previous step's success is shown
+	if stepIndex > 0 {
+		prevStepName := s.steps[stepIndex-1].Action
+		if !s.displayed[prevStepName] {
 			return false
 		}
 	}
@@ -796,9 +804,12 @@ func (e *Executor) executeAction(ctx context.Context, action buildfab.Action, st
 		}, ctx.Err()
 	}
 
-	// Call step start callback if provided
-	if e.opts.StepCallback != nil {
+	// Call step start callback if provided and streaming manager allows it
+	if e.opts.StepCallback != nil && (streamingManager == nil || streamingManager.ShouldShowStepStart(action.Name)) {
 		e.opts.StepCallback.OnStepStart(ctx, action.Name)
+		if streamingManager != nil {
+			streamingManager.MarkStepStarted(action.Name)
+		}
 	}
 
 	var result buildfab.Result
@@ -885,6 +896,9 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 	// Execute the command with streaming output
 	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
 	
+	// Connect stdin to the terminal for interactive commands
+	cmd.Stdin = os.Stdin
+	
 	var err error
 	if e.opts.Verbose {
 		// Use streaming output for verbose mode
@@ -899,6 +913,11 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 			lines := strings.Split(strings.TrimRight(string(output), "\n"), "\n")
 			for _, line := range lines {
 				if strings.TrimSpace(line) != "" {
+					// Call step output callback if provided
+					if e.opts.StepCallback != nil {
+						e.opts.StepCallback.OnStepOutput(ctx, action.Name, line)
+					}
+					
 					if streamingManager == nil || streamingManager.ShouldStreamOutput(action.Name) {
 						e.ui.PrintCommandOutput(line)
 					} else {
@@ -959,31 +978,36 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 	done := make(chan error, 1)
 	streamingDone := make(chan bool, 2) // One for stdout, one for stderr
 	
-	// Stream stdout
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			
-			// Don't show step start messages immediately - they will be shown with success messages
-			// Just mark the step as started for internal tracking
-			if streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
-				streamingManager.MarkStepStarted(actionName)
-			}
-			
-			// Check streaming status dynamically for each line
-			if e.ui != nil {
-				if streamingManager == nil || streamingManager.ShouldStreamOutput(actionName) {
-					e.ui.PrintCommandOutput(line)
-				} else {
-					// Buffer output for later when this step becomes active
-					streamingManager.BufferOutput(actionName, line)
+		// Stream stdout
+		go func() {
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				line := scanner.Text()
+				
+				// Don't show step start messages immediately - they will be shown with success messages
+				// Just mark the step as started for internal tracking
+				if streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
+					streamingManager.MarkStepStarted(actionName)
+				}
+				
+				// Call step output callback if provided
+				if e.opts.StepCallback != nil {
+					e.opts.StepCallback.OnStepOutput(ctx, actionName, line)
+				}
+				
+				// Check streaming status dynamically for each line
+				if e.ui != nil {
+					if streamingManager == nil || streamingManager.ShouldStreamOutput(actionName) {
+						e.ui.PrintCommandOutput(line)
+					} else {
+						// Buffer output for later when this step becomes active
+						streamingManager.BufferOutput(actionName, line)
+					}
 				}
 			}
-		}
-		// Signal that stdout is done
-		streamingDone <- true
-	}()
+			// Signal that stdout is done
+			streamingDone <- true
+		}()
 	
 	// Stream stderr
 	go func() {
@@ -995,6 +1019,11 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 			// Just mark the step as started for internal tracking
 			if streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
 				streamingManager.MarkStepStarted(actionName)
+			}
+			
+			// Call step output callback if provided
+			if e.opts.StepCallback != nil {
+				e.opts.StepCallback.OnStepOutput(ctx, actionName, line)
 			}
 			
 			// Check streaming status dynamically for each line

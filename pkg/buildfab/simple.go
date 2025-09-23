@@ -60,21 +60,15 @@ func NewSimpleRunner(config *Config, opts *SimpleRunOptions) *SimpleRunner {
 
 // RunStage executes a specific stage with automatic output handling
 func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
-	_, exists := r.config.GetStage(stageName)
+	stage, exists := r.config.GetStage(stageName)
 	if !exists {
 		return fmt.Errorf("stage not found: %s", stageName)
 	}
 
 	// Stage header will be printed by the library's UI system
 
-	// Create step callback to collect results
-	stepCallback := &SimpleStepCallback{
-		verbose: r.opts.Verbose,
-		debug:   r.opts.Debug,
-		output:  r.opts.Output,
-		errorOutput: r.opts.ErrorOutput,
-		config:  r.config,
-	}
+	// Create ordered step callback to collect results with proper ordering
+	stepCallback := NewOrderedStepCallback(stage.Steps, r.opts.Verbose, r.opts.Debug, r.opts.ErrorOutput)
 
 	// Convert to complex options for internal executor
 	complexOpts := &RunOptions{
@@ -108,8 +102,16 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	// Get updated results after handling skipped steps
 	results = stepCallback.GetResults()
 	
-	// Print summary
-	r.printSummary(stageName, err == nil, results)
+	// Check if execution was terminated due to context cancellation
+	terminated := ctx.Err() != nil
+	success := err == nil && !terminated
+	
+	// Print summary with termination handling
+	if terminated {
+		r.printTerminatedSummary(stageName, results)
+	} else {
+		r.printSummary(stageName, success, results)
+	}
 	
 	return err
 }
@@ -476,6 +478,82 @@ func (r *SimpleRunner) getSkippedSteps(stageName string, executedResults []StepR
 	}
 	
 	return skippedSteps
+}
+
+// printTerminatedSummary prints the stage result when execution was terminated
+func (r *SimpleRunner) printTerminatedSummary(stageName string, results []StepResult) {
+	fmt.Fprintf(r.opts.Output, "\n")
+	fmt.Fprintf(r.opts.Output, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	
+	icon := "⏹️"
+	color := colorYellow
+	status := "TERMINATED"
+	
+	fmt.Fprintf(r.opts.Output, "%s %s%s%s - %s\n", icon, color, status, colorReset, stageName)
+	
+	// Print summary
+	if len(results) > 0 {
+		fmt.Fprintf(r.opts.Output, "\n")
+		fmt.Fprintf(r.opts.Output, "📊 Summary:\n")
+		
+		statusCounts := make(map[StepStatus]int)
+		for _, result := range results {
+			statusCounts[result.Status]++
+		}
+		
+		// Define status order for consistent display
+		statusOrder := []StepStatus{
+			StepStatusError,
+			StepStatusWarn,
+			StepStatusOK,
+			StepStatusSkipped,
+		}
+		
+		for _, status := range statusOrder {
+			count := statusCounts[status]
+			var icon, color string
+			
+			switch status {
+			case StepStatusOK:
+				icon = "✓"
+				if count > 0 {
+					color = colorGreen
+				} else {
+					color = colorGray
+				}
+			case StepStatusWarn:
+				icon = "!"
+				if count > 0 {
+					color = colorYellow
+				} else {
+					color = colorGray
+				}
+			case StepStatusError:
+				icon = "✗"
+				if count > 0 {
+					color = colorRed
+				} else {
+					color = colorGray
+				}
+			case StepStatusSkipped:
+				icon = "→"
+				if count > 0 {
+					color = colorGray
+				} else {
+					color = colorGray
+				}
+			default:
+				icon = "?"
+				if count > 0 {
+					color = colorGray
+				} else {
+					color = colorGray
+				}
+			}
+			
+			fmt.Fprintf(r.opts.Output, "   %s%s%s %s%-8s %3d%s\n", color, icon, colorReset, color, status.String(), count, colorReset)
+		}
+	}
 }
 
 // printSummary prints the stage result with summary

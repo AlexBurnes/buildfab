@@ -1,0 +1,32 @@
+project:
+  name: "test-sudo-input"
+
+actions:
+  - name: "sudo-test"
+    run: |
+      echo "This will require sudo password:"
+      sudo -n true 2>/dev/null && echo "Sudo already authenticated" || echo "Sudo requires password"
+      echo "Command completed"
+
+  - name: "interactive-command"
+    run: |
+      echo "Starting interactive command..."
+      echo "Please enter your name:"
+      read name
+      echo "Hello, $name!"
+      echo "Interactive command completed!"
+
+stages:
+  test-sudo:
+    steps:
+      - action: "sudo-test"
+  
+  test-interactive:
+    steps:
+      - action: "interactive-command"
+  
+  test-mixed:
+    steps:
+      - action: "sudo-test"
+      - action: "interactive-command"
+        require: ["sudo-test"]

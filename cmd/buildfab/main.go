@@ -264,29 +264,29 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		}
 	}
 	
-	// Create run options for internal executor
+	// Create simple run options
 	// If quiet is set, override verbose to false
 	effectiveVerbose := verbose && !quiet
-	opts := &buildfab.RunOptions{
-		ConfigPath:   configPath,
-		MaxParallel:  maxParallel,
-		Verbose:      effectiveVerbose,
-		Debug:        debug,
-		Variables:    variables,
-		WorkingDir:   workingDir,
-		Output:       os.Stdout,
-		ErrorOutput:  os.Stderr,
-		Only:         only,
+	opts := &buildfab.SimpleRunOptions{
+		ConfigPath:  configPath,
+		MaxParallel: maxParallel,
+		Verbose:     effectiveVerbose,
+		Debug:       debug,
+		Variables:   variables,
+		WorkingDir:  workingDir,
+		Output:      os.Stdout,
+		ErrorOutput: os.Stderr,
+		Only:        only,
 		WithRequires: withRequires,
 	}
 	
-	// Create internal executor
-	exec := executor.New(cfg, opts, uiInstance)
+	// Create simple runner
+	runner := buildfab.NewSimpleRunner(cfg, opts)
 	
 	// Check if running a specific step
 	if len(args) == 2 {
 		stepName := args[1]
-		err := exec.RunAction(ctx, stepName)
+		err := runner.RunStageStep(ctx, stageName, stepName)
 		if err != nil {
 			// In test mode, return the error instead of exiting
 			if testing.Testing() {
@@ -297,8 +297,8 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	
-	// Run the entire stage using internal executor
-	err = exec.RunStage(ctx, stageName)
+	// Run the entire stage using simple runner
+	err = runner.RunStage(ctx, stageName)
 	if err != nil {
 		// In test mode, return the error instead of exiting
 		if testing.Testing() {

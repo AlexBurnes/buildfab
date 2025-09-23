@@ -8,8 +8,11 @@ buildfab follows a layered architecture with clear separation of concerns:
 │   CLI Layer     │  ← cmd/buildfab/main.go
 ├─────────────────┤
 │   Library API   │  ← pkg/buildfab/ (public interface)
+│   SimpleRunner  │  ← Uses OrderedStepCallback for output management
 ├─────────────────┤
 │  Core Engine    │  ← internal/executor/ (DAG execution)
+├─────────────────┤
+│  Output Manager │  ← OrderedOutputManager (queue-based output ordering)
 ├─────────────────┤
 │  Configuration  │  ← internal/config/ (YAML parsing)
 ├─────────────────┤
@@ -22,10 +25,12 @@ buildfab follows a layered architecture with clear separation of concerns:
 ## Key Technical Decisions
 - **Library-first design**: Core functionality in pkg/buildfab for embedding
 - **DAG execution engine**: Parallel processing with dependency resolution
+- **Queue-based output management**: OrderedOutputManager ensures sequential display of parallel execution
 - **YAML configuration**: Human-readable format with validation
 - **Built-in action registry**: Extensible system for common operations
 - **Variable interpolation**: GitHub-style `${{ }}` syntax for dynamic values
 - **Error policy system**: Configurable stop/warn behavior per step
+- **Debug logging system**: Comprehensive debug output with -d|--debug flag for complex changes
 
 ## Design Patterns in Use
 - **Command Pattern**: Actions implement common interface for execution
@@ -34,6 +39,9 @@ buildfab follows a layered architecture with clear separation of concerns:
 - **Builder Pattern**: Configuration and options construction
 - **Factory Pattern**: Action instantiation and registration
 - **Dependency Injection**: Context and options passed to components
+- **Queue Pattern**: OrderedOutputManager manages step output in sequential order
+- **Callback Pattern**: OrderedStepCallback delegates output to OrderedOutputManager
+- **Debug Pattern**: Comprehensive debug logging for complex change implementation
 - **Mock Pattern**: Test doubles for external dependencies and UI components
 - **Test Builder Pattern**: Helper functions for creating test configurations
 
@@ -44,14 +52,19 @@ buildfab follows a layered architecture with clear separation of concerns:
 - **Actions → Variables**: Actions use variable system for interpolation
 - **Config → All**: Configuration drives all component behavior
 - **UI → All**: UI components provide user feedback and error reporting
+- **OrderedOutputManager → UI**: Queue-based output management ensures sequential display
+- **OrderedStepCallback → OrderedOutputManager**: Callback delegates all output to queue manager
+- **Debug System → All**: Comprehensive debug logging throughout execution pipeline
 
 ## Critical Implementation Paths
 1. **YAML Parsing**: project.yml → internal model → validation
 2. **DAG Construction**: Actions → dependencies → cycle detection → execution plan
 3. **Variable Resolution**: `${{ }}` → context → interpolation → action execution
 4. **Parallel Execution**: DAG → wave scheduling → concurrent execution → result aggregation
-5. **Error Handling**: Action failure → policy check → continue/stop → reporting
-6. **Library Integration**: pre-push → buildfab API → stage execution → result handling
+5. **Queue-Based Output**: OrderedOutputManager → step queue → sequential display → UI
+6. **Error Handling**: Action failure → policy check → continue/stop → reporting
+7. **Debug Logging**: Debug flag → comprehensive logging → queue state → decision tracing
+8. **Library Integration**: pre-push → buildfab API → stage execution → result handling
 
 ## Data Flow
 ```
@@ -59,6 +72,9 @@ project.yml → Config Parser → DAG Builder → Executor → Actions → Resul
      ↓              ↓            ↓           ↓         ↓        ↓
   Validation → Dependency → Wave → Action → Variable → Status
               Resolution  Planning Execution Interpolation Reporting
+     ↓              ↓            ↓           ↓         ↓        ↓
+  Queue-Based → OrderedOutput → Step → Debug → Sequential
+  Output Mgmt    Manager       Queue  Logging  Display
 ```
 
 ## Testing Architecture
@@ -72,6 +88,36 @@ Test Suite (75.3% Coverage)
 ├── Executor Tests (internal/executor: 0% - blocked)
 └── End-to-End Tests (integration_test.go)
 ```
+
+## Output Management Patterns
+
+### OrderedOutputManager Architecture
+The OrderedOutputManager implements a queue-based approach to ensure sequential output display from parallel execution:
+
+```
+┌─────────────────┐
+│   Executor      │  ← Runs steps in parallel for performance
+├─────────────────┤
+│   StepCallback  │  ← OrderedStepCallback delegates to manager
+├─────────────────┤
+│   OutputManager │  ← OrderedOutputManager manages display order
+├─────────────────┤
+│   UI Display    │  ← Shows output in declaration order
+└─────────────────┘
+```
+
+### Key Output Management Patterns
+- **Queue-based ordering**: Steps run in parallel but display output sequentially in declaration order
+- **Buffered output**: Output is buffered until the step becomes active for display
+- **Completion tracking**: Tracks step completion and ensures proper ordering of success messages
+- **Duplicate prevention**: Output is only shown once, either during execution or completion
+- **Context awareness**: Handles both verbose and silence modes with appropriate display logic
+
+### Output Flow
+1. **Step Start**: `OnStepStart()` → `canShowStepStart()` → `showStepStart()`
+2. **Step Output**: `OnStepOutput()` → Buffer output (don't display immediately)
+3. **Step Complete**: `OnStepComplete()` → `checkAndShowCompletedSteps()` → `showStepCompletion()`
+4. **Next Step**: `checkAndShowNextStep()` → Show next available step
 
 ## Test Patterns
 - **Table-driven tests**: Comprehensive test cases with expected inputs/outputs

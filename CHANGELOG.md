@@ -7,6 +7,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.17] - 2025-09-23
+
+### Fixed
+- **Streaming Output Fix**: Fixed OrderedOutputManager to provide true streaming output instead of buffering output until step completion
+  - Fixed immediate streaming - output now streams immediately as it's produced for the currently active step, not buffered until completion
+  - Fixed parallel step buffering - steps that run in parallel but need to wait their turn now properly buffer their output and flush it when they become the active step
+  - Added flushBufferedOutput method - implemented proper buffering and flushing logic for steps that can't stream immediately
+  - Enhanced checkAndShowNextStep - now flushes buffered output when a step becomes the current active step
+  - Enhanced checkAndShowCompletedSteps - now flushes buffered output when showing completed steps in order
+  - Fixed executor integration - added OnStepOutput calls in the executor to properly pass output to the OrderedOutputManager
+  - Perfect streaming behavior - both sequential steps (test-streaming) and parallel steps (test-parallel) now work correctly with proper output ordering and immediate streaming
+  - Comprehensive testing - verified fix works correctly for both sequential and parallel execution scenarios
+
+### Added
+- **Interactive Command Support**: Added stdin connection for interactive commands
+  - Connected cmd.Stdin = os.Stdin to allow commands to read from terminal input
+  - Interactive prompts are now visible in the output stream in real-time
+  - Commands that require user input (like sudo) show their prompts correctly
+  - Note: Full interactive input handling has limitations due to subprocess execution constraints
+
+### Technical Details
+- **OrderedOutputManager Enhancements**: 
+  - Modified OnStepOutput to stream output immediately if it's the current active step
+  - Added flushBufferedOutput method to flush all buffered output when a step becomes active
+  - Updated checkAndShowNextStep to flush buffered output when a step becomes the current step
+  - Updated checkAndShowCompletedSteps to flush buffered output when showing completed steps
+- **Executor Integration**: 
+  - Added OnStepOutput calls in executeCommandWithStreaming for both stdout and stderr
+  - Added OnStepOutput calls in executeCustomAction for buffered output mode
+  - Connected cmd.Stdin = os.Stdin for interactive command support
+
+## [0.8.16] - 2025-09-23
+
+### Fixed
+- **Ordered Output Manager Fixes**: Fixed critical issues in the OrderedOutputManager implementation after refactoring
+  - Fixed output ordering issues where steps were completing out of order and not being displayed in correct sequential order
+  - Fixed duplicate output issue where step output was being shown both in OnStepOutput and showStepCompletion methods
+  - Added checkAndShowCompletedSteps method to properly handle completed steps that can now be shown in order
+  - Enhanced completion logic to ensure all completed steps are displayed in the correct order
+  - Fixed missing step completions - all steps now properly show their completion messages in the correct sequential order
+  - Perfect user experience with clean, ordered output and no duplicate display
+
+### Verified
+- **Library Refactoring**: Confirmed that the library buildfab is correctly using the new refactoring approach
+  - Verified OrderedStepCallback and OrderedOutputManager are properly integrated
+  - Confirmed both CLI and library use the same output management system
+  - Tested comprehensive output ordering in both verbose and silence modes
+
+## [0.8.15] - 2025-09-23
+
+### Fixed
+- **Ctrl+C Termination Message**: Fixed issue where Ctrl+C was working but output didn't show "TERMINATED!" after refactoring
+  - Added proper context cancellation detection in both runStageInternal and executeStageWithCallback methods
+  - Added printTerminatedSummary method in SimpleRunner that displays "⏹️ TERMINATED" message with yellow color
+  - Enhanced RunStage method to check for termination and call appropriate summary method (terminated vs normal)
+  - Fixed both execution paths to properly handle context cancellation and display termination messages
+  - Perfect user experience with clear "TERMINATED" status and proper summary statistics
+
+## [0.8.14] - 2025-09-23
+
+### Added
+- **Queue-Based Output Manager**: Implemented OrderedOutputManager for perfect sequential output display
+  - New queue-based system that manages step output in proper sequential order using a queue approach
+  - Eliminates mixed output between parallel steps with proper buffering and ordered display logic
+  - All steps now show their start messages (○ step-name running...) in correct sequential order
+  - Fixed last step issue - goreleaser-dry-run step now properly shows both start and completion messages
+  - Implemented OrderedStepCallback - new StepCallback implementation that delegates all output to the OrderedOutputManager
+  - Perfect sequential output - steps run in parallel for performance but display output sequentially in declaration order
+  - Comprehensive testing - verified fix works correctly for all steps including the last step
+
+### Added
+- **Comprehensive Debug Logging**: Added extensive debug output with -d|--debug flag for complex changes
+  - Debug output traces queue state and decision-making process in OrderedOutputManager
+  - Shows step registration, queue state, and output decisions in real-time
+  - Helps developers understand and debug complex output management logic
+  - Created debug output rule - documented best practices for using debug output during complex changes
+  - Essential for troubleshooting and understanding queue-based output management behavior
+
+### Fixed
+- **Missing Step Start Messages**: Fixed issue where only the first step showed its start message
+  - All steps now properly show their start messages in correct sequential order
+  - Steps wait for previous step to complete before showing their start message
+  - Perfect sequential display: ○ step1 running... → ✓ step1 executed successfully → ○ step2 running...
+  - Resolves user-reported issue where step start messages were missing for all but the first step
+
+### Fixed
+- **Last Step Display Issue**: Fixed goreleaser-dry-run step not showing start message
+  - Last step now properly shows both start and completion messages
+  - Queue-based logic correctly handles the last step in the execution sequence
+  - All steps, including the last one, now display their start and completion messages correctly
+  - Perfect user experience with complete visibility into all step execution
+
+### Changed
+- **Output Management Architecture**: Replaced StreamingOutputManager with OrderedOutputManager
+  - New architecture uses queue-based approach instead of streaming manager logic
+  - Executor now delegates all output responsibility to OrderedOutputManager
+  - Simplified executor logic by centralizing output management in dedicated component
+  - Better separation of concerns between execution and output display
+
+### Documentation
+- **Debug Output Rule**: Created comprehensive rule for using debug output during complex changes
+  - Documented best practices for implementing debug logging in complex logic
+  - Added rule to .cursor/rules/rule-debug-output.mdc for future reference
+  - Emphasizes importance of debug output for understanding queue state and decision-making
+  - Helps developers implement and debug complex output management systems
+
 ## [0.8.13] - 2025-09-23
 
 ### Fixed

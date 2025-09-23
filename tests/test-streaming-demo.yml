@@ -1,0 +1,17 @@
+project:
+  name: "test-streaming-demo"
+
+actions:
+  - name: "streaming-demo"
+    run: |
+      echo "Starting streaming demo..."
+      for i in $(seq 1 5); do
+        echo "Step $i of 5"
+        sleep 1
+      done
+      echo "Streaming demo completed!"
+
+stages:
+  test-streaming-demo:
+    steps:
+      - action: "streaming-demo"

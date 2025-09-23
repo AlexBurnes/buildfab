@@ -1,0 +1,14 @@
+project:
+  name: "test-sudo-real"
+
+actions:
+  - name: "sudo-real"
+    run: |
+      echo "Testing real sudo command..."
+      sudo ls /root
+      echo "Sudo command completed!"
+
+stages:
+  test-sudo-real:
+    steps:
+      - action: "sudo-real"
