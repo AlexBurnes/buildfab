@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/AlexBurnes/buildfab/internal/config"
-	"github.com/AlexBurnes/buildfab/internal/executor"
-	"github.com/AlexBurnes/buildfab/internal/ui"
 	"github.com/AlexBurnes/buildfab/pkg/buildfab"
 )
 
@@ -105,8 +103,8 @@ stages:
 		t.Fatalf("Variable resolution failed: %v", err)
 	}
 
-	// Test executor creation
-	opts := &buildfab.RunOptions{
+	// Test simple runner creation (same as CLI)
+	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configFile,
 		MaxParallel: 2,
 		Verbose:     false,
@@ -119,22 +117,16 @@ stages:
 		WithRequires: false,
 	}
 
-	exec := executor.New(cfg, opts, ui.New(false, false))
-	if exec == nil {
-		t.Error("Executor should not be nil")
-	}
-
-	// Test action listing
-	actions := exec.ListActions()
-	if len(actions) != 3 {
-		t.Errorf("ListActions() length = %v, want %v", len(actions), 3)
+	runner := buildfab.NewSimpleRunner(cfg, opts)
+	if runner == nil {
+		t.Error("SimpleRunner should not be nil")
 	}
 
 	// Test stage execution
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	err = exec.RunStage(ctx, "test-stage")
+	err = runner.RunStage(ctx, "test-stage")
 	// The DAG execution should now work correctly
 	if err == nil {
 		t.Log("Integration test completed successfully")
@@ -184,8 +176,8 @@ stages:
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Test executor with missing VERSION file
-	opts := &buildfab.RunOptions{
+	// Test simple runner with missing VERSION file
+	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configFile,
 		MaxParallel: 2,
 		Verbose:     false,
@@ -198,13 +190,13 @@ stages:
 		WithRequires: false,
 	}
 
-	exec := executor.New(cfg, opts, ui.New(false, false))
+	runner := buildfab.NewSimpleRunner(cfg, opts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// Test action execution (should fail due to missing VERSION file)
-	err = exec.RunAction(ctx, "version-check")
+	err = runner.RunAction(ctx, "version-check")
 	if err == nil {
 		t.Log("Action execution completed successfully (unexpected)")
 	} else {

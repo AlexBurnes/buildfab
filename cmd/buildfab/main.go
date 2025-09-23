@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/AlexBurnes/buildfab/pkg/buildfab"
 	"github.com/AlexBurnes/buildfab/internal/ui"
-	"github.com/AlexBurnes/buildfab/internal/executor"
 	"github.com/AlexBurnes/buildfab/internal/version"
 )
 
@@ -195,16 +194,16 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Load configuration to check if argument is a stage or action
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
-		// If config loading fails, treat as stage name (fallback behavior)
-		return runStageDirect(cmd, args)
+	// If config loading fails, treat as stage name (fallback behavior)
+	return runStageDirect(cmd, args)
 	}
 	
 	stageOrActionName := args[0]
 	
 	// Check if it's a stage name first (higher priority)
 	if _, isStage := cfg.Stages[stageOrActionName]; isStage {
-		// It's a stage, run it directly
-		return runStageDirect(cmd, args)
+	// It's a stage, run it directly
+	return runStageDirect(cmd, args)
 	}
 	
 	// Check if it's an action name
@@ -264,9 +263,10 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		}
 	}
 	
-	// Create simple run options
 	// If quiet is set, override verbose to false
 	effectiveVerbose := verbose && !quiet
+	
+	// Create simple run options
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configPath,
 		MaxParallel: maxParallel,
@@ -354,144 +354,16 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 	return runner.RunAction(ctx, actionName)
 }
 
-const (
-	colorReset  = "\033[0m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorRed    = "\033[31m"
-	colorCyan   = "\033[36m"
-	colorGray   = "\033[90m"
-)
-
 // Custom output functions removed - now using library UI system
 
 // runStage handles the run command
 func runStage(cmd *cobra.Command, args []string) error {
-	// Create context with cancellation
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	
-	// Load configuration using library API
-	cfg, err := buildfab.LoadConfig(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-	
-	// Print header using library UI - always show buildfab name and version
-	uiInstance := ui.New(verbose && !quiet, debug)
-	uiInstance.PrintCLIHeader("buildfab", getVersion())
-	
-	// Get project info for project check
-	projectName := "buildfab" // Default project name
-	if cfg.Project.Name != "" {
-		projectName = cfg.Project.Name
-	}
-	
-	// Get project version from version.library file or VERSION file
-	projectVersion := getProjectVersion()
-	uiInstance.PrintProjectCheck(projectName, projectVersion)
-	
-	stageName := args[0]
-	
-	// Create variables map from environment variables
-	variables := make(map[string]string)
-	for _, envVar := range envVars {
-		parts := strings.SplitN(envVar, "=", 2)
-		if len(parts) == 2 {
-			variables[parts[0]] = parts[1]
-		}
-	}
-	
-	// Create run options for internal executor
-	// If quiet is set, override verbose to false
-	effectiveVerbose := verbose && !quiet
-	opts := &buildfab.RunOptions{
-		ConfigPath:   configPath,
-		MaxParallel:  maxParallel,
-		Verbose:      effectiveVerbose,
-		Debug:        debug,
-		Variables:    variables,
-		WorkingDir:   workingDir,
-		Output:       os.Stdout,
-		ErrorOutput:  os.Stderr,
-		Only:         only,
-		WithRequires: withRequires,
-	}
-	
-	// Reuse the UI instance created above
-	
-	// Create internal executor
-	exec := executor.New(cfg, opts, uiInstance)
-	
-	// Check if running a specific step
-	if len(args) == 2 {
-		stepName := args[1]
-		err := exec.RunAction(ctx, stepName)
-		if err != nil {
-			// In test mode, return the error instead of exiting
-			if testing.Testing() {
-				return err
-			}
-			os.Exit(1)
-		}
-		return nil
-	}
-	
-	// Run the entire stage using internal executor
-	err = exec.RunStage(ctx, stageName)
-	if err != nil {
-		// In test mode, return the error instead of exiting
-		if testing.Testing() {
-			return err
-		}
-		os.Exit(1)
-	}
-	return nil
+	return runStageDirect(cmd, args)
 }
 
 // runAction handles the action command
 func runAction(cmd *cobra.Command, args []string) error {
-	// Create context with cancellation
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	
-	// Load configuration using library API
-	cfg, err := buildfab.LoadConfig(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-	
-	// Create variables map from environment variables
-	variables := make(map[string]string)
-	for _, envVar := range envVars {
-		parts := strings.SplitN(envVar, "=", 2)
-		if len(parts) == 2 {
-			variables[parts[0]] = parts[1]
-		}
-	}
-	
-	// Create simple run options
-	// If quiet is set, override verbose to false
-	effectiveVerbose := verbose && !quiet
-	opts := &buildfab.SimpleRunOptions{
-		ConfigPath:  configPath,
-		MaxParallel: maxParallel,
-		Verbose:     effectiveVerbose,
-		Debug:       debug,
-		Variables:   variables,
-		WorkingDir:  workingDir,
-		Output:      os.Stdout,
-		ErrorOutput: os.Stderr,
-		Only:        only,
-	}
-	
-	// Create simple runner
-	runner := buildfab.NewSimpleRunner(cfg, opts)
-	
-	actionName := args[0]
-	
-	// Run action using simple API
-	return runner.RunAction(ctx, actionName)
+	return runActionDirect(cmd, args)
 }
 
 // runListActions handles the list-actions command
