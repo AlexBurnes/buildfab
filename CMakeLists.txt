@@ -1,29 +1,44 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Get version with corrected priority order
-set(VERSION_UTILITY "${CMAKE_SOURCE_DIR}/scripts/version")
+set(VERSION_FILE "${CMAKE_SOURCE_DIR}/VERSION")
 set(GIT_VERSION "")
 set(PROJECT_VERSION "")
 
-# 1. Try to use built version utility first
-if(EXISTS ${VERSION_UTILITY})
-    execute_process(
-        COMMAND ${VERSION_UTILITY} version
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE VERSION_UTILITY_OUTPUT
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE VERSION_UTILITY_RESULT
-    )
-    
-    if(VERSION_UTILITY_RESULT EQUAL 0 AND VERSION_UTILITY_OUTPUT)
-        set(GIT_VERSION ${VERSION_UTILITY_OUTPUT})
-        message(STATUS "Using built version utility: ${GIT_VERSION}")
+# 1. Try to read from VERSION file first (highest priority)
+if(EXISTS ${VERSION_FILE})
+    file(READ ${VERSION_FILE} VERSION_FILE_CONTENT)
+    string(STRIP ${VERSION_FILE_CONTENT} GIT_VERSION)
+    if(GIT_VERSION)
+        message(STATUS "Using VERSION file: ${GIT_VERSION}")
     else()
-        message(WARNING "Built version utility failed, trying auto-download")
+        message(WARNING "VERSION file is empty, trying version utility")
     endif()
 endif()
 
-# 2. NEW: Auto-download latest version utility
+# 2. Fallback to version utility if VERSION file not available or empty
+if(NOT GIT_VERSION)
+    set(VERSION_UTILITY "${CMAKE_SOURCE_DIR}/scripts/version")
+    
+    if(EXISTS ${VERSION_UTILITY})
+        execute_process(
+            COMMAND ${VERSION_UTILITY} version
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            OUTPUT_VARIABLE VERSION_UTILITY_OUTPUT
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            RESULT_VARIABLE VERSION_UTILITY_RESULT
+        )
+        
+        if(VERSION_UTILITY_RESULT EQUAL 0 AND VERSION_UTILITY_OUTPUT)
+            set(GIT_VERSION ${VERSION_UTILITY_OUTPUT})
+            message(STATUS "Using built version utility: ${GIT_VERSION}")
+        else()
+            message(WARNING "Built version utility failed, trying auto-download")
+        endif()
+    endif()
+endif()
+
+# 3. Auto-download latest version utility if needed
 if(NOT GIT_VERSION)
     message(STATUS "No version utility found, downloading latest from GitHub...")
     
@@ -80,7 +95,7 @@ if(NOT GIT_VERSION)
     endif()
 endif()
 
-# 3. Fallback to git describe if version utility not available or failed
+# 4. Final fallback to git describe if all else fails
 if(NOT GIT_VERSION)
     execute_process(
         COMMAND git describe --match "v[0-9]*" --abbrev=0 --tags
@@ -93,7 +108,7 @@ if(NOT GIT_VERSION)
     if(GIT_VERSION_RESULT EQUAL 0 AND GIT_VERSION)
         message(STATUS "Using git describe: ${GIT_VERSION}")
     else()
-        message(FATAL_ERROR "Failed to get version from built utility, download, and git describe. Make sure you're in a git repository.")
+        message(FATAL_ERROR "Failed to get version from VERSION file, version utility, and git describe. Make sure VERSION file exists or you're in a git repository.")
     endif()
 endif()
 
