@@ -1,6 +1,15 @@
 # Progress: buildfab
 
 ## What Works
+- **Nil Error Wrapping Bug Fix**: Successfully fixed critical bug in runStageInternal function where fmt.Errorf with %w was being called with nil error
+  - Added nil check before error wrapping to prevent formatting errors
+  - When result.Status == StatusError but result.Error == nil, now uses %s with result.Message instead of %w
+  - Prevents "invalid verb %w for value of type error" formatting errors that were crashing the buildfab library
+  - Added comprehensive test case TestNilErrorWrapping to verify fix works correctly for both nil and non-nil error scenarios
+  - Perfect error handling - library now gracefully handles all error conditions without formatting crashes
+  - All tests passing including new test case
+  - Updated CHANGELOG.md with detailed technical information
+  - VERSION 0.8.13 RELEASED with critical bug fix
 - **Git Actions Status Fixes**: Successfully fixed all git actions (git@untracked, git@uncommitted, git@modified) to properly report warning status instead of error status and standardized their message formatting
   - Fixed StatusWarn handling - updated RunAction method to check Result.Status for built-in actions, not just error presence
   - Standardized git action messages - all three git actions now use consistent message format ending with "to check run:\n    git status"

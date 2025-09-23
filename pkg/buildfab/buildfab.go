@@ -479,7 +479,11 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 						continue
 					}
 					// Default is "stop" - return error
-					return fmt.Errorf("step %s failed: %w", step.Action, result.Error)
+					if result.Error != nil {
+						return fmt.Errorf("step %s failed: %w", step.Action, result.Error)
+					} else {
+						return fmt.Errorf("step %s failed: %s", step.Action, result.Message)
+					}
 				}
 			}
 		}

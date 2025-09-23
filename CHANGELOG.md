@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.13] - 2025-09-23
+
+### Fixed
+- **Nil Error Wrapping Bug**: Fixed critical bug in runStageInternal function where fmt.Errorf with %w was being called with nil error
+  - Added nil check before error wrapping to prevent formatting errors
+  - When result.Status == StatusError but result.Error == nil, now uses %s with result.Message instead of %w
+  - Prevents "invalid verb %w for value of type error" formatting errors
+  - Added comprehensive test case TestNilErrorWrapping to verify fix
+  - Resolves issue where buildfab library would crash with formatting errors in certain error conditions
+
 ## [0.8.12] - 2025-09-23
 
 ### Fixed

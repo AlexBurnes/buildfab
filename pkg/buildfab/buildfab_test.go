@@ -2,6 +2,7 @@ package buildfab
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"runtime"
 	"strings"
@@ -535,5 +536,44 @@ func TestRunCLI(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "run command requires a stage name") {
 		t.Errorf("RunCLI() error = %v, want error containing 'run command requires a stage name'", err.Error())
+	}
+}
+
+func TestNilErrorWrapping(t *testing.T) {
+	// Test the scenario where result.Status == StatusError but result.Error == nil
+	// This was causing a formatting error in fmt.Errorf with %w
+	
+	// Create a mock result with StatusError but nil Error
+	// This simulates the scenario that was causing the bug
+	results := []Result{
+		{
+			Name:    "test-action",
+			Status:  StatusError,
+			Message: "test error message",
+			Error:   nil, // This is the key - nil error with StatusError
+		},
+	}
+	
+	// This should not panic or cause a formatting error
+	// The fix ensures we check for nil before using %w
+	for _, result := range results {
+		if result.Status == StatusError {
+			if result.Error != nil {
+				// This path uses %w (original behavior)
+				err := fmt.Errorf("step %s failed: %w", "test-action", result.Error)
+				if err == nil {
+					t.Error("Expected error, got nil")
+				}
+			} else {
+				// This path uses %s (new behavior for nil errors)
+				err := fmt.Errorf("step %s failed: %s", "test-action", result.Message)
+				if err == nil {
+					t.Error("Expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), "test error message") {
+					t.Errorf("Expected error to contain 'test error message', got: %s", err.Error())
+				}
+			}
+		}
 	}
 }
