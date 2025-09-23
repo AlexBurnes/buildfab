@@ -4,7 +4,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.8.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.8.5-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Features
 
@@ -61,6 +61,50 @@ buildfab action git@untracked
 
 # List all available actions
 buildfab list-actions
+```
+
+## CLI Usage
+
+### Command Line Options
+
+buildfab provides several command-line options to control execution behavior:
+
+#### Output Control
+- **`-v, --verbose`**: Enable verbose output (default) - shows detailed command execution and output
+- **`-q, --quiet`**: Disable verbose output (silence mode) - shows only final results and summary
+- **`-d, --debug`**: Enable debug output for troubleshooting
+
+#### Execution Control
+- **`-c, --config`**: Path to configuration file (default: `.project.yml`)
+- **`-w, --working-dir`**: Working directory for execution (default: current directory)
+- **`--max-parallel`**: Maximum parallel execution (default: CPU count)
+- **`--only`**: Only run steps matching these labels
+- **`--with-requires`**: Include required dependencies when running single step
+
+#### Environment
+- **`--env`**: Export environment variables to actions
+
+### Examples
+
+```bash
+# Run with verbose output (default)
+buildfab run pre-push
+
+# Run in quiet mode
+buildfab run pre-push --quiet
+buildfab run pre-push -q
+
+# Run with debug output
+buildfab run pre-push --debug
+
+# Run with custom configuration
+buildfab run pre-push --config my-project.yml
+
+# Run only specific steps
+buildfab run pre-push --only test,lint
+
+# Run with environment variables
+buildfab run pre-push --env GO_VERSION=1.23.1 --env BUILD_TARGET=linux
 ```
 
 ## Installation and Git Hook Setup

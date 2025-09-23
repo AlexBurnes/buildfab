@@ -107,7 +107,7 @@ func DefaultRunOptions() *RunOptions {
 	return &RunOptions{
 		ConfigPath:  ".project.yml",
 		MaxParallel: runtime.NumCPU(),
-		Verbose:     false,
+		Verbose:     true,
 		Debug:       false,
 		Variables:   make(map[string]string),
 		WorkingDir:  ".",

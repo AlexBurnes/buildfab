@@ -1,6 +1,16 @@
 # Progress: buildfab
 
 ## What Works
+- **Verbose Mode Default and Quiet Option**: Successfully implemented and released verbose mode as default behavior and added quiet option for silence mode
+  - Made verbose mode default in `DefaultRunOptions()` - all CLI commands now show detailed command execution and output by default
+  - Added `-q, --quiet` flags to override verbose mode and enable silence mode when needed
+  - Updated CLI logic to properly handle quiet flag with `effectiveVerbose := verbose && !quiet` logic
+  - Updated all tests to account for verbose being default in `DefaultRunOptions()`
+  - Enhanced documentation with comprehensive CLI usage section in README.md
+  - Updated CHANGELOG.md to document verbose mode default change and quiet option addition in v0.8.5
+  - Perfect user experience - users get detailed output by default but can easily switch to quiet mode
+  - All tests passing with both verbose and quiet modes working correctly
+  - VERSION 0.8.5 RELEASED with verbose mode default and quiet option implementation
 - **Streaming Output and CLI Unification**: Successfully implemented ordered streaming output and unified CLI/library systems
   - Fixed streaming output ordering for parallel execution - steps run in parallel but display output sequentially in declaration order
   - Eliminated mixed output between parallel steps with proper buffering and ordered display logic

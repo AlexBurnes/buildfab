@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.5] - 2025-01-27
+
+### Changed
+- **Verbose Mode Default**: Made verbose mode the default behavior for all buildfab executions
+  - `DefaultRunOptions()` now sets `Verbose: true` by default
+  - All CLI commands now show detailed command execution and output by default
+  - Provides better visibility into what buildfab is doing during execution
+  - Maintains backward compatibility with existing configurations
+
+### Added
+- **Quiet Mode Option**: Added `-q, --quiet` flag to disable verbose output when needed
+  - New `--quiet` and `-q` flags override verbose mode to enable silence mode
+  - Silence mode shows only final results and summary without command details
+  - Useful for CI/CD environments or when minimal output is preferred
+  - Updated CLI help text to clearly indicate verbose as default and quiet as override option
+
 ## [0.8.4] - 2025-01-27
 
 ### Fixed

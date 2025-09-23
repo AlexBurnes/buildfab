@@ -40,8 +40,8 @@ func TestDefaultRunOptions(t *testing.T) {
 	if opts.MaxParallel != runtime.NumCPU() {
 		t.Errorf("MaxParallel = %v, want %v", opts.MaxParallel, runtime.NumCPU())
 	}
-	if opts.Verbose != false {
-		t.Errorf("Verbose = %v, want %v", opts.Verbose, false)
+	if opts.Verbose != true {
+		t.Errorf("Verbose = %v, want %v", opts.Verbose, true)
 	}
 	if opts.Debug != false {
 		t.Errorf("Debug = %v, want %v", opts.Debug, false)

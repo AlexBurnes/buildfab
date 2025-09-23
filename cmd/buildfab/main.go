@@ -36,6 +36,7 @@ func getVersion() string {
 // Global flags
 var (
 	verbose       bool
+	quiet         bool
 	debug         bool
 	configPath    string
 	maxParallel   int
@@ -114,7 +115,8 @@ var listStepsCmd = &cobra.Command{
 
 func main() {
 	// Add global flags
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", true, "enable verbose output (default)")
+	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "disable verbose output (silence mode)")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug output")
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", ".project.yml", "path to configuration file")
 	rootCmd.PersistentFlags().IntVar(&maxParallel, "max-parallel", 0, "maximum parallel execution (default: CPU count)")
@@ -213,10 +215,12 @@ func runStage(cmd *cobra.Command, args []string) error {
 	}
 	
 	// Create simple run options
+	// If quiet is set, override verbose to false
+	effectiveVerbose := verbose && !quiet
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:   configPath,
 		MaxParallel:  maxParallel,
-		Verbose:      verbose,
+		Verbose:      effectiveVerbose,
 		Debug:        debug,
 		Variables:    variables,
 		WorkingDir:   workingDir,
@@ -277,10 +281,12 @@ func runAction(cmd *cobra.Command, args []string) error {
 	}
 	
 	// Create simple run options
+	// If quiet is set, override verbose to false
+	effectiveVerbose := verbose && !quiet
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configPath,
 		MaxParallel: maxParallel,
-		Verbose:     verbose,
+		Verbose:     effectiveVerbose,
 		Debug:       debug,
 		Variables:   variables,
 		WorkingDir:  workingDir,
