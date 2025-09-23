@@ -14,6 +14,7 @@ import (
 type UI struct {
 	verbose bool
 	debug   bool
+	quiet   bool
 }
 
 // New creates a new UI instance
@@ -21,6 +22,16 @@ func New(verbose, debug bool) *UI {
 	return &UI{
 		verbose: verbose,
 		debug:   debug,
+		quiet:   false,
+	}
+}
+
+// NewWithQuiet creates a new UI instance with quiet mode
+func NewWithQuiet(verbose, debug, quiet bool) *UI {
+	return &UI{
+		verbose: verbose,
+		debug:   debug,
+		quiet:   quiet,
 	}
 }
 
@@ -116,11 +127,28 @@ func (u *UI) PrintStageResult(stageName string, success bool, duration time.Dura
 	fmt.Fprintf(os.Stderr, "%s %s%s%s - %s (%.2fs)\n", icon, color, status, reset, stageName, duration.Seconds())
 }
 
+// PrintStageTerminated prints stage termination due to signal
+func (u *UI) PrintStageTerminated(stageName string, duration time.Duration) {
+	fmt.Fprintf(os.Stderr, "\n")
+	
+	icon := "⚠️ "
+	color := "\033[33m" // Yellow
+	status := "TERMINATED"
+	reset := "\033[0m"
+	
+	fmt.Fprintf(os.Stderr, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Fprintf(os.Stderr, "%s %s%s%s - %s (%.2fs)\n", icon, color, status, reset, stageName, duration.Seconds())
+}
+
 // PrintCommand prints a command being executed
 func (u *UI) PrintCommand(command string) {
-	if u.verbose {
-		fmt.Fprintf(os.Stderr, "  💻 %s\n", command)
-	}
+	// Suppress command content - only show step name
+	// The command content is not displayed to keep output clean
+}
+
+// PrintStepName prints just the step name without command content
+func (u *UI) PrintStepName(stepName string) {
+	fmt.Fprintf(os.Stderr, "  💻 %s\n", stepName)
 }
 
 // PrintCommandOutput prints command output

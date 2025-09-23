@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.6] - 2025-01-27
+
+### Fixed
+- **Ctrl+C Signal Handling**: Fixed critical issue where Ctrl+C did not properly terminate the executor
+  - Executor now properly handles context cancellation and terminates promptly without hanging
+  - Added comprehensive context cancellation checks throughout DAG execution loops
+  - Implemented safe channel operations to prevent panics when context is cancelled
+  - Added proper command process termination when context is cancelled
+  - Resolves issue where buildfab would hang indefinitely when interrupted with Ctrl+C
+- **Command Output Display**: Fixed issue where command output was not being displayed during execution
+  - Executor now shows real-time command output during execution instead of just command content
+  - Fixed UI integration to use `e.ui.PrintCommandOutput()` instead of step callbacks
+  - Both stdout and stderr are properly streamed and displayed in real-time
+  - Works correctly in both verbose and non-verbose modes
+  - Users now see actual command execution results as they happen
+
+### Changed
+- **Command Content Suppression**: Suppressed command content from YAML configuration to keep output clean
+  - Command content from configuration files is no longer displayed during normal execution
+  - Added `PrintStepName()` method to show only step names instead of full command content
+  - Command content is still preserved in error messages for debugging and manual reproduction
+  - Provides cleaner output while maintaining debugging capabilities when errors occur
+- **UI Integration**: Enhanced CLI to use internal executor with proper UI interface
+  - CLI now uses internal executor instead of simple runner for better UI integration
+  - All output formatting is now handled through the UI interface for consistency
+  - Proper integration between executor and UI ensures consistent output formatting
+
+### Added
+- **TERMINATED Status Display**: Added proper status display when execution is interrupted
+  - Shows "⚠️ TERMINATED" status instead of misleading "SUCCESS" when Ctrl+C is pressed
+  - Added `PrintStageTerminated()` method to UI interface for proper termination display
+  - Clear indication to users when execution was interrupted rather than completed successfully
+  - Maintains proper timing and summary information even when terminated
+
 ## [0.8.5] - 2025-01-27
 
 ### Changed

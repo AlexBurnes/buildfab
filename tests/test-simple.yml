@@ -1,0 +1,12 @@
+project:
+  name: test-simple
+  version: v0.1.0
+
+actions:
+  - name: simple-echo
+    run: echo "Hello World"
+
+stages:
+  test-simple:
+    steps:
+      - action: simple-echo

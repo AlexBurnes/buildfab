@@ -655,6 +655,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 	// Create channels for communication
 	resultChan := make(chan Result, len(dag))
 	done := make(chan bool)
+	ctxDone := ctx.Done()
 	
 	// Mutex for thread-safe access to shared state
 	var mu sync.Mutex
@@ -709,12 +710,27 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 					break
 				}
 				
-				time.Sleep(10 * time.Millisecond)
+				// Check for context cancellation while waiting
+				select {
+				case <-ctxDone:
+					close(resultChan)
+					return
+				case <-time.After(10 * time.Millisecond):
+					// Continue waiting
+				}
 			}
 			close(resultChan)
 		}()
 		
 		for {
+			// Check for context cancellation at the start of each loop iteration
+			select {
+			case <-ctxDone:
+				return
+			default:
+				// Continue with execution
+			}
+			
 			mu.Lock()
 			readySteps := r.getReadyStepsLocked(dag, completed, failed, executing)
 			mu.Unlock()
@@ -735,13 +751,26 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 					break
 				}
 				
-				// Wait a bit before checking again
-				time.Sleep(10 * time.Millisecond)
+				// Wait a bit before checking again, but check for cancellation
+				select {
+				case <-ctxDone:
+					return
+				case <-time.After(10 * time.Millisecond):
+					// Continue waiting
+				}
 				continue
 			}
 			
 			// Start ready steps immediately without waiting
 			for _, nodeName := range readySteps {
+				// Check for context cancellation before starting each step
+				select {
+				case <-ctxDone:
+					return
+				default:
+					// Continue with step execution
+				}
+				
 				node := dag[nodeName]
 				
 				mu.Lock()
@@ -758,7 +787,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 					}
 					select {
 					case resultChan <- result:
-					case <-ctx.Done():
+					case <-ctxDone:
 						return
 					}
 					continue
@@ -776,7 +805,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 					
 					select {
 					case resultChan <- result:
-					case <-ctx.Done():
+					case <-ctxDone:
 						return
 					}
 				}(nodeName, node)
@@ -924,6 +953,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 	// Create channels for communication
 	resultChan := make(chan Result, len(dag))
 	done := make(chan bool)
+	ctxDone := ctx.Done()
 	
 	// Mutex for thread-safe access to shared state
 	var mu sync.Mutex
@@ -964,12 +994,27 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 					break
 				}
 				
-				time.Sleep(10 * time.Millisecond)
+				// Check for context cancellation while waiting
+				select {
+				case <-ctxDone:
+					close(resultChan)
+					return
+				case <-time.After(10 * time.Millisecond):
+					// Continue waiting
+				}
 			}
 			close(resultChan)
 		}()
 		
 		for {
+			// Check for context cancellation at the start of each loop iteration
+			select {
+			case <-ctxDone:
+				return
+			default:
+				// Continue with execution
+			}
+			
 			mu.Lock()
 			readySteps := r.getReadyStepsLocked(dag, completed, failed, executing)
 			mu.Unlock()
@@ -990,13 +1035,26 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 					break
 				}
 				
-				// Wait a bit before checking again
-				time.Sleep(10 * time.Millisecond)
+				// Wait a bit before checking again, but check for cancellation
+				select {
+				case <-ctxDone:
+					return
+				case <-time.After(10 * time.Millisecond):
+					// Continue waiting
+				}
 				continue
 			}
 			
 			// Start ready steps immediately without waiting
 			for _, nodeName := range readySteps {
+				// Check for context cancellation before starting each step
+				select {
+				case <-ctxDone:
+					return
+				default:
+					// Continue with step execution
+				}
+				
 				node := dag[nodeName]
 				
 				mu.Lock()
@@ -1013,7 +1071,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 					}
 					select {
 					case resultChan <- result:
-					case <-ctx.Done():
+					case <-ctxDone:
 						return
 					}
 					continue
@@ -1025,7 +1083,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 					result.Name = nodeName
 					select {
 					case resultChan <- result:
-					case <-ctx.Done():
+					case <-ctxDone:
 						return
 					}
 				}(nodeName, node)

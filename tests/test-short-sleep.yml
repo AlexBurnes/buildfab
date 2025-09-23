@@ -1,0 +1,15 @@
+project:
+  name: test-short-sleep
+  version: v0.1.0
+
+actions:
+  - name: short-sleep
+    run: |
+      echo "Starting short sleep..."
+      sleep 2
+      echo "Short sleep completed!"
+
+stages:
+  test-short-sleep:
+    steps:
+      - action: short-sleep

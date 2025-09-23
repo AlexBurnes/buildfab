@@ -22,7 +22,9 @@ func (m *mockUI) PrintProjectCheck(projectName, version string) {}
 func (m *mockUI) PrintStepStatus(stepName string, status buildfab.Status, message string) {}
 func (m *mockUI) PrintStageHeader(stageName string) {}
 func (m *mockUI) PrintStageResult(stageName string, success bool, duration time.Duration) {}
+func (m *mockUI) PrintStageTerminated(stageName string, duration time.Duration) {}
 func (m *mockUI) PrintCommand(command string) {}
+func (m *mockUI) PrintStepName(stepName string) {}
 func (m *mockUI) PrintCommandOutput(output string) {}
 func (m *mockUI) PrintRepro(stepName, repro string) {}
 func (m *mockUI) PrintReproInline(stepName, repro string) {}

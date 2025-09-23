@@ -20,6 +20,7 @@ import (
 type Executor struct {
 	config         *buildfab.Config
 	opts           *buildfab.RunOptions
+	ui             UI
 	registry       *actions.Registry
 	versionDetector *version.Detector
 }
@@ -31,7 +32,9 @@ type UI interface {
 	PrintStepStatus(stepName string, status buildfab.Status, message string)
 	PrintStageHeader(stageName string)
 	PrintStageResult(stageName string, success bool, duration time.Duration)
+	PrintStageTerminated(stageName string, duration time.Duration)
 	PrintCommand(command string)
+	PrintStepName(stepName string)
 	PrintCommandOutput(output string)
 	PrintRepro(stepName, repro string)
 	PrintReproInline(stepName, repro string)
@@ -45,6 +48,7 @@ func New(config *buildfab.Config, opts *buildfab.RunOptions, ui UI) *Executor {
 	return &Executor{
 		config:         config,
 		opts:           opts,
+		ui:             ui,
 		registry:       actions.New(),
 		versionDetector: version.New(),
 	}
@@ -57,12 +61,9 @@ func (e *Executor) RunStage(ctx context.Context, stageName string) error {
 		return fmt.Errorf("stage not found: %s", stageName)
 	}
 
-	// Print CLI header and project check
-	version := e.getVersion()
-	if ui, ok := e.opts.Output.(UI); ok {
-		ui.PrintCLIHeader("buildfab", version)
-		ui.PrintProjectCheck(e.config.Project.Name, version)
-		ui.PrintStageHeader(stageName)
+	// Print stage header
+	if e.ui != nil {
+		e.ui.PrintStageHeader(stageName)
 	}
 
 	start := time.Now()
@@ -77,11 +78,19 @@ func (e *Executor) RunStage(ctx context.Context, stageName string) error {
 	results, err := e.executeDAGWithStreaming(ctx, dag, stage.Steps)
 	
 	duration := time.Since(start)
-	success := err == nil && !hasErrors(results)
 	
-	if ui, ok := e.opts.Output.(UI); ok {
-		ui.PrintStageResult(stageName, success, duration)
-		ui.PrintSummary(results)
+	// Check if execution was terminated due to context cancellation
+	terminated := ctx.Err() != nil
+	success := err == nil && !hasErrors(results) && !terminated
+	
+	
+	if e.ui != nil {
+		if terminated {
+			e.ui.PrintStageTerminated(stageName, duration)
+		} else {
+			e.ui.PrintStageResult(stageName, success, duration)
+		}
+		e.ui.PrintSummary(results)
 	}
 
 	return err
@@ -95,8 +104,8 @@ func (e *Executor) RunAction(ctx context.Context, actionName string) error {
 	}
 
 	result, _ := e.executeAction(ctx, action)
-	if ui, ok := e.opts.Output.(UI); ok {
-		ui.PrintStepStatus(actionName, result.Status, result.Message)
+	if e.ui != nil {
+		e.ui.PrintStepStatus(actionName, result.Status, result.Message)
 	}
 	
 	if result.Error != nil {
@@ -134,8 +143,8 @@ func (e *Executor) RunStageStep(ctx context.Context, stageName, stepName string)
 
 	// Execute the action
 	result, _ := e.executeAction(ctx, action)
-	if ui, ok := e.opts.Output.(UI); ok {
-		ui.PrintStepStatus(stepName, result.Status, result.Message)
+	if e.ui != nil {
+		e.ui.PrintStepStatus(stepName, result.Status, result.Message)
 	}
 	
 	if result.Error != nil {
@@ -251,9 +260,32 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 	// Create channels for communication
 	resultChan := make(chan buildfab.Result, len(dag))
 	done := make(chan bool)
+	ctxDone := ctx.Done()
 	
 	// Mutex for thread-safe access to shared state
 	var mu sync.Mutex
+	var channelClosed sync.Once
+	
+	// Safe send function that checks if channel is closed
+	safeSend := func(result buildfab.Result) {
+		// Check if context is done first
+		select {
+		case <-ctxDone:
+			// Context cancelled, don't send
+			return
+		default:
+			// Context not cancelled, try to send
+		}
+		
+		// Try to send with timeout
+		select {
+		case resultChan <- result:
+		case <-ctxDone:
+			// Context cancelled while trying to send
+		case <-time.After(100 * time.Millisecond):
+			// Timeout, channel might be closed
+		}
+	}
 	
 	// Start a goroutine to handle results and display them
 	go func() {
@@ -294,12 +326,28 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 					break
 				}
 				
-				time.Sleep(10 * time.Millisecond)
+				// Check for context cancellation while waiting
+				select {
+				case <-ctxDone:
+					channelClosed.Do(func() { close(resultChan) })
+					return
+				case <-time.After(10 * time.Millisecond):
+					// Continue waiting
+				}
 			}
 			close(resultChan)
 		}()
 		
 		for {
+			// Check for context cancellation at the start of each loop iteration
+			select {
+			case <-ctx.Done():
+				// Context cancelled, exit immediately
+				return
+			default:
+				// Continue with execution
+			}
+			
 			mu.Lock()
 			readySteps := e.getReadyStepsLocked(dag, completed, failed, executing)
 			mu.Unlock()
@@ -320,13 +368,26 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 					break
 				}
 				
-				// Wait a bit before checking again
-				time.Sleep(10 * time.Millisecond)
+				// Wait a bit before checking again, but check for cancellation
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(10 * time.Millisecond):
+					// Continue waiting
+				}
 				continue
 			}
 			
 			// Start ready steps immediately without waiting
 			for _, nodeName := range readySteps {
+				// Check for context cancellation before starting each step
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					// Continue with step execution
+				}
+				
 				node := dag[nodeName]
 				
 				mu.Lock()
@@ -341,11 +402,7 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 						Status: buildfab.StatusSkipped,
 						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
 					}
-					select {
-					case resultChan <- result:
-					case <-ctx.Done():
-						return
-					}
+					safeSend(result)
 					continue
 				}
 				
@@ -356,11 +413,7 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 						Status: buildfab.StatusOK,
 						Message: "skipped (condition not met)",
 					}
-					select {
-					case resultChan <- result:
-					case <-ctx.Done():
-						return
-					}
+					safeSend(result)
 					continue
 				}
 				
@@ -368,11 +421,13 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 				go func(nodeName string, node *DAGNode) {
 					result, _ := e.executeAction(ctx, node.Action)
 					result.Name = nodeName
-					select {
-					case resultChan <- result:
-					case <-ctx.Done():
-						return
+					// Check if context was cancelled during execution
+					if ctx.Err() != nil {
+						result.Status = buildfab.StatusError
+						result.Message = "cancelled"
+						result.Error = ctx.Err()
 					}
+					safeSend(result)
 				}(nodeName, node)
 			}
 		}
@@ -394,8 +449,8 @@ func (e *Executor) displayStepImmediately(stepName string, steps []buildfab.Step
 			// Check if all previous steps in declaration order have been completed
 			if e.canDisplayStepImmediately(step, steps, displayed, completed) {
 				if result, exists := resultMap[stepName]; exists {
-					if ui, ok := e.opts.Output.(UI); ok {
-						ui.PrintStepStatus(stepName, result.Status, result.Message)
+					if e.ui != nil {
+						e.ui.PrintStepStatus(stepName, result.Status, result.Message)
 					}
 					displayed[stepName] = true
 				}
@@ -454,8 +509,8 @@ func (e *Executor) displayRemainingSteps(steps []buildfab.Step, resultMap map[st
 	for _, step := range steps {
 		if !displayed[step.Action] {
 			if result, exists := resultMap[step.Action]; exists {
-				if ui, ok := e.opts.Output.(UI); ok {
-					ui.PrintStepStatus(step.Action, result.Status, result.Message)
+				if e.ui != nil {
+					e.ui.PrintStepStatus(step.Action, result.Status, result.Message)
 				}
 				displayed[step.Action] = true
 			}
@@ -496,6 +551,15 @@ func (e *Executor) getFailedDependencyNames(node *DAGNode, failed map[string]boo
 
 // executeAction executes a single action
 func (e *Executor) executeAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) {
+	// Check if context is already cancelled before starting
+	if ctx.Err() != nil {
+		return buildfab.Result{
+			Status:  buildfab.StatusError,
+			Message: "cancelled",
+			Error:   ctx.Err(),
+		}, ctx.Err()
+	}
+
 	// Call step start callback if provided
 	if e.opts.StepCallback != nil {
 		e.opts.StepCallback.OnStepStart(ctx, action.Name)
@@ -548,9 +612,9 @@ func (e *Executor) executeBuiltInAction(ctx context.Context, action buildfab.Act
 	
 	result, err := runner.Run(ctx)
 	
-	// Call step output callback if provided and verbose mode is enabled
-	if e.opts.StepCallback != nil && e.opts.Verbose && result.Message != "" {
-		e.opts.StepCallback.OnStepOutput(ctx, action.Name, result.Message)
+	// Print output using UI interface
+	if e.ui != nil && result.Message != "" {
+		e.ui.PrintCommandOutput(result.Message)
 	}
 	
 	return result, err
@@ -558,20 +622,27 @@ func (e *Executor) executeBuiltInAction(ctx context.Context, action buildfab.Act
 
 // executeCustomAction executes a custom action with run command
 func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) {
+	// Check if context is already cancelled before starting
+	if ctx.Err() != nil {
+		return buildfab.Result{
+			Status:  buildfab.StatusError,
+			Message: "cancelled",
+			Error:   ctx.Err(),
+		}, ctx.Err()
+	}
+
 	if action.Run == "" {
 		return buildfab.Result{
 			Status:  buildfab.StatusError,
 			Message: "no run command specified",
 		}, fmt.Errorf("no run command specified for action %s", action.Name)
 	}
-	
-	// Print command if verbose mode is enabled
-	if e.opts.Verbose {
-		if ui, ok := e.opts.Output.(UI); ok {
-			ui.PrintCommand(action.Run)
-		}
+
+	// Print step name (suppress command content)
+	if e.ui != nil {
+		e.ui.PrintStepName(action.Name)
 	}
-	
+
 	// Execute the command with streaming output
 	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
 	
@@ -584,9 +655,14 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 		output, cmdErr := cmd.CombinedOutput()
 		err = cmdErr
 		
-		// Call step output callback if provided and verbose mode is enabled
-		if e.opts.StepCallback != nil && e.opts.Verbose && len(output) > 0 {
-			e.opts.StepCallback.OnStepOutput(ctx, action.Name, string(output))
+		// Print output using UI interface
+		if e.ui != nil && len(output) > 0 {
+			lines := strings.Split(strings.TrimRight(string(output), "\n"), "\n")
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" {
+					e.ui.PrintCommandOutput(line)
+				}
+			}
 		}
 	}
 	
@@ -631,9 +707,9 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Call step output callback if provided - this handles the printing
-			if e.opts.StepCallback != nil {
-				e.opts.StepCallback.OnStepOutput(ctx, actionName, line)
+			// Print output using UI interface
+			if e.ui != nil {
+				e.ui.PrintCommandOutput(line)
 			}
 		}
 	}()
@@ -644,9 +720,9 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Call step output callback if provided - this handles the printing
-			if e.opts.StepCallback != nil {
-				e.opts.StepCallback.OnStepOutput(ctx, actionName, line)
+			// Print output using UI interface
+			if e.ui != nil {
+				e.ui.PrintCommandOutput(line)
 			}
 		}
 	}()
@@ -659,10 +735,13 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 	// Wait for either completion or context cancellation
 	select {
 	case err := <-done:
+		// Command completed normally
 		return err
 	case <-ctx.Done():
-		// Kill the command if context is cancelled
-		cmd.Process.Kill()
+		// Context cancelled, kill the command
+		if cmd.Process != nil {
+			cmd.Process.Kill()
+		}
 		return ctx.Err()
 	}
 }

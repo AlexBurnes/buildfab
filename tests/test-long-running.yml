@@ -1,0 +1,18 @@
+project:
+  name: test-long-running
+  version: v0.1.0
+
+actions:
+  - name: very-long-running
+    run: |
+      echo "Starting very long running command..."
+      for i in $(seq 1 30); do
+        echo "Step $i of 30"
+        sleep 2
+      done
+      echo "Very long running command completed!"
+
+stages:
+  test-long-running:
+    steps:
+      - action: very-long-running

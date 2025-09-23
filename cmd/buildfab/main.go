@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/AlexBurnes/buildfab/pkg/buildfab"
 	"github.com/AlexBurnes/buildfab/internal/ui"
+	"github.com/AlexBurnes/buildfab/internal/executor"
 )
 
 const (
@@ -199,7 +200,7 @@ func runStage(cmd *cobra.Command, args []string) error {
 	version := getVersion()
 	
 	// Print header using library UI
-	uiInstance := &ui.UI{}
+	uiInstance := ui.New(verbose && !quiet, debug)
 	uiInstance.PrintCLIHeader(projectName, version)
 	uiInstance.PrintProjectCheck(projectName, version)
 	
@@ -214,10 +215,10 @@ func runStage(cmd *cobra.Command, args []string) error {
 		}
 	}
 	
-	// Create simple run options
+	// Create run options for internal executor
 	// If quiet is set, override verbose to false
 	effectiveVerbose := verbose && !quiet
-	opts := &buildfab.SimpleRunOptions{
+	opts := &buildfab.RunOptions{
 		ConfigPath:   configPath,
 		MaxParallel:  maxParallel,
 		Verbose:      effectiveVerbose,
@@ -230,13 +231,15 @@ func runStage(cmd *cobra.Command, args []string) error {
 		WithRequires: withRequires,
 	}
 	
-	// Create simple runner
-	runner := buildfab.NewSimpleRunner(cfg, opts)
+	// Reuse the UI instance created above
+	
+	// Create internal executor
+	exec := executor.New(cfg, opts, uiInstance)
 	
 	// Check if running a specific step
 	if len(args) == 2 {
 		stepName := args[1]
-		err := runner.RunStageStep(ctx, stageName, stepName)
+		err := exec.RunAction(ctx, stepName)
 		if err != nil {
 			// In test mode, return the error instead of exiting
 			if testing.Testing() {
@@ -247,8 +250,8 @@ func runStage(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	
-	// Run the entire stage using simple API
-	err = runner.RunStage(ctx, stageName)
+	// Run the entire stage using internal executor
+	err = exec.RunStage(ctx, stageName)
 	if err != nil {
 		// In test mode, return the error instead of exiting
 		if testing.Testing() {
