@@ -103,7 +103,7 @@ func (e *Executor) RunAction(ctx context.Context, actionName string) error {
 		return fmt.Errorf("action not found: %s", actionName)
 	}
 
-	result, _ := e.executeAction(ctx, action)
+	result, _ := e.executeAction(ctx, action, nil)
 	if e.ui != nil {
 		e.ui.PrintStepStatus(actionName, result.Status, result.Message)
 	}
@@ -142,7 +142,7 @@ func (e *Executor) RunStageStep(ctx context.Context, stageName, stepName string)
 	}
 
 	// Execute the action
-	result, _ := e.executeAction(ctx, action)
+	result, _ := e.executeAction(ctx, action, nil)
 	if e.ui != nil {
 		e.ui.PrintStepStatus(stepName, result.Status, result.Message)
 	}
@@ -246,6 +246,191 @@ func (e *Executor) detectCycles(dag map[string]*DAGNode) error {
 	return nil
 }
 
+// StreamingOutputManager manages which step's output should be streamed
+type StreamingOutputManager struct {
+	steps     []buildfab.Step
+	displayed map[string]bool
+	started   map[string]bool
+	doneStreaming map[string]bool
+	buffers   map[string][]string // Buffer output for steps that can't stream yet
+	mu        *sync.Mutex
+}
+
+// ShouldStreamOutput checks if the given step should have its output streamed
+func (s *StreamingOutputManager) ShouldStreamOutput(stepName string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Find the step in declaration order
+	stepIndex := -1
+	for i, step := range s.steps {
+		if step.Action == stepName {
+			stepIndex = i
+			break
+		}
+	}
+	
+	if stepIndex == -1 {
+		return false
+	}
+	
+	// Check if this step itself has finished streaming - if so, don't stream
+	if s.doneStreaming[stepName] {
+		return false
+	}
+	
+	// Allow streaming if this is the first step, or if all previous steps have finished streaming
+	if stepIndex == 0 {
+		return true
+	}
+	
+	// Check if all previous steps in declaration order have finished streaming
+	for i := 0; i < stepIndex; i++ {
+		if !s.doneStreaming[s.steps[i].Action] {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// ShouldShowStepStart checks if the given step should show its start message
+func (s *StreamingOutputManager) ShouldShowStepStart(stepName string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Find the step in declaration order
+	stepIndex := -1
+	for i, step := range s.steps {
+		if step.Action == stepName {
+			stepIndex = i
+			break
+		}
+	}
+	
+	if stepIndex == -1 {
+		return false
+	}
+	
+	// Allow all steps to start immediately, but only show start message for the first one
+	// Check if this step itself has been started - if so, don't show start
+	if s.started[stepName] {
+		return false
+	}
+	
+	// Only show start message for the first step in declaration order
+	return stepIndex == 0
+}
+
+// MarkStepStarted marks a step as started
+func (s *StreamingOutputManager) MarkStepStarted(stepName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.started[stepName] = true
+}
+
+// MarkStepDisplayed marks a step as displayed
+func (s *StreamingOutputManager) MarkStepDisplayed(stepName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.displayed[stepName] = true
+}
+
+// MarkStepDoneStreaming marks a step as done streaming
+func (s *StreamingOutputManager) MarkStepDoneStreaming(stepName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.doneStreaming[stepName] = true
+}
+
+// BufferOutput buffers output for a step that can't stream yet
+func (s *StreamingOutputManager) BufferOutput(stepName, line string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.buffers[stepName] = append(s.buffers[stepName], line)
+}
+
+// FlushBufferedOutput flushes all buffered output for a step
+func (s *StreamingOutputManager) FlushBufferedOutput(stepName string) []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	output := make([]string, len(s.buffers[stepName]))
+	copy(output, s.buffers[stepName])
+	s.buffers[stepName] = nil // Clear the buffer
+	return output
+}
+
+// ShouldShowStepStartWhenActive checks if a step should show its start message when it becomes active
+func (s *StreamingOutputManager) ShouldShowStepStartWhenActive(stepName string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Find the step in declaration order
+	stepIndex := -1
+	for i, step := range s.steps {
+		if step.Action == stepName {
+			stepIndex = i
+			break
+		}
+	}
+	
+	if stepIndex == -1 {
+		return false
+	}
+	
+	// Check if all previous steps in declaration order have finished streaming
+	for i := 0; i < stepIndex; i++ {
+		if !s.doneStreaming[s.steps[i].Action] {
+			return false
+		}
+	}
+	
+	// Check if this step itself has been started - if so, don't show start
+	if s.started[stepName] {
+		return false
+	}
+	
+	return true
+}
+
+// ShouldShowStepSuccess checks if a step should show its success message
+func (s *StreamingOutputManager) ShouldShowStepSuccess(stepName string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Find the step in declaration order
+	stepIndex := -1
+	for i, step := range s.steps {
+		if step.Action == stepName {
+			stepIndex = i
+			break
+		}
+	}
+	
+	if stepIndex == -1 {
+		return false
+	}
+	
+	// Check if this step itself has been displayed - if so, don't show success
+	if s.displayed[stepName] {
+		return false
+	}
+	
+	// For the first step, always show success when it completes
+	if stepIndex == 0 {
+		return true
+	}
+	
+	// For subsequent steps, check if all previous steps in declaration order have been displayed
+	for i := 0; i < stepIndex; i++ {
+		if !s.displayed[s.steps[i].Action] {
+			return false
+		}
+	}
+	
+	return true
+}
+
 // executeDAGWithStreaming executes the DAG with streaming output in declaration order
 func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*DAGNode, steps []buildfab.Step) ([]buildfab.Result, error) {
 	var results []buildfab.Result
@@ -253,6 +438,7 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 	failed := make(map[string]bool)
 	displayed := make(map[string]bool)
 	executing := make(map[string]bool)
+	started := make(map[string]bool)
 	
 	// Create a map of results by step name for quick lookup
 	resultMap := make(map[string]buildfab.Result)
@@ -265,6 +451,16 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 	// Mutex for thread-safe access to shared state
 	var mu sync.Mutex
 	var channelClosed sync.Once
+	
+	// Create a streaming output manager
+	streamingManager := &StreamingOutputManager{
+		steps:     steps,
+		displayed: displayed,
+		started:   started,
+		doneStreaming: make(map[string]bool),
+		buffers:   make(map[string][]string),
+		mu:        &mu,
+	}
 	
 	// Safe send function that checks if channel is closed
 	safeSend := func(result buildfab.Result) {
@@ -303,7 +499,7 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 			mu.Unlock()
 			
 			// Display immediately if it's ready in declaration order
-			e.displayStepImmediately(result.Name, steps, resultMap, displayed, completed)
+			e.displayStepImmediately(result.Name, steps, resultMap, displayed, completed, streamingManager)
 		}
 	}()
 	
@@ -419,7 +615,7 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 				
 				// Execute the node in parallel
 				go func(nodeName string, node *DAGNode) {
-					result, _ := e.executeAction(ctx, node.Action)
+					result, _ := e.executeAction(ctx, node.Action, streamingManager)
 					result.Name = nodeName
 					// Check if context was cancelled during execution
 					if ctx.Err() != nil {
@@ -436,23 +632,26 @@ func (e *Executor) executeDAGWithStreaming(ctx context.Context, dag map[string]*
 	<-done
 	
 	// Display any remaining steps that weren't displayed yet
-	e.displayRemainingSteps(steps, resultMap, displayed)
+	e.displayRemainingSteps(steps, resultMap, displayed, streamingManager)
 	
 	return results, nil
 }
 
 // displayStepImmediately displays a step immediately if it can be shown (streaming)
-func (e *Executor) displayStepImmediately(stepName string, steps []buildfab.Step, resultMap map[string]buildfab.Result, displayed map[string]bool, completed map[string]bool) {
+func (e *Executor) displayStepImmediately(stepName string, steps []buildfab.Step, resultMap map[string]buildfab.Result, displayed map[string]bool, completed map[string]bool, streamingManager *StreamingOutputManager) {
 	// Find the step in declaration order
 	for _, step := range steps {
 		if step.Action == stepName {
 			// Check if all previous steps in declaration order have been completed
 			if e.canDisplayStepImmediately(step, steps, displayed, completed) {
 				if result, exists := resultMap[stepName]; exists {
-					if e.ui != nil {
-						e.ui.PrintStepStatus(stepName, result.Status, result.Message)
+					// Use streaming manager to control when success messages are displayed
+					if streamingManager == nil || streamingManager.ShouldShowStepSuccess(stepName) {
+						if e.ui != nil {
+							e.ui.PrintStepStatus(stepName, result.Status, result.Message)
+						}
+						displayed[stepName] = true
 					}
-					displayed[stepName] = true
 				}
 			}
 			break
@@ -505,14 +704,17 @@ func (e *Executor) getReadyStepsLocked(dag map[string]*DAGNode, completed map[st
 }
 
 // displayRemainingSteps displays any steps that weren't displayed yet
-func (e *Executor) displayRemainingSteps(steps []buildfab.Step, resultMap map[string]buildfab.Result, displayed map[string]bool) {
+func (e *Executor) displayRemainingSteps(steps []buildfab.Step, resultMap map[string]buildfab.Result, displayed map[string]bool, streamingManager *StreamingOutputManager) {
 	for _, step := range steps {
 		if !displayed[step.Action] {
 			if result, exists := resultMap[step.Action]; exists {
-				if e.ui != nil {
-					e.ui.PrintStepStatus(step.Action, result.Status, result.Message)
+				// Use streaming manager to control when success messages are displayed
+				if streamingManager == nil || streamingManager.ShouldShowStepSuccess(step.Action) {
+					if e.ui != nil {
+						e.ui.PrintStepStatus(step.Action, result.Status, result.Message)
+					}
+					displayed[step.Action] = true
 				}
-				displayed[step.Action] = true
 			}
 		}
 	}
@@ -550,7 +752,7 @@ func (e *Executor) getFailedDependencyNames(node *DAGNode, failed map[string]boo
 }
 
 // executeAction executes a single action
-func (e *Executor) executeAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) {
+func (e *Executor) executeAction(ctx context.Context, action buildfab.Action, streamingManager *StreamingOutputManager) (buildfab.Result, error) {
 	// Check if context is already cancelled before starting
 	if ctx.Err() != nil {
 		return buildfab.Result{
@@ -571,7 +773,7 @@ func (e *Executor) executeAction(ctx context.Context, action buildfab.Action) (b
 	if action.Uses != "" {
 		result, err = e.executeBuiltInAction(ctx, action)
 	} else {
-		result, err = e.executeCustomAction(ctx, action)
+		result, err = e.executeCustomAction(ctx, action, streamingManager)
 	}
 
 	// Call step complete callback if provided
@@ -621,7 +823,7 @@ func (e *Executor) executeBuiltInAction(ctx context.Context, action buildfab.Act
 }
 
 // executeCustomAction executes a custom action with run command
-func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Action) (buildfab.Result, error) {
+func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Action, streamingManager *StreamingOutputManager) (buildfab.Result, error) {
 	// Check if context is already cancelled before starting
 	if ctx.Err() != nil {
 		return buildfab.Result{
@@ -638,9 +840,12 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 		}, fmt.Errorf("no run command specified for action %s", action.Name)
 	}
 
-	// Print step name (suppress command content)
-	if e.ui != nil {
+	// Print step name only if this step should show its start message
+	if e.ui != nil && (streamingManager == nil || streamingManager.ShouldShowStepStart(action.Name)) {
 		e.ui.PrintStepName(action.Name)
+		if streamingManager != nil {
+			streamingManager.MarkStepStarted(action.Name)
+		}
 	}
 
 	// Execute the command with streaming output
@@ -649,20 +854,34 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 	var err error
 	if e.opts.Verbose {
 		// Use streaming output for verbose mode
-		err = e.executeCommandWithStreaming(ctx, cmd, action.Name)
+		err = e.executeCommandWithStreaming(ctx, cmd, action.Name, streamingManager)
 	} else {
 		// Use buffered output for non-verbose mode
 		output, cmdErr := cmd.CombinedOutput()
 		err = cmdErr
 		
-		// Print output using UI interface
+		// Print output using UI interface or buffer it
 		if e.ui != nil && len(output) > 0 {
 			lines := strings.Split(strings.TrimRight(string(output), "\n"), "\n")
 			for _, line := range lines {
 				if strings.TrimSpace(line) != "" {
-					e.ui.PrintCommandOutput(line)
+					if streamingManager == nil || streamingManager.ShouldStreamOutput(action.Name) {
+						e.ui.PrintCommandOutput(line)
+					} else {
+						// Buffer output for later when this step becomes active
+						streamingManager.BufferOutput(action.Name, line)
+					}
 				}
 			}
+		}
+		
+		// Mark as done streaming for non-verbose mode too
+		if streamingManager != nil {
+			streamingManager.MarkStepDoneStreaming(action.Name)
+			// Check if this step should display its success message
+			e.checkAndDisplayStepSuccess(action.Name, streamingManager)
+			// Check if next step should now start streaming
+			e.checkAndStartNextStep(action.Name, streamingManager)
 		}
 	}
 	
@@ -681,7 +900,7 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 }
 
 // executeCommandWithStreaming executes a command with real-time output streaming
-func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd, actionName string) error {
+func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd, actionName string, streamingManager *StreamingOutputManager) error {
 	// Create pipes for stdout and stderr
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -698,8 +917,15 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		return fmt.Errorf("failed to start command: %w", err)
 	}
 	
+	// Check if this step should show its start message when it becomes active
+	if e.ui != nil && streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
+		e.ui.PrintStepName(actionName)
+		streamingManager.MarkStepStarted(actionName)
+	}
+	
 	// Create channels for goroutine communication
 	done := make(chan error, 1)
+	streamingDone := make(chan bool, 2) // One for stdout, one for stderr
 	
 	// Stream stdout
 	go func() {
@@ -707,11 +933,24 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Print output using UI interface
+			// Check if this step should show its start message when it becomes active
+			if e.ui != nil && streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
+				e.ui.PrintStepName(actionName)
+				streamingManager.MarkStepStarted(actionName)
+			}
+			
+			// Check streaming status dynamically for each line
 			if e.ui != nil {
-				e.ui.PrintCommandOutput(line)
+				if streamingManager == nil || streamingManager.ShouldStreamOutput(actionName) {
+					e.ui.PrintCommandOutput(line)
+				} else {
+					// Buffer output for later when this step becomes active
+					streamingManager.BufferOutput(actionName, line)
+				}
 			}
 		}
+		// Signal that stdout is done
+		streamingDone <- true
 	}()
 	
 	// Stream stderr
@@ -720,10 +959,37 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Print output using UI interface
-			if e.ui != nil {
-				e.ui.PrintCommandOutput(line)
+			// Check if this step should show its start message when it becomes active
+			if e.ui != nil && streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
+				e.ui.PrintStepName(actionName)
+				streamingManager.MarkStepStarted(actionName)
 			}
+			
+			// Check streaming status dynamically for each line
+			if e.ui != nil {
+				if streamingManager == nil || streamingManager.ShouldStreamOutput(actionName) {
+					e.ui.PrintCommandOutput(line)
+				} else {
+					// Buffer output for later when this step becomes active
+					streamingManager.BufferOutput(actionName, line)
+				}
+			}
+		}
+		// Signal that stderr is done
+		streamingDone <- true
+	}()
+	
+	// Wait for both stdout and stderr to finish streaming
+	go func() {
+		<-streamingDone // Wait for stdout
+		<-streamingDone // Wait for stderr
+		// Mark as done streaming when both are finished
+		if streamingManager != nil {
+			streamingManager.MarkStepDoneStreaming(actionName)
+			// Check if this step should display its success message
+			e.checkAndDisplayStepSuccess(actionName, streamingManager)
+			// Check if next step should now start streaming
+			e.checkAndStartNextStep(actionName, streamingManager)
 		}
 	}()
 	
@@ -743,6 +1009,59 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 			cmd.Process.Kill()
 		}
 		return ctx.Err()
+	}
+}
+
+// checkAndStartNextStep checks if the next step should start streaming and shows its start message
+func (e *Executor) checkAndStartNextStep(completedStepName string, streamingManager *StreamingOutputManager) {
+	// Find the next step in declaration order
+	nextStepIndex := -1
+	for i, step := range streamingManager.steps {
+		if step.Action == completedStepName {
+			nextStepIndex = i + 1
+			break
+		}
+	}
+	
+	if nextStepIndex >= len(streamingManager.steps) {
+		return // No next step
+	}
+	
+	nextStepName := streamingManager.steps[nextStepIndex].Action
+	
+	// Check if the next step should show its start message and start streaming
+	if streamingManager.ShouldShowStepStartWhenActive(nextStepName) {
+		if e.ui != nil {
+			e.ui.PrintStepName(nextStepName)
+			streamingManager.MarkStepStarted(nextStepName)
+		}
+	}
+	
+	// Flush any buffered output for the next step
+	if e.ui != nil {
+		bufferedOutput := streamingManager.FlushBufferedOutput(nextStepName)
+		for _, line := range bufferedOutput {
+			e.ui.PrintCommandOutput(line)
+		}
+	}
+}
+
+// checkAndDisplayStepSuccess checks if a step should display its success message and displays it
+func (e *Executor) checkAndDisplayStepSuccess(stepName string, streamingManager *StreamingOutputManager) {
+	if streamingManager == nil || !streamingManager.ShouldShowStepSuccess(stepName) {
+		return
+	}
+	
+	// Find the step result
+	for _, result := range streamingManager.steps {
+		if result.Action == stepName {
+			// Display the success message
+			if e.ui != nil {
+				e.ui.PrintStepStatus(stepName, buildfab.StatusOK, "command executed successfully")
+			}
+			streamingManager.MarkStepDisplayed(stepName)
+			break
+		}
 	}
 }
 

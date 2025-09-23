@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.9] - 2025-09-23
+
+### Fixed
+- **Streaming Output Synchronization**: Fixed mixed streaming output issue caused by parallel command execution
+  - Implemented `StreamingOutputManager` to coordinate output from parallel commands
+  - Steps now run in parallel for performance but display output sequentially in declaration order
+  - Only the first step in declaration order streams its output at any given time
+  - Eliminated mixed output between parallel steps during execution
+  - Resolves issue where Ctrl+C termination fix broke streaming output ordering
+  - Both parallel and sequential execution scenarios now work correctly
+- **Output Buffering System**: Implemented comprehensive output buffering for steps that cannot stream yet
+  - Steps that cannot stream yet now buffer their output instead of discarding it
+  - Buffered output is flushed when the step becomes active in declaration order
+  - Ensures no output is lost during parallel execution
+  - Perfect user experience with complete output visibility in correct order
+  - Both verbose and non-verbose modes support output buffering
+- **Success Message Ordering**: Fixed success messages appearing in completion order instead of declaration order
+  - Success messages now appear in declaration order for both parallel and sequential execution
+  - Implemented `ShouldShowStepSuccess` method to control when success messages are displayed
+  - Success messages are displayed when steps actually complete, not when they start
+  - Eliminated duplicate success messages in sequential execution scenarios
+  - Perfect user experience with properly ordered success messages
+
 ### Documentation
 - **Memory Bank Updates**: Added Immediate Actions from static analysis as future development tasks
   - Added test coverage improvement targets (80%+ coverage for production readiness)
