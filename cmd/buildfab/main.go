@@ -13,6 +13,7 @@ import (
 	"github.com/AlexBurnes/buildfab/pkg/buildfab"
 	"github.com/AlexBurnes/buildfab/internal/ui"
 	"github.com/AlexBurnes/buildfab/internal/executor"
+	"github.com/AlexBurnes/buildfab/internal/version"
 )
 
 const (
@@ -30,6 +31,29 @@ func getVersion() string {
 	}
 	
 	// If not set at build time, return unknown
+	return "unknown"
+}
+
+// getProjectVersion returns the project version using the version library
+func getProjectVersion() string {
+	// Use the version library to detect the current project version
+	// This will read from VERSION file or detect from git tags
+	detector := version.New()
+	ctx := context.Background()
+	
+	if version, err := detector.DetectCurrentVersion(ctx); err == nil && version != "" {
+		return version
+	}
+	
+	// Fallback to VERSION file if version library fails
+	if data, err := os.ReadFile("VERSION"); err == nil {
+		version := strings.TrimSpace(string(data))
+		if version != "" {
+			return version
+		}
+	}
+	
+	// Final fallback
 	return "unknown"
 }
 
@@ -215,17 +239,19 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 	
-	// Get project info
+	// Print header using library UI - always show buildfab name and version
+	uiInstance := ui.New(verbose && !quiet, debug)
+	uiInstance.PrintCLIHeader("buildfab", getVersion())
+	
+	// Get project info for project check
 	projectName := "buildfab" // Default project name
 	if cfg.Project.Name != "" {
 		projectName = cfg.Project.Name
 	}
-	version := getVersion()
 	
-	// Print header using library UI
-	uiInstance := ui.New(verbose && !quiet, debug)
-	uiInstance.PrintCLIHeader(projectName, version)
-	uiInstance.PrintProjectCheck(projectName, version)
+	// Get project version from version.library file or VERSION file
+	projectVersion := getProjectVersion()
+	uiInstance.PrintProjectCheck(projectName, projectVersion)
 	
 	stageName := args[0]
 	
@@ -351,17 +377,19 @@ func runStage(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 	
-	// Get project info
+	// Print header using library UI - always show buildfab name and version
+	uiInstance := ui.New(verbose && !quiet, debug)
+	uiInstance.PrintCLIHeader("buildfab", getVersion())
+	
+	// Get project info for project check
 	projectName := "buildfab" // Default project name
 	if cfg.Project.Name != "" {
 		projectName = cfg.Project.Name
 	}
-	version := getVersion()
 	
-	// Print header using library UI
-	uiInstance := ui.New(verbose && !quiet, debug)
-	uiInstance.PrintCLIHeader(projectName, version)
-	uiInstance.PrintProjectCheck(projectName, version)
+	// Get project version from version.library file or VERSION file
+	projectVersion := getProjectVersion()
+	uiInstance.PrintProjectCheck(projectName, projectVersion)
 	
 	stageName := args[0]
 	

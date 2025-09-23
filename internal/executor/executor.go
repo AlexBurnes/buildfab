@@ -655,6 +655,7 @@ func (e *Executor) displayStepImmediately(stepName string, steps []buildfab.Step
 					// Use streaming manager to control when success messages are displayed
 					if streamingManager == nil || streamingManager.ShouldShowStepSuccess(stepName) {
 						if e.ui != nil {
+							// Only show success message - step start message is shown elsewhere
 							e.ui.PrintStepStatus(stepName, result.Status, result.Message)
 						}
 						// Use streaming manager to mark as displayed to avoid race conditions
@@ -738,6 +739,7 @@ func (e *Executor) displayRemainingSteps(steps []buildfab.Step, resultMap map[st
 				// Use streaming manager to control when success messages are displayed
 				if streamingManager == nil || streamingManager.ShouldShowStepSuccess(step.Action) {
 					if e.ui != nil {
+						// Only show success message - step start message is shown elsewhere
 						e.ui.PrintStepStatus(step.Action, result.Status, result.Message)
 					}
 					// Use streaming manager to mark as displayed to avoid race conditions
@@ -907,14 +909,12 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 			}
 		}
 		
-		// Mark as done streaming for non-verbose mode too
-		if streamingManager != nil {
-			streamingManager.MarkStepDoneStreaming(action.Name)
-			// Check if this step should display its success message
-			e.checkAndDisplayStepSuccess(action.Name, streamingManager)
-			// Check if next step should now start streaming
-			e.checkAndStartNextStep(action.Name, streamingManager)
-		}
+	// Mark as done streaming for non-verbose mode too
+	if streamingManager != nil {
+		streamingManager.MarkStepDoneStreaming(action.Name)
+		// Check if next step should now start streaming
+		e.checkAndStartNextStep(action.Name, streamingManager)
+	}
 	}
 	
 	if err != nil {
@@ -949,9 +949,9 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		return fmt.Errorf("failed to start command: %w", err)
 	}
 	
-	// Check if this step should show its start message when it becomes active
-	if e.ui != nil && streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
-		e.ui.PrintStepName(actionName)
+	// Don't show step start messages immediately - they will be shown with success messages
+	// Just mark the step as started for internal tracking
+	if streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
 		streamingManager.MarkStepStarted(actionName)
 	}
 	
@@ -965,9 +965,9 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Check if this step should show its start message when it becomes active
-			if e.ui != nil && streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
-				e.ui.PrintStepName(actionName)
+			// Don't show step start messages immediately - they will be shown with success messages
+			// Just mark the step as started for internal tracking
+			if streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
 				streamingManager.MarkStepStarted(actionName)
 			}
 			
@@ -991,9 +991,9 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		for scanner.Scan() {
 			line := scanner.Text()
 			
-			// Check if this step should show its start message when it becomes active
-			if e.ui != nil && streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
-				e.ui.PrintStepName(actionName)
+			// Don't show step start messages immediately - they will be shown with success messages
+			// Just mark the step as started for internal tracking
+			if streamingManager != nil && streamingManager.ShouldShowStepStartWhenActive(actionName) {
 				streamingManager.MarkStepStarted(actionName)
 			}
 			
@@ -1018,8 +1018,6 @@ func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cm
 		// Mark as done streaming when both are finished
 		if streamingManager != nil {
 			streamingManager.MarkStepDoneStreaming(actionName)
-			// Check if this step should display its success message
-			e.checkAndDisplayStepSuccess(actionName, streamingManager)
 			// Check if next step should now start streaming
 			e.checkAndStartNextStep(actionName, streamingManager)
 		}
@@ -1061,12 +1059,12 @@ func (e *Executor) checkAndStartNextStep(completedStepName string, streamingMana
 	
 	nextStepName := streamingManager.steps[nextStepIndex].Action
 	
-	// Check if the next step should show its start message and start streaming
+	// Show step start message when the step becomes active
 	if streamingManager.ShouldShowStepStartWhenActive(nextStepName) {
 		if e.ui != nil {
 			e.ui.PrintStepName(nextStepName)
-			streamingManager.MarkStepStarted(nextStepName)
 		}
+		streamingManager.MarkStepStarted(nextStepName)
 	}
 	
 	// Flush any buffered output for the next step
