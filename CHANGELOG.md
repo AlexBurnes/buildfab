@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.18] - 2025-09-23
+
+### Fixed
+- **Test Race Conditions**: Fixed data race conditions in MockStepCallback test struct that were causing test failures
+  - Added thread safety with sync.Mutex to MockStepCallback struct
+  - Protected all write operations (OnStepStart, OnStepComplete, OnStepOutput, OnStepError, Reset) with mutex locks
+  - Protected all read operations in test methods by copying data while holding the lock
+  - Fixed race conditions in parallel step execution tests
+  - All tests now pass with `go test ./... -v -race` without any race condition warnings
+  - Maintained full test functionality while ensuring thread safety
+
 ## [0.8.17] - 2025-09-23
 
 ### Fixed

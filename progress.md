@@ -10,7 +10,7 @@
   - Fixed executor integration - added OnStepOutput calls in the executor to properly pass output to the OrderedOutputManager
   - Perfect streaming behavior - both sequential steps (test-streaming) and parallel steps (test-parallel) now work correctly with proper output ordering and immediate streaming
   - Comprehensive testing - verified fix works correctly for both sequential and parallel execution scenarios
-  - VERSION 0.8.17 RELEASED with true real-time output streaming and proper buffering for parallel steps, plus interactive command support
+  - VERSION 0.8.18 RELEASED with test race condition fixes and thread-safe MockStepCallback
 - **Ctrl+C Termination Message Fix**: Successfully fixed the issue where Ctrl+C was working but the output didn't show "TERMINATED!" after the refactoring to the new executor and output manager approach
   - Fixed termination detection - added proper context cancellation detection in both runStageInternal and executeStageWithCallback methods
   - Added printTerminatedSummary method - created new method in SimpleRunner that displays "⏹️ TERMINATED" message with yellow color and proper summary statistics
