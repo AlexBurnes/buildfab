@@ -766,8 +766,14 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 				
 				// Execute the node in parallel with streaming output control
 				go func(nodeName string, node *DAGNode) {
-					result, _ := r.executeActionForDAGWithStreamingControl(ctx, node.Action, streamingManager)
+					result, err := r.executeActionForDAGWithStreamingControl(ctx, node.Action, streamingManager)
 					result.Name = nodeName
+					
+					// Call OnStepError immediately if the step failed
+					if err != nil && r.opts.StepCallback != nil {
+						r.opts.StepCallback.OnStepError(ctx, nodeName, err)
+					}
+					
 					select {
 					case resultChan <- result:
 					case <-ctx.Done():
@@ -1123,20 +1129,20 @@ func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result
 			if err != nil {
 				status = StepStatusError
 				message = err.Error()
-			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
-		} else if result.Status == StatusWarn {
-			status = StepStatusWarn
-			message = result.Message
-		} else if result.Status == StatusError {
-			status = StepStatusError
-			message = result.Message
-		} else if result.Status == StatusSkipped {
-			status = StepStatusSkipped
-			message = result.Message
+				r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+			} else if result.Status == StatusWarn {
+				status = StepStatusWarn
+				message = result.Message
+			} else if result.Status == StatusError {
+				status = StepStatusError
+				message = result.Message
+			} else if result.Status == StatusSkipped {
+				status = StepStatusSkipped
+				message = result.Message
+			}
+			
+			r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
 		}
-		
-		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
-	}
 
 	return result, err
 }
