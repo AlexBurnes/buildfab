@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -95,25 +96,36 @@ func TestTerminatedStatusDisplay(t *testing.T) {
 // captureUI captures output for testing
 type captureUI struct {
 	output strings.Builder
+	mu     sync.Mutex
 }
 
 func (c *captureUI) PrintCLIHeader(name, version string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("CLI Header\n")
 }
 
 func (c *captureUI) PrintProjectCheck(projectName, version string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Project Check\n")
 }
 
 func (c *captureUI) PrintStepStatus(stepName string, status buildfab.Status, message string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Step Status\n")
 }
 
 func (c *captureUI) PrintStageHeader(stageName string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Stage Header\n")
 }
 
 func (c *captureUI) PrintStageResult(stageName string, success bool, duration time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if success {
 		c.output.WriteString("SUCCESS\n")
 	} else {
@@ -122,30 +134,44 @@ func (c *captureUI) PrintStageResult(stageName string, success bool, duration ti
 }
 
 func (c *captureUI) PrintStageTerminated(stageName string, duration time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("⚠️  TERMINATED - " + stageName + "\n")
 }
 
 func (c *captureUI) PrintCommand(command string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Command: " + command + "\n")
 }
 
 func (c *captureUI) PrintStepName(stepName string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Step: " + stepName + "\n")
 }
 
 func (c *captureUI) PrintCommandOutput(output string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Output: " + output + "\n")
 }
 
 func (c *captureUI) PrintRepro(stepName, repro string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Repro: " + repro + "\n")
 }
 
 func (c *captureUI) PrintReproInline(stepName, repro string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Repro Inline: " + repro + "\n")
 }
 
 func (c *captureUI) PrintSummary(results []buildfab.Result) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.output.WriteString("Summary\n")
 }
 
@@ -158,5 +184,7 @@ func (c *captureUI) IsDebug() bool {
 }
 
 func (c *captureUI) GetOutput() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.output.String()
 }
