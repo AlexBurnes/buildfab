@@ -68,7 +68,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	// Stage header will be printed by the library's UI system
 
 	// Create ordered step callback to collect results with proper ordering
-	stepCallback := NewOrderedStepCallback(stage.Steps, r.opts.Verbose, r.opts.Debug, r.opts.ErrorOutput)
+	stepCallback := NewOrderedStepCallback(stage.Steps, r.opts.Verbose, r.opts.Debug, r.opts.ErrorOutput, r.config)
 
 	// Convert to complex options for internal executor
 	complexOpts := &RunOptions{

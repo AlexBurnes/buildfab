@@ -75,7 +75,7 @@ func (a *GitUntrackedAction) Run(ctx context.Context) (Result, error) {
 	if len(untracked) > 0 {
 		return Result{
 			Status:  StatusWarn,
-			Message: "Untracked files found, to check run:\n    git status",
+			Message: "Untracked files found, to check run:\n      git status",
 		}, nil // Return nil error for warning status
 	}
 	
@@ -114,7 +114,7 @@ func (a *GitUncommittedAction) Run(ctx context.Context) (Result, error) {
 	if len(uncommitted) > 0 {
 		return Result{
 			Status:  StatusWarn,
-			Message: "Uncommitted changes found, to check run:\n    git status",
+			Message: "Uncommitted changes found, to check run:\n      git status",
 		}, nil // Return nil error for warning status
 	}
 	
@@ -153,7 +153,7 @@ func (a *GitModifiedAction) Run(ctx context.Context) (Result, error) {
 	if len(modified) > 0 {
 		return Result{
 			Status:  StatusWarn,
-			Message: "There are modified files, to check run:\n    git status",
+			Message: "There are modified files, to check run:\n      git status",
 		}, nil // Return nil error for warning status
 	}
 	

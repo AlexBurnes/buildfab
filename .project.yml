@@ -35,8 +35,8 @@ stages:
         require: [configure-cmake]
       - action: install-binary
         require: [build-binaries]
-      #- action: run-tests
-      #  require: [install-binary]
+      - action: run-tests
+        require: [install-binary]
       #- action: create-installers
       #  require: [install-binary]
       #- action: goreleaser-dry-run

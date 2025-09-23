@@ -4,7 +4,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.8.18-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.9.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Features
 
@@ -281,23 +281,58 @@ See [Project Specification](docs/Project-specification.md) for complete configur
 
 ## Library Usage
 
+### SimpleRunner (Recommended)
+
 ```go
 package main
 
 import (
     "context"
-    "github.com/AlexBurnes/buildfab"
+    "github.com/AlexBurnes/buildfab/pkg/buildfab"
 )
 
 func main() {
     ctx := context.Background()
     
-    opts := &buildfab.RunOptions{
+    // Load configuration
+    cfg, err := buildfab.LoadConfig(".project.yml")
+    if err != nil {
+        // Handle error
+        return
+    }
+    
+    // Create simple run options
+    opts := &buildfab.SimpleRunOptions{
         ConfigPath: ".project.yml",
         Verbose:    true,
     }
     
-    err := buildfab.RunStage(ctx, "pre-push", opts)
+    // Create simple runner
+    runner := buildfab.NewSimpleRunner(cfg, opts)
+    
+    // Run a stage - all output is handled automatically!
+    err = runner.RunStage(ctx, "pre-push")
+    if err != nil {
+        // Handle error
+    }
+}
+```
+
+### One-liner Usage
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/AlexBurnes/buildfab/pkg/buildfab"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Simple one-liner
+    err := buildfab.RunStageSimple(ctx, ".project.yml", "pre-push", true)
     if err != nil {
         // Handle error
     }

@@ -151,26 +151,29 @@ func TestStepCallbackIntegration(t *testing.T) {
 		t.Errorf("Expected 2 OnStepComplete calls, got %d", onStepCompleteCalls)
 	}
 
-	// Verify first step (success)
-	if stepStartCalls[0] != "test-action" {
-		t.Errorf("Expected first step to be 'test-action', got '%s'", stepStartCalls[0])
+	// Verify steps were called (order may vary due to parallel execution)
+	// Find the test-action step
+	var testActionComplete *StepCompleteCall
+	var failingActionComplete *StepCompleteCall
+	
+	for _, call := range stepCompleteCalls {
+		if call.StepName == "test-action" {
+			testActionComplete = &call
+		} else if call.StepName == "failing-action" {
+			failingActionComplete = &call
+		}
 	}
-
-	firstComplete := stepCompleteCalls[0]
-	if firstComplete.StepName != "test-action" {
-		t.Errorf("Expected first complete step to be 'test-action', got '%s'", firstComplete.StepName)
+	
+	if testActionComplete == nil {
+		t.Errorf("Expected 'test-action' step to complete, but it wasn't found")
+	} else if testActionComplete.Status != StepStatusOK {
+		t.Errorf("Expected 'test-action' step status to be OK, got %v", testActionComplete.Status)
 	}
-	if firstComplete.Status != StepStatusOK {
-		t.Errorf("Expected first step status to be OK, got %v", firstComplete.Status)
-	}
-
-	// Verify second step (error with warn policy)
-	secondComplete := stepCompleteCalls[1]
-	if secondComplete.StepName != "failing-action" {
-		t.Errorf("Expected second complete step to be 'failing-action', got '%s'", secondComplete.StepName)
-	}
-	if secondComplete.Status != StepStatusError {
-		t.Errorf("Expected second step status to be Error, got %v", secondComplete.Status)
+	
+	if failingActionComplete == nil {
+		t.Errorf("Expected 'failing-action' step to complete, but it wasn't found")
+	} else if failingActionComplete.Status != StepStatusError {
+		t.Errorf("Expected 'failing-action' step status to be Error, got %v", failingActionComplete.Status)
 	}
 
 	// Verify error callback was called

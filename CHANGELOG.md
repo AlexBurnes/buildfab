@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-09-23
+
+### Added
+- **Automatic Shell Error Handling**: Implemented automatic shell error handling by adding `-euc` flags to all shell command executions
+  - All shell commands now automatically use `sh -euc` which includes `-e` (exit on error), `-u` (exit on undefined variables), and `-c` (execute command)
+  - Commands that fail now properly cause actions to fail instead of continuing and reporting success
+  - Fixed version-module action - the `ddffd` command that doesn't exist now properly fails the action instead of reporting success
+  - Enhanced error message formatting - improved error messages to show "to check run:" with properly aligned commands
+  - Updated all shell execution points - modified three key shell command execution methods in buildfab.go to use proper error handling flags
+  - Comprehensive testing - verified fix works correctly for single-line commands, multiline scripts, and complex actions
+  - Perfect user experience - users now get accurate error reporting when commands fail, with clear reproduction instructions
+
 ## [0.8.18] - 2025-09-23
 
 ### Fixed

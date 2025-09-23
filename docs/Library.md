@@ -4,39 +4,105 @@ buildfab provides a comprehensive Go library API for embedding automation workfl
 
 ## Core API
 
-### Main Functions
+### SimpleRunner (Recommended)
+
+The `SimpleRunner` provides a simplified interface for most use cases:
 
 ```go
 package buildfab
 
 import "context"
 
-// RunStage executes a specific stage from project.yml configuration
-func RunStage(ctx context.Context, stageName string, opts *RunOptions) error
+// SimpleRunner provides a simplified interface for running stages and actions
+type SimpleRunner struct {
+    config *Config
+    opts   *SimpleRunOptions
+}
 
-// RunAction executes a standalone action
-func RunAction(ctx context.Context, actionName string, opts *RunOptions) error
+// NewSimpleRunner creates a new simple buildfab runner
+func NewSimpleRunner(config *Config, opts *SimpleRunOptions) *SimpleRunner
 
-// RunStageStep executes a single step within a stage
-func RunStageStep(ctx context.Context, stageName, stepName string, opts *RunOptions) error
+// RunStage executes a specific stage with automatic output handling
+func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error
+
+// RunAction executes a specific action with automatic output handling
+func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error
+
+// RunStageStep executes a specific step within a stage
+func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName string) error
+```
+
+### Advanced Runner
+
+For advanced use cases with custom callbacks:
+
+```go
+// Runner provides the main execution interface
+type Runner struct {
+    config   *Config
+    opts     *RunOptions
+    registry ActionRegistry
+}
+
+// NewRunner creates a new buildfab runner with default built-in actions
+func NewRunner(config *Config, opts *RunOptions) *Runner
+
+// RunStage executes a specific stage
+func (r *Runner) RunStage(ctx context.Context, stageName string) error
+
+// RunAction executes a specific action
+func (r *Runner) RunAction(ctx context.Context, actionName string) error
+
+// RunStageStep executes a specific step within a stage
+func (r *Runner) RunStageStep(ctx context.Context, stageName, stepName string) error
+```
+
+### Convenience Functions
+
+```go
+// RunStageSimple executes a stage with minimal configuration
+func RunStageSimple(ctx context.Context, configPath, stageName string, verbose bool) error
+
+// RunActionSimple executes an action with minimal configuration
+func RunActionSimple(ctx context.Context, configPath, actionName string, verbose bool) error
 ```
 
 ### Configuration Options
 
+#### SimpleRunOptions (Recommended)
+
+```go
+// SimpleRunOptions configures simple stage execution
+type SimpleRunOptions struct {
+    ConfigPath   string            // Path to project.yml (default: ".project.yml")
+    MaxParallel  int               // Maximum parallel execution (default: CPU count)
+    Verbose      bool              // Enable verbose output
+    Debug        bool              // Enable debug output
+    Variables    map[string]string // Additional variables for interpolation
+    WorkingDir   string            // Working directory for execution
+    Output       io.Writer         // Output writer (default: os.Stdout)
+    ErrorOutput  io.Writer         // Error output writer (default: os.Stderr)
+    Only         []string          // Only run steps matching these labels
+    WithRequires bool              // Include required dependencies when running single step
+}
+```
+
+#### RunOptions (Advanced)
+
 ```go
 // RunOptions configures stage execution
 type RunOptions struct {
-    ConfigPath    string            // Path to project.yml (default: "project.yml")
-    MaxParallel   int               // Maximum parallel execution (default: CPU count)
-    Verbose       bool              // Enable verbose output
-    Debug         bool              // Enable debug output
-    Variables     map[string]string // Additional variables for interpolation
-    WorkingDir    string            // Working directory for execution
-    Output        io.Writer         // Output writer (default: os.Stdout)
-    ErrorOutput   io.Writer         // Error output writer (default: os.Stderr)
-    OnlyLabels    []string          // Labels for conditional execution
-    WithRequires  bool              // Include dependencies when running single step
-    StepCallback  StepCallback      // Optional callback for step execution events
+    ConfigPath   string            // Path to project.yml (default: ".project.yml")
+    MaxParallel  int               // Maximum parallel execution (default: CPU count)
+    Verbose      bool              // Enable verbose output
+    Debug        bool              // Enable debug output
+    Variables    map[string]string // Additional variables for interpolation
+    WorkingDir   string            // Working directory for execution
+    Output       io.Writer         // Output writer (default: os.Stdout)
+    ErrorOutput  io.Writer         // Error output writer (default: os.Stderr)
+    Only         []string          // Only run steps matching these labels
+    WithRequires bool              // Include required dependencies when running single step
+    StepCallback StepCallback      // Optional callback for step execution events
 }
 ```
 
@@ -152,7 +218,7 @@ type VariableError struct {
 
 ## Usage Examples
 
-### Basic Stage Execution
+### Basic Stage Execution (SimpleRunner - Recommended)
 
 ```go
 package main
@@ -161,27 +227,61 @@ import (
     "context"
     "fmt"
     "os"
-    "github.com/AlexBurnes/buildfab"
+    "github.com/AlexBurnes/buildfab/pkg/buildfab"
 )
 
 func main() {
     ctx := context.Background()
     
-    opts := &buildfab.RunOptions{
-        ConfigPath: "project.yml",
-        Verbose:    true,
-        WorkingDir: ".",
+    // Load configuration
+    cfg, err := buildfab.LoadConfig(".project.yml")
+    if err != nil {
+        fmt.Printf("Error loading config: %v\n", err)
+        return
     }
     
-    err := buildfab.RunStage(ctx, "pre-push", opts)
+    // Create simple run options
+    opts := &buildfab.SimpleRunOptions{
+        ConfigPath: ".project.yml",
+        Verbose:    true,
+        Output:     os.Stdout,
+        ErrorOutput: os.Stderr,
+    }
+    
+    // Create simple runner
+    runner := buildfab.NewSimpleRunner(cfg, opts)
+    
+    // Run a stage - all output is handled automatically!
+    err = runner.RunStage(ctx, "pre-push")
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Stage execution failed: %v\n", err)
+        fmt.Printf("Stage failed: %v\n", err)
         os.Exit(1)
     }
 }
 ```
 
-### Step Callbacks for Real-time Progress
+### One-liner Stage Execution
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/AlexBurnes/buildfab/pkg/buildfab"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    // Simple one-liner
+    err := buildfab.RunStageSimple(ctx, ".project.yml", "pre-push", true)
+    if err != nil {
+        // Handle error
+    }
+}
+```
+
+### Step Callbacks for Real-time Progress (Advanced Runner)
 
 ```go
 package main
@@ -191,7 +291,7 @@ import (
     "fmt"
     "os"
     "time"
-    "github.com/AlexBurnes/buildfab"
+    "github.com/AlexBurnes/buildfab/pkg/buildfab"
 )
 
 // ExampleStepCallback demonstrates step-by-step progress reporting
@@ -232,17 +332,25 @@ func (c *ExampleStepCallback) OnStepError(ctx context.Context, stepName string, 
 func main() {
     ctx := context.Background()
     
-    // Create run options with step callback
-    opts := &buildfab.RunOptions{
-        ConfigPath:   "project.yml",
-        Verbose:      true,
-        WorkingDir:   ".",
-        StepCallback: &ExampleStepCallback{},
+    // Load configuration
+    cfg, err := buildfab.LoadConfig(".project.yml")
+    if err != nil {
+        fmt.Printf("Error loading config: %v\n", err)
+        return
     }
     
-    err := buildfab.RunStage(ctx, "pre-push", opts)
+    // Create run options with step callback
+    opts := buildfab.DefaultRunOptions()
+    opts.StepCallback = &ExampleStepCallback{}
+    opts.Verbose = true
+    
+    // Create runner
+    runner := buildfab.NewRunner(cfg, opts)
+    
+    // Run a stage with step callbacks
+    err = runner.RunStage(ctx, "pre-push")
     if err != nil {
-        fmt.Fprintf(os.Stderr, "Stage execution failed: %v\n", err)
+        fmt.Printf("Stage execution failed: %v\n", err)
         os.Exit(1)
     }
 }
@@ -280,35 +388,50 @@ opts := &buildfab.RunOptions{
 }
 ```
 
-### Custom Variables
+### Custom Variables (SimpleRunner)
 
 ```go
-opts := &buildfab.RunOptions{
-    ConfigPath: "project.yml",
+cfg, err := buildfab.LoadConfig(".project.yml")
+if err != nil {
+    // Handle error
+}
+
+opts := &buildfab.SimpleRunOptions{
+    ConfigPath: ".project.yml",
     Variables: map[string]string{
         "custom_var": "value",
         "environment": "production",
     },
 }
 
-err := buildfab.RunStage(ctx, "deploy", opts)
+runner := buildfab.NewSimpleRunner(cfg, opts)
+err = runner.RunStage(ctx, "deploy")
 ```
 
 ### Single Action Execution
 
 ```go
-err := buildfab.RunAction(ctx, "run-tests", opts)
+// Using SimpleRunner
+runner := buildfab.NewSimpleRunner(cfg, opts)
+err := runner.RunAction(ctx, "run-tests")
+
+// Using convenience function
+err := buildfab.RunActionSimple(ctx, ".project.yml", "run-tests", true)
 ```
 
 ### Single Step Execution
 
 ```go
+// Using SimpleRunner
+runner := buildfab.NewSimpleRunner(cfg, opts)
+
 // Run just the version-check step from pre-push stage
-err := buildfab.RunStageStep(ctx, "pre-push", "version-check", opts)
+err := runner.RunStageStep(ctx, "pre-push", "version-check")
 
 // Run with dependencies
 opts.WithRequires = true
-err := buildfab.RunStageStep(ctx, "pre-push", "version-check", opts)
+runner = buildfab.NewSimpleRunner(cfg, opts)
+err = runner.RunStageStep(ctx, "pre-push", "version-check")
 ```
 
 ## Integration with pre-push
@@ -321,19 +444,31 @@ package main
 import (
     "context"
     "os"
-    "github.com/AlexBurnes/buildfab"
+    "github.com/AlexBurnes/buildfab/pkg/buildfab"
 )
 
 func main() {
     ctx := context.Background()
     
-    opts := &buildfab.RunOptions{
-        ConfigPath:  "project.yml",
-        Verbose:     true,
-        WorkingDir:  ".",
+    // Load configuration
+    cfg, err := buildfab.LoadConfig(".project.yml")
+    if err != nil {
+        os.Exit(1)
     }
     
-    err := buildfab.RunStage(ctx, "pre-push", opts)
+    // Create simple run options
+    opts := &buildfab.SimpleRunOptions{
+        ConfigPath: ".project.yml",
+        Verbose:    true,
+        Output:     os.Stdout,
+        ErrorOutput: os.Stderr,
+    }
+    
+    // Create simple runner
+    runner := buildfab.NewSimpleRunner(cfg, opts)
+    
+    // Run pre-push stage
+    err = runner.RunStage(ctx, "pre-push")
     if err != nil {
         os.Exit(1)
     }

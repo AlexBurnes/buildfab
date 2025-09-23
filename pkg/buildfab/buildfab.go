@@ -185,22 +185,23 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 			status := StepStatusOK
 			message := "executed successfully"
 			
-			if err != nil {
+			// Prioritize result status and message over error when available
+			if result.Status == StatusError {
+				status = StepStatusError
+				message = result.Message
+				if err != nil {
+					r.opts.StepCallback.OnStepError(ctx, actionName, err)
+				}
+			} else if result.Status == StatusWarn {
+				status = StepStatusWarn
+				message = result.Message
+			} else if result.Status == StatusSkipped {
+				status = StepStatusSkipped
+				message = result.Message
+			} else if err != nil {
 				status = StepStatusError
 				message = err.Error()
 				r.opts.StepCallback.OnStepError(ctx, actionName, err)
-			} else {
-				// Check the result status for built-in actions
-				if result.Status == StatusWarn {
-					status = StepStatusWarn
-					message = result.Message
-				} else if result.Status == StatusError {
-					status = StepStatusError
-					message = result.Message
-				} else if result.Status == StatusSkipped {
-					status = StepStatusSkipped
-					message = result.Message
-				}
 			}
 			
 			r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, duration)
@@ -741,19 +742,23 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 		status := StepStatusOK
 		message := "executed successfully"
 		
-		if err != nil {
+		// Prioritize result status and message over error when available
+		if result.Status == StatusError {
 			status = StepStatusError
-			message = err.Error()
-			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+			message = result.Message
+			if err != nil {
+				r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+			}
 		} else if result.Status == StatusWarn {
 			status = StepStatusWarn
-			message = result.Message
-		} else if result.Status == StatusError {
-			status = StepStatusError
 			message = result.Message
 		} else if result.Status == StatusSkipped {
 			status = StepStatusSkipped
 			message = result.Message
+		} else if err != nil {
+			status = StepStatusError
+			message = err.Error()
+			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
 		}
 		
 		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
@@ -1472,28 +1477,32 @@ func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result
 		result, err = r.runCustomActionForDAG(ctx, action)
 	}
 		
-		// Call step complete callback if provided
-		if r.opts.StepCallback != nil {
-			status := StepStatusOK
-			message := "executed successfully"
-			
+	// Call step complete callback if provided
+	if r.opts.StepCallback != nil {
+		status := StepStatusOK
+		message := "executed successfully"
+		
+		// Prioritize result status and message over error when available
+		if result.Status == StatusError {
+			status = StepStatusError
+			message = result.Message
 			if err != nil {
-				status = StepStatusError
-				message = err.Error()
 				r.opts.StepCallback.OnStepError(ctx, action.Name, err)
-			} else if result.Status == StatusWarn {
-				status = StepStatusWarn
-				message = result.Message
-			} else if result.Status == StatusError {
-				status = StepStatusError
-				message = result.Message
-			} else if result.Status == StatusSkipped {
-				status = StepStatusSkipped
-				message = result.Message
 			}
-			
-			r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
+		} else if result.Status == StatusWarn {
+			status = StepStatusWarn
+			message = result.Message
+		} else if result.Status == StatusSkipped {
+			status = StepStatusSkipped
+			message = result.Message
+		} else if err != nil {
+			status = StepStatusError
+			message = err.Error()
+			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
 		}
+		
+		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
+	}
 
 	return result, err
 }
@@ -1539,8 +1548,8 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 		}, fmt.Errorf("action %s has no run command", action.Name)
 	}
 	
-	// Create command
-	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
+	// Create command with error handling flags
+	cmd := exec.CommandContext(ctx, "sh", "-euc", action.Run)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables
@@ -1598,8 +1607,8 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 		}, fmt.Errorf("action %s has no run command", action.Name)
 	}
 	
-	// Create command
-	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
+	// Create command with error handling flags
+	cmd := exec.CommandContext(ctx, "sh", "-euc", action.Run)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables
@@ -1703,8 +1712,8 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 		return fmt.Errorf("action %s has no run command", action.Name)
 	}
 	
-	// Create command
-	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
+	// Create command with error handling flags
+	cmd := exec.CommandContext(ctx, "sh", "-euc", action.Run)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables

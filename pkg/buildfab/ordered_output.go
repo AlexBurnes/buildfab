@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 )
@@ -22,6 +23,7 @@ type OrderedOutputManager struct {
 	verbose     bool
 	debug       bool
 	errorOutput io.Writer
+	config      *Config                    // Configuration for command extraction
 }
 
 // StepOutputData contains all output data for a step
@@ -37,7 +39,7 @@ type StepOutputData struct {
 }
 
 // NewOrderedOutputManager creates a new ordered output manager
-func NewOrderedOutputManager(steps []Step, verbose bool, debug bool, errorOutput io.Writer) *OrderedOutputManager {
+func NewOrderedOutputManager(steps []Step, verbose bool, debug bool, errorOutput io.Writer, config *Config) *OrderedOutputManager {
 	return &OrderedOutputManager{
 		steps:       steps,
 		stepData:    make(map[string]*StepOutputData),
@@ -45,6 +47,7 @@ func NewOrderedOutputManager(steps []Step, verbose bool, debug bool, errorOutput
 		verbose:     verbose,
 		debug:       debug,
 		errorOutput: errorOutput,
+		config:      config,
 	}
 }
 
@@ -293,6 +296,9 @@ func (o *OrderedOutputManager) flushBufferedOutput(stepName string) {
 
 // showStepResult shows the result message for a step
 func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus, message string) {
+	// Enhance error messages with reproduction instructions
+	enhancedMessage := o.enhanceMessage(stepName, status, message)
+	
 	var icon, color string
 	switch status {
 	case StepStatusOK:
@@ -314,10 +320,10 @@ func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus
 	
 	if o.verbose {
 		// In verbose mode, just print the result
-		fmt.Fprintf(o.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, message)
+		fmt.Fprintf(o.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
 	} else {
 		// In silence mode, replace the running indicator with the result
-		fmt.Fprintf(o.errorOutput, "\r  %s%s%s %s %s\n", color, icon, colorReset, stepName, message)
+		fmt.Fprintf(o.errorOutput, "\r  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
 	}
 }
 
@@ -325,11 +331,12 @@ func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus
 type OrderedStepCallback struct {
 	manager *OrderedOutputManager
 	results []StepResult
+	mu      *sync.Mutex
 }
 
 // NewOrderedStepCallback creates a new ordered step callback
-func NewOrderedStepCallback(steps []Step, verbose bool, debug bool, errorOutput io.Writer) *OrderedStepCallback {
-	manager := NewOrderedOutputManager(steps, verbose, debug, errorOutput)
+func NewOrderedStepCallback(steps []Step, verbose bool, debug bool, errorOutput io.Writer, config *Config) *OrderedStepCallback {
+	manager := NewOrderedOutputManager(steps, verbose, debug, errorOutput, config)
 	
 	// Register all steps
 	for _, step := range steps {
@@ -339,6 +346,7 @@ func NewOrderedStepCallback(steps []Step, verbose bool, debug bool, errorOutput 
 	return &OrderedStepCallback{
 		manager: manager,
 		results: make([]StepResult, 0),
+		mu:      &sync.Mutex{},
 	}
 }
 
@@ -351,12 +359,14 @@ func (c *OrderedStepCallback) OnStepStart(ctx context.Context, stepName string) 
 func (c *OrderedStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration) {
 	c.manager.OnStepComplete(ctx, stepName, status, message, duration)
 	
-	// Collect result for summary
+	// Collect result for summary (thread-safe)
+	c.mu.Lock()
 	c.results = append(c.results, StepResult{
 		StepName: stepName,
 		Status:   status,
 		Duration: duration,
 	})
+	c.mu.Unlock()
 }
 
 // OnStepOutput implements StepCallback interface
@@ -371,7 +381,12 @@ func (c *OrderedStepCallback) OnStepError(ctx context.Context, stepName string, 
 
 // GetResults returns the collected step results
 func (c *OrderedStepCallback) GetResults() []StepResult {
-	return c.results
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Return a copy to avoid race conditions
+	result := make([]StepResult, len(c.results))
+	copy(result, c.results)
+	return result
 }
 
 // debugPrintState prints the current state of the output manager
@@ -391,4 +406,131 @@ func (o *OrderedOutputManager) debugPrintState() {
 		fmt.Fprintf(o.errorOutput, "    %s: started=%v, completed=%v, status=%s\n", 
 			stepName, data.Started, data.Completed, data.Status)
 	}
+}
+
+// enhanceMessage improves error messages to match v0.5.0 style
+func (o *OrderedOutputManager) enhanceMessage(stepName string, status StepStatus, message string) string {
+	switch status {
+	case StepStatusError:
+		// Check if message already contains reproduction instructions
+		if strings.Contains(message, "to check run:") {
+			// Extract just the reproduction part and reformat with proper indentation
+			lines := strings.Split(message, "\n")
+			var reproductionLines []string
+			foundReproduction := false
+			for _, line := range lines {
+				if strings.Contains(line, "to check run:") {
+					foundReproduction = true
+					reproductionLines = append(reproductionLines, line)
+				} else if foundReproduction {
+					reproductionLines = append(reproductionLines, line)
+				}
+			}
+			if len(reproductionLines) > 0 {
+				// Reformat the command with proper indentation
+				command := o.extractCommand(stepName, strings.Join(reproductionLines, "\n"))
+				return fmt.Sprintf("to check run:\n%s", command)
+			}
+		}
+		// Check if message is wrapped by runStageInternal
+		if strings.Contains(message, "step ") && strings.Contains(message, " failed: ") {
+			// Extract the original error message after "failed: "
+			parts := strings.Split(message, " failed: ")
+			if len(parts) > 1 {
+				originalMessage := parts[1]
+				// If original message already has reproduction instructions, use it
+				if strings.Contains(originalMessage, "to check run:") {
+					return originalMessage
+				}
+				// If original message doesn't have reproduction instructions, add them
+				command := o.extractCommand(stepName, message)
+				return fmt.Sprintf("to check run:\n%s", command)
+			}
+		}
+		// Enhance error messages with reproduction instructions
+		if strings.Contains(message, "command failed: exit status") {
+			// Extract the command from the step name or message
+			command := o.extractCommand(stepName, message)
+			return fmt.Sprintf("to check run:\n%s", command)
+		}
+		return message
+	case StepStatusSkipped:
+		// Enhance skipped messages with dependency information
+		if strings.Contains(message, "dependency failed") {
+			// Try to extract which dependency failed
+			failedDep := o.extractFailedDependency(stepName)
+			if failedDep != "" {
+				return fmt.Sprintf("skipped (dependency failed: %s)", failedDep)
+			}
+		}
+		return message
+	default:
+		return message
+	}
+}
+
+// extractCommand tries to extract the command that failed
+func (o *OrderedOutputManager) extractCommand(stepName, message string) string {
+	if o.config == nil {
+		return fmt.Sprintf("      %s", stepName)
+	}
+	
+	// Try to find the action and extract the actual command
+	action, exists := o.config.GetAction(stepName)
+	if exists && action.Run != "" {
+		lines := strings.Split(action.Run, "\n")
+		var alignedLines []string
+		
+		// Find minimum leading spaces across all lines
+		minLeadingSpaces := 999 // Start with a large number
+		for _, line := range lines {
+			if strings.TrimSpace(line) == "" {
+				continue // Skip empty lines
+			}
+			lineLeadingSpaces := 0
+			for _, char := range line {
+				if char == ' ' {
+					lineLeadingSpaces++
+				} else {
+					break
+				}
+			}
+			if lineLeadingSpaces < minLeadingSpaces {
+				minLeadingSpaces = lineLeadingSpaces
+			}
+		}
+		
+		// If all lines were empty, use 0
+		if minLeadingSpaces == 999 {
+			minLeadingSpaces = 0
+		}
+		
+		for _, line := range lines {
+			// Remove minimum leading spaces to preserve relative indentation
+			trimmedLine := line
+			if len(line) >= minLeadingSpaces {
+				trimmedLine = line[minLeadingSpaces:]
+			}
+			
+			// Add 6 spaces indentation
+			alignedLines = append(alignedLines, "      "+trimmedLine)
+		}
+		return strings.Join(alignedLines, "\n")
+	}
+	
+	// Fallback to step name
+	return fmt.Sprintf("      %s", stepName)
+}
+
+// extractFailedDependency tries to determine which dependency failed
+func (o *OrderedOutputManager) extractFailedDependency(stepName string) string {
+	// Look through results to find failed dependencies
+	for _, data := range o.stepData {
+		if data.Status == StepStatusError {
+			// This is a simple heuristic - in a real implementation,
+			// we'd need to track the dependency graph
+			return stepName
+		}
+	}
+	return ""
 }
