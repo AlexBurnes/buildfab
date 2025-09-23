@@ -336,6 +336,13 @@ func (s *StreamingOutputManager) MarkStepDisplayed(stepName string) {
 	s.displayed[stepName] = true
 }
 
+// IsStepDisplayed checks if a step has been displayed
+func (s *StreamingOutputManager) IsStepDisplayed(stepName string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.displayed[stepName]
+}
+
 // MarkStepDoneStreaming marks a step as done streaming
 func (s *StreamingOutputManager) MarkStepDoneStreaming(stepName string) {
 	s.mu.Lock()
@@ -643,14 +650,19 @@ func (e *Executor) displayStepImmediately(stepName string, steps []buildfab.Step
 	for _, step := range steps {
 		if step.Action == stepName {
 			// Check if all previous steps in declaration order have been completed
-			if e.canDisplayStepImmediately(step, steps, displayed, completed) {
+			if e.canDisplayStepImmediately(step, steps, displayed, completed, streamingManager) {
 				if result, exists := resultMap[stepName]; exists {
 					// Use streaming manager to control when success messages are displayed
 					if streamingManager == nil || streamingManager.ShouldShowStepSuccess(stepName) {
 						if e.ui != nil {
 							e.ui.PrintStepStatus(stepName, result.Status, result.Message)
 						}
-						displayed[stepName] = true
+						// Use streaming manager to mark as displayed to avoid race conditions
+						if streamingManager != nil {
+							streamingManager.MarkStepDisplayed(stepName)
+						} else {
+							displayed[stepName] = true
+						}
 					}
 				}
 			}
@@ -660,7 +672,7 @@ func (e *Executor) displayStepImmediately(stepName string, steps []buildfab.Step
 }
 
 // canDisplayStepImmediately checks if a step can be displayed immediately (streaming)
-func (e *Executor) canDisplayStepImmediately(step buildfab.Step, steps []buildfab.Step, displayed map[string]bool, completed map[string]bool) bool {
+func (e *Executor) canDisplayStepImmediately(step buildfab.Step, steps []buildfab.Step, displayed map[string]bool, completed map[string]bool, streamingManager *StreamingOutputManager) bool {
 	// Find the position of this step in the declaration order
 	stepIndex := -1
 	for i, s := range steps {
@@ -677,7 +689,14 @@ func (e *Executor) canDisplayStepImmediately(step buildfab.Step, steps []buildfa
 	// Check if all previous steps in declaration order have been displayed
 	// This allows true streaming - steps can complete out of order but display in order
 	for i := 0; i < stepIndex; i++ {
-		if !displayed[steps[i].Action] {
+		// Use streaming manager if available, otherwise use local map
+		isDisplayed := false
+		if streamingManager != nil {
+			isDisplayed = streamingManager.IsStepDisplayed(steps[i].Action)
+		} else {
+			isDisplayed = displayed[steps[i].Action]
+		}
+		if !isDisplayed {
 			return false
 		}
 	}
@@ -706,14 +725,27 @@ func (e *Executor) getReadyStepsLocked(dag map[string]*DAGNode, completed map[st
 // displayRemainingSteps displays any steps that weren't displayed yet
 func (e *Executor) displayRemainingSteps(steps []buildfab.Step, resultMap map[string]buildfab.Result, displayed map[string]bool, streamingManager *StreamingOutputManager) {
 	for _, step := range steps {
-		if !displayed[step.Action] {
+		// Check if step is already displayed using streaming manager or local map
+		isDisplayed := false
+		if streamingManager != nil {
+			isDisplayed = streamingManager.IsStepDisplayed(step.Action)
+		} else {
+			isDisplayed = displayed[step.Action]
+		}
+		
+		if !isDisplayed {
 			if result, exists := resultMap[step.Action]; exists {
 				// Use streaming manager to control when success messages are displayed
 				if streamingManager == nil || streamingManager.ShouldShowStepSuccess(step.Action) {
 					if e.ui != nil {
 						e.ui.PrintStepStatus(step.Action, result.Status, result.Message)
 					}
-					displayed[step.Action] = true
+					// Use streaming manager to mark as displayed to avoid race conditions
+					if streamingManager != nil {
+						streamingManager.MarkStepDisplayed(step.Action)
+					} else {
+						displayed[step.Action] = true
+					}
 				}
 			}
 		}
