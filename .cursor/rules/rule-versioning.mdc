@@ -41,11 +41,12 @@ fi
 1. **Check version**: Ensure VERSION file is incremented from last tag
 2. **Make changes**: Implement features/fixes
 3. **Test**: Run `go test ./... -v`
-4. **Dry run**: `./buildtools/build-goreleaser.sh dry-run`
-5. **Commit**: Use simple commit messages with version (e.g., "feat: v0.1.1, add feature", "fix: v0.1.1, resolve bug", "chore: v0.1.1, update docs")
-6. **Tag**: `git tag $(cat VERSION)`
-7. **Push**: `git push origin master --tags` (always use --tags when pushing with tags)
-8. **Release**: `./buildtools/build-goreleaser.sh release`
+4. **Update changelog**: Add entry with correct dates (git log for historical, terminal for current)
+5. **Dry run**: `./buildtools/build-goreleaser.sh dry-run`
+6. **Commit**: Use simple commit messages with version (e.g., "feat: v0.1.1, add feature", "fix: v0.1.1, resolve bug", "chore: v0.1.1, update docs")
+7. **Tag**: `git tag $(cat VERSION)`
+8. **Push**: `git push origin master --tags` (always use --tags when pushing with tags)
+9. **Release**: `./buildtools/build-goreleaser.sh release`
 
 ## AI Assistant Version Check Protocol
 
@@ -102,3 +103,22 @@ The `scripts/version-bump-with-file` script automatically:
 - **VERSION file**: Current planned version
 - **CHANGELOG.md**: Updated with each release
 - **Memory bank**: Updated with version changes
+
+## Changelog Date Requirements
+- **For historical versions**: Use git log dates - `git log -1 --format="%ai" <tag>`
+- **For current version**: Use terminal date - `date +%Y-%m-%d`
+- **Never use placeholder dates**: All dates must be accurate from git history or current system
+- **Format dates as**: `YYYY-MM-DD` (e.g., `2025-09-23`)
+- **Verify all dates**: Cross-reference with git tag history to ensure accuracy
+
+### Date Commands
+```bash
+# Get current date for new version
+date +%Y-%m-%d
+
+# Get all version dates from git log
+git tag --sort=-version:refname | xargs -I {} git log -1 --format="%ai {}" {}
+
+# Get specific version date
+git log -1 --format="%ai" v0.8.6
+```

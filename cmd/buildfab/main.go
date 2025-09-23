@@ -49,7 +49,7 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "buildfab [flags] [command]",
+	Use:   "buildfab [flags] [stage]",
 	Short: "Buildfab CLI tool for project automation",
 	Long: `buildfab is a Go-based runner for project automations defined in a YAML file.
 It executes stages composed of steps (actions), supports parallel and sequential
@@ -60,6 +60,8 @@ For example: buildfab pre-push is equivalent to buildfab run pre-push`,
 	RunE: runRoot,
 	// Disable automatic command suggestions to allow custom argument handling
 	DisableSuggestions: true,
+	// Allow unknown commands to be passed to RunE
+	Args: cobra.ArbitraryArgs,
 }
 
 // runCmd represents the run command
@@ -162,11 +164,164 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	}
 	
-	// If arguments provided, treat first argument as stage name for run command
-	// This implements the default behavior: buildfab pre-push -> buildfab run pre-push
-	// Create a new run command and execute it with the arguments
-	runCmd.SetArgs(args)
-	return runCmd.Execute()
+	// Load configuration to check if argument is a stage or action
+	cfg, err := buildfab.LoadConfig(configPath)
+	if err != nil {
+		// If config loading fails, treat as stage name (fallback behavior)
+		return runStageDirect(cmd, args)
+	}
+	
+	stageOrActionName := args[0]
+	
+	// Check if it's a stage name first (higher priority)
+	if _, isStage := cfg.Stages[stageOrActionName]; isStage {
+		// It's a stage, run it directly
+		return runStageDirect(cmd, args)
+	}
+	
+	// Check if it's an action name
+	if _, isAction := cfg.GetAction(stageOrActionName); isAction {
+		// It's an action, run it directly
+		return runActionDirect(cmd, args)
+	}
+	
+	// Check if it's a built-in action
+	opts := buildfab.DefaultRunOptions()
+	runner := buildfab.NewRunner(cfg, opts)
+	builtinActions := runner.ListBuiltInActions()
+	if _, isBuiltinAction := builtinActions[stageOrActionName]; isBuiltinAction {
+		// It's a built-in action, run it directly
+		return runActionDirect(cmd, args)
+	}
+	
+	// If not found as stage or action, treat as stage name (fallback behavior)
+	// This allows for dynamic stage names or better error messages from run command
+	return runStageDirect(cmd, args)
+}
+
+// runStageDirect runs a stage directly without going through cobra command execution
+func runStageDirect(cmd *cobra.Command, args []string) error {
+	// Create context with cancellation
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	
+	// Load configuration using library API
+	cfg, err := buildfab.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	
+	// Get project info
+	projectName := "buildfab" // Default project name
+	if cfg.Project.Name != "" {
+		projectName = cfg.Project.Name
+	}
+	version := getVersion()
+	
+	// Print header using library UI
+	uiInstance := ui.New(verbose && !quiet, debug)
+	uiInstance.PrintCLIHeader(projectName, version)
+	uiInstance.PrintProjectCheck(projectName, version)
+	
+	stageName := args[0]
+	
+	// Create variables map from environment variables
+	variables := make(map[string]string)
+	for _, envVar := range envVars {
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) == 2 {
+			variables[parts[0]] = parts[1]
+		}
+	}
+	
+	// Create run options for internal executor
+	// If quiet is set, override verbose to false
+	effectiveVerbose := verbose && !quiet
+	opts := &buildfab.RunOptions{
+		ConfigPath:   configPath,
+		MaxParallel:  maxParallel,
+		Verbose:      effectiveVerbose,
+		Debug:        debug,
+		Variables:    variables,
+		WorkingDir:   workingDir,
+		Output:       os.Stdout,
+		ErrorOutput:  os.Stderr,
+		Only:         only,
+		WithRequires: withRequires,
+	}
+	
+	// Create internal executor
+	exec := executor.New(cfg, opts, uiInstance)
+	
+	// Check if running a specific step
+	if len(args) == 2 {
+		stepName := args[1]
+		err := exec.RunAction(ctx, stepName)
+		if err != nil {
+			// In test mode, return the error instead of exiting
+			if testing.Testing() {
+				return err
+			}
+			os.Exit(1)
+		}
+		return nil
+	}
+	
+	// Run the entire stage using internal executor
+	err = exec.RunStage(ctx, stageName)
+	if err != nil {
+		// In test mode, return the error instead of exiting
+		if testing.Testing() {
+			return err
+		}
+		os.Exit(1)
+	}
+	return nil
+}
+
+// runActionDirect runs an action directly without going through cobra command execution
+func runActionDirect(cmd *cobra.Command, args []string) error {
+	// Create context with cancellation
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	
+	// Load configuration using library API
+	cfg, err := buildfab.LoadConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	
+	// Create variables map from environment variables
+	variables := make(map[string]string)
+	for _, envVar := range envVars {
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) == 2 {
+			variables[parts[0]] = parts[1]
+		}
+	}
+	
+	// Create simple run options
+	// If quiet is set, override verbose to false
+	effectiveVerbose := verbose && !quiet
+	opts := &buildfab.SimpleRunOptions{
+		ConfigPath:  configPath,
+		MaxParallel: maxParallel,
+		Verbose:     effectiveVerbose,
+		Debug:       debug,
+		Variables:   variables,
+		WorkingDir:  workingDir,
+		Output:      os.Stdout,
+		ErrorOutput: os.Stderr,
+		Only:        only,
+	}
+	
+	// Create simple runner
+	runner := buildfab.NewSimpleRunner(cfg, opts)
+	
+	actionName := args[0]
+	
+	// Run action using simple API
+	return runner.RunAction(ctx, actionName)
 }
 
 const (

@@ -7,7 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.6] - 2025-01-27
+## [0.8.7] - 2025-09-23
+
+### Fixed
+- **CLI Parser**: Fixed CLI argument parsing to handle stage/action names when no run command is specified
+  - When no subcommand is provided, first argument is now treated as stage or action name
+  - Stage names have higher priority than action names when both exist with same name
+  - Supports both custom actions and built-in actions (version@check, git@untracked, etc.)
+  - Resolves issue where `buildfab test-streaming` was treated as unknown command
+  - Maintains backward compatibility with explicit `run` and `action` commands
+
+### Changed
+- **Rules Enhancement**: Updated versioning and complete changes rules with changelog date requirements
+  - Enhanced `rule-versioning.mdc` with changelog date requirements and commands
+  - Updated `rule-complete-changes.mdc` to include proper date management
+  - Added specific commands for getting dates from git log and terminal
+  - Fixed all historical changelog dates using accurate git log information
+  - Ensures all future changelog entries use correct dates from git history or current system
+
+## [0.8.6] - 2025-09-23
 
 ### Fixed
 - **Ctrl+C Signal Handling**: Fixed critical issue where Ctrl+C did not properly terminate the executor
@@ -41,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Clear indication to users when execution was interrupted rather than completed successfully
   - Maintains proper timing and summary information even when terminated
 
-## [0.8.5] - 2025-01-27
+## [0.8.5] - 2025-09-23
 
 ### Changed
 - **Verbose Mode Default**: Made verbose mode the default behavior for all buildfab executions
@@ -57,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Useful for CI/CD environments or when minimal output is preferred
   - Updated CLI help text to clearly indicate verbose as default and quiet as override option
 
-## [0.8.4] - 2025-01-27
+## [0.8.4] - 2025-09-23
 
 ### Fixed
 - **Streaming Output Ordering**: Fixed step start and completion messages to appear in declaration order during parallel execution
@@ -116,7 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated packaging/linux/README.md manual installation example to use latest URL pattern
   - Verified all "latest" URLs are correctly pointing to current releases
 
-## [0.8.0] - 2025-01-27
+## [0.8.0] - 2025-09-22
 
 ### Added
 - **Automated Version Bump Script**: Created `scripts/version-bump-with-file` for comprehensive version management
@@ -133,7 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added packaging file update requirements to versioning rules
   - Enhanced error handling for packaging file updates
 
-## [0.7.5] - 2025-01-27
+## [0.7.5] - 2025-09-22
 
 ### Fixed
 - **Installer Scripts**: Fixed installer scripts to use correct binary name and repository
@@ -143,7 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated macOS Homebrew formula (`packaging/macos/version.rb`) to use correct repository and binary name
   - All installer scripts now correctly download and install the `buildfab` binary from the correct repository
 
-## [0.7.4] - 2025-01-27
+## [0.7.4] - 2025-09-22
 
 ### Added
 - **Buildfab Migration**: Complete migration from bash scripts to buildfab actions
@@ -177,7 +195,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added platform-specific installation instructions for both amd64 and arm64
   - Improved developer workflow documentation
 
-## [0.7.3] - 2025-01-27
+## [0.7.3] - 2025-09-22
 
 ### Added
 - **Silence Mode Enhancement**: Added running step indicators for improved user experience
@@ -205,7 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added reference to version-go project for complete version utility documentation
   - Reorganized installation sections to avoid duplication and improve user experience
 
-## [0.7.2] - 2025-01-27
+## [0.7.2] - 2025-09-22
 
 ### Fixed
 - **Command Alignment Issues**: Fixed multi-line command indentation and duplicate output problems
@@ -222,7 +240,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated CLI to use SimpleRunner exclusively, eliminating callback complexity for end users
   - Maintained advanced callback API for internal use while providing simple public interface
 
-## [0.7.1] - 2025-01-27
+## [0.7.1] - 2025-09-22
 
 ### Added
 - **v0.5.0 Style Output Implementation**: Successfully implemented beautiful v0.5.0 style output formatting
@@ -266,7 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Maintained all beautiful output formatting while using modern library architecture
   - All functions now use buildfab.LoadConfig(), buildfab.NewRunner(), etc.
 
-## [0.7.0] - 2025-01-27
+## [0.7.0] - 2025-09-22
 
 ### Added
 - **Step Callback System**: Added comprehensive step-by-step progress reporting for buildfab library
@@ -295,7 +313,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added examples for different callback patterns (verbose, silent, custom)
   - Updated API reference to include new `StepCallback` field in `RunOptions`
 
-## [0.6.0] - 2025-01-27
+## [0.6.0] - 2025-09-21
 
 ### Added
 - **Built-in Action Support in Public API**: Added comprehensive built-in action support to the buildfab library
@@ -316,7 +334,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added library integration examples showing built-in action support
   - Updated feature list to highlight built-in action capabilities
 
-## [0.5.1] - 2025-01-27
+## [0.5.1] - 2025-09-21
 
 ### Fixed
 - **Library API Implementation**: Fixed `buildfab.Runner.RunStage()`, `RunAction()`, and `RunStageStep()` methods
@@ -388,7 +406,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Error Testing**: Comprehensive error condition coverage across all packages
 - **Test Structure**: Organized tests by package with clear separation of concerns
 
-## [v0.3.0] - 2025-01-21
+## [v0.3.0] - 2025-09-21
 
 ### Added
 - **CLI Help Improvements**: Fixed help usage to show `buildfab [flags] [command]` instead of duplicate usage lines
@@ -402,13 +420,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI Command Structure**: Improved CLI command organization with better help text and usage examples
 - **Action Listing**: Enhanced action listing to show both custom and built-in actions with proper descriptions
 
-## [v0.2.0] - 2025-01-21
+## [v0.2.0] - 2025-09-21
 
 ### Added
 - **Complete Changes Shortcut**: Added rule for "complete changes" command that automatically executes full release workflow including version bump, documentation updates, git operations, and push
 - **Semantic Commit Formatting**: Extended git commit format to require "and write change description on new line" for better semantic formatting and consistency
 
-## [v0.1.2] - 2025-01-21
+## [v0.1.2] - 2025-09-21
 
 ### Fixed
 - **DAG Executor Streaming**: Fixed critical bug where DAG executor was not properly implementing streaming output
@@ -417,7 +435,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Changed display logic to show results immediately when they complete, in declaration order
   - Now properly supports true parallel execution with streaming output as specified in pre-push project
 
-## [v0.1.1] - 2025-01-21
+## [v0.1.1] - 2025-09-21
 
 ### Fixed
 - **Dependency Error Messages**: Enhanced dependency failure messages to show specific dependency names instead of generic "dependency failed"
@@ -436,7 +454,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Summary Number Alignment**: Improved summary formatting with right-aligned numbers and consistent spacing for better readability (removed unnecessary colon)
 - **Workflow Rules Update**: Updated version management rules to use simple commit messages and always push with --tags
 
-## [v0.1.0] - 2025-01-21
+## [v0.1.0] - 2025-09-21
 
 ### Added
 - **Release Preparation**: Updated memory bank documents, README, and CHANGELOG for v0.1.0 release
@@ -500,7 +518,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation Structure**: Adopted naming conventions (First-word-second-word.md)
 - **Build System**: Reused existing CMake/Conan/GoReleaser infrastructure
 
-## [v0.1.0] - 2025-01-27
+## [v0.1.0] - 2025-09-21
 
 ### Added
 - **Initial Project Setup**: Complete project structure and documentation

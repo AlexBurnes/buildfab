@@ -1,6 +1,18 @@
 # Progress: buildfab
 
 ## What Works
+- **CLI Parser Fix and Rules Update**: Successfully fixed CLI argument parsing to handle stage/action names when no run command is specified and updated rules files for proper changelog date management
+  - Fixed unknown command error - when no subcommand is provided, first argument is now treated as stage or action name
+  - Implemented priority system - stage names have higher priority than action names when both exist with same name
+  - Added comprehensive support - supports both custom actions and built-in actions (version@check, git@untracked, etc.)
+  - Resolved user issue - `buildfab test-streaming` now works correctly instead of showing "unknown command" error
+  - Maintained backward compatibility - explicit `run` and `action` commands continue to work as before
+  - Enhanced user experience - users can now run stages and actions directly without specifying subcommands
+  - Comprehensive testing - verified with test-streaming.yml and priority testing with same-named stage/action
+  - Perfect CLI behavior - intuitive command-line interface that matches user expectations
+  - Updated rules files - enhanced versioning and complete changes rules with changelog date requirements
+  - Fixed all changelog dates - corrected all version dates using accurate git log information
+  - VERSION 0.8.7 RELEASED with CLI parser fix, rules enhancement, and comprehensive testing
 - **Ctrl+C Signal Handling and Command Output Fixes**: Successfully implemented comprehensive Ctrl+C signal handling and command output display improvements
   - Fixed Ctrl+C hanging issue - executor now properly handles context cancellation and terminates promptly without hanging
   - Added TERMINATED status display - when Ctrl+C is pressed, shows "⚠️ TERMINATED" instead of misleading "SUCCESS" status
