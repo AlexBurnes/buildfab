@@ -2,6 +2,7 @@
 package executor
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -571,19 +572,21 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 		}
 	}
 	
-	// Execute the command
+	// Execute the command with streaming output
 	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
-	output, err := cmd.CombinedOutput()
 	
-	// Call step output callback if provided and verbose mode is enabled
-	if e.opts.StepCallback != nil && e.opts.Verbose && len(output) > 0 {
-		e.opts.StepCallback.OnStepOutput(ctx, action.Name, string(output))
-	}
-	
-	// Only show output in verbose mode for custom actions
+	var err error
 	if e.opts.Verbose {
-		if ui, ok := e.opts.Output.(UI); ok {
-			ui.PrintCommandOutput(string(output))
+		// Use streaming output for verbose mode
+		err = e.executeCommandWithStreaming(ctx, cmd, action.Name)
+	} else {
+		// Use buffered output for non-verbose mode
+		output, cmdErr := cmd.CombinedOutput()
+		err = cmdErr
+		
+		// Call step output callback if provided and verbose mode is enabled
+		if e.opts.StepCallback != nil && e.opts.Verbose && len(output) > 0 {
+			e.opts.StepCallback.OnStepOutput(ctx, action.Name, string(output))
 		}
 	}
 	
@@ -599,6 +602,69 @@ func (e *Executor) executeCustomAction(ctx context.Context, action buildfab.Acti
 		Status:  buildfab.StatusOK,
 		Message: "command executed successfully",
 	}, nil
+}
+
+// executeCommandWithStreaming executes a command with real-time output streaming
+func (e *Executor) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd, actionName string) error {
+	// Create pipes for stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+	
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start command: %w", err)
+	}
+	
+	// Create channels for goroutine communication
+	done := make(chan error, 1)
+	
+	// Stream stdout
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			
+			// Call step output callback if provided - this handles the printing
+			if e.opts.StepCallback != nil {
+				e.opts.StepCallback.OnStepOutput(ctx, actionName, line)
+			}
+		}
+	}()
+	
+	// Stream stderr
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			
+			// Call step output callback if provided - this handles the printing
+			if e.opts.StepCallback != nil {
+				e.opts.StepCallback.OnStepOutput(ctx, actionName, line)
+			}
+		}
+	}()
+	
+	// Wait for command completion
+	go func() {
+		done <- cmd.Wait()
+	}()
+	
+	// Wait for either completion or context cancellation
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		// Kill the command if context is cancelled
+		cmd.Process.Kill()
+		return ctx.Err()
+	}
 }
 
 // getVersion returns the current version from the VERSION file

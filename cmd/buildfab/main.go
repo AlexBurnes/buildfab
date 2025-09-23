@@ -8,10 +8,10 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/AlexBurnes/buildfab/pkg/buildfab"
+	"github.com/AlexBurnes/buildfab/internal/ui"
 )
 
 const (
@@ -58,8 +58,6 @@ For example: buildfab pre-push is equivalent to buildfab run pre-push`,
 	RunE: runRoot,
 	// Disable automatic command suggestions to allow custom argument handling
 	DisableSuggestions: true,
-	// Allow unknown commands to be handled by runRoot
-	DisableFlagParsing: false,
 }
 
 // runCmd represents the run command
@@ -137,49 +135,6 @@ func main() {
 	rootCmd.AddCommand(listStepsCmd)
 	rootCmd.AddCommand(validateCmd)
 	
-	// Check if first argument is a known subcommand
-	args := os.Args[1:]
-	if len(args) > 0 {
-		// Check if first argument is a known subcommand
-		knownCommands := []string{"run", "action", "list-actions", "list-stages", "list-steps", "validate", "completion", "help"}
-		isKnownCommand := false
-		for _, cmd := range knownCommands {
-			if args[0] == cmd {
-				isKnownCommand = true
-				break
-			}
-		}
-		
-		// If not a known command and not a flag, treat as stage name
-		if !isKnownCommand && !strings.HasPrefix(args[0], "-") {
-			// Insert "run" as the first argument
-			args = append([]string{"run"}, args...)
-			os.Args = append([]string{os.Args[0]}, args...)
-		}
-		
-		// Handle case where first argument is a flag and second argument is a stage name
-		if !isKnownCommand && strings.HasPrefix(args[0], "-") && len(args) > 1 && !strings.HasPrefix(args[1], "-") {
-			// Check if second argument is a known command
-			isSecondArgKnownCommand := false
-			for _, cmd := range knownCommands {
-				if args[1] == cmd {
-					isSecondArgKnownCommand = true
-					break
-				}
-			}
-			
-			// If second argument is not a known command, treat it as a stage name
-			if !isSecondArgKnownCommand {
-				// Insert "run" before the second argument
-				newArgs := make([]string, 0, len(args)+1)
-				newArgs = append(newArgs, args[0]) // Keep the flag
-				newArgs = append(newArgs, "run")   // Insert "run"
-				newArgs = append(newArgs, args[1:]...) // Add the rest
-				os.Args = append([]string{os.Args[0]}, newArgs...)
-			}
-		}
-	}
-	
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -206,7 +161,9 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	
 	// If arguments provided, treat first argument as stage name for run command
 	// This implements the default behavior: buildfab pre-push -> buildfab run pre-push
-	return runStage(cmd, args)
+	// Create a new run command and execute it with the arguments
+	runCmd.SetArgs(args)
+	return runCmd.Execute()
 }
 
 const (
@@ -218,44 +175,7 @@ const (
 	colorGray   = "\033[90m"
 )
 
-// printHeader prints the v0.5.0 style header
-func printHeader(projectName, version string) {
-	// Handle version that already has 'v' prefix
-	versionDisplay := version
-	if !strings.HasPrefix(version, "v") {
-		versionDisplay = "v" + version
-	}
-	fmt.Printf("🚀 %s %s\n", projectName, versionDisplay)
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Printf("📦 Project: %s\n", projectName)
-	fmt.Printf("🏷️  Version: %s\n", versionDisplay)
-	fmt.Printf("\n")
-}
-
-// printStageHeader prints the stage header
-func printStageHeader(stageName string) {
-	fmt.Printf("▶️  Running stage: %s\n", stageName)
-	fmt.Printf("\n")
-}
-
-// printSimpleResult prints a simple result message
-func printSimpleResult(name string, success bool, duration time.Duration) {
-	fmt.Printf("\n")
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	
-	var icon, color, status string
-	if success {
-		icon = "🎉"
-		color = colorGreen
-		status = "SUCCESS"
-	} else {
-		icon = "💥"
-		color = colorRed
-		status = "FAILED"
-	}
-	
-	fmt.Printf("%s %s%s%s - %s (%.2fs)\n", icon, color, status, colorReset, name, duration.Seconds())
-}
+// Custom output functions removed - now using library UI system
 
 // runStage handles the run command
 func runStage(cmd *cobra.Command, args []string) error {
@@ -276,8 +196,10 @@ func runStage(cmd *cobra.Command, args []string) error {
 	}
 	version := getVersion()
 	
-	// Print header
-	printHeader(projectName, version)
+	// Print header using library UI
+	uiInstance := &ui.UI{}
+	uiInstance.PrintCLIHeader(projectName, version)
+	uiInstance.PrintProjectCheck(projectName, version)
 	
 	stageName := args[0]
 	

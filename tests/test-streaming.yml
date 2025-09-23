@@ -1,0 +1,33 @@
+project:
+  name: "test-streaming"
+
+actions:
+  - name: "long-running-command"
+    run: |
+      echo "Starting long-running command..."
+      for i in $(seq 1 10); do
+        echo "Step $i of 10"
+        sleep 1
+      done
+      echo "Long-running command completed!"
+
+  - name: "another-long-command"
+    run: |
+      echo "Starting another long command..."
+      for i in $(seq 1 5); do
+        echo "Another step $i of 5"
+        sleep 2
+      done
+      echo "Another command completed!"
+
+stages:
+  test-streaming:
+    steps:
+      - action: "long-running-command"
+      - action: "another-long-command"
+        require: ["long-running-command"]
+  
+  test-parallel:
+    steps:
+      - action: "long-running-command"
+      - action: "another-long-command"

@@ -65,8 +65,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 		return fmt.Errorf("stage not found: %s", stageName)
 	}
 
-	// Print stage header
-	fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s\n\n", stageName)
+	// Stage header will be printed by the library's UI system
 
 	// Create step callback to collect results
 	stepCallback := &SimpleStepCallback{
@@ -77,7 +76,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 		config:  r.config,
 	}
 
-	// Convert to complex options and use internal runner
+	// Convert to complex options for internal executor
 	complexOpts := &RunOptions{
 		ConfigPath:   r.opts.ConfigPath,
 		MaxParallel:  r.opts.MaxParallel,

@@ -1,6 +1,16 @@
 # Progress: buildfab
 
 ## What Works
+- **Streaming Output and CLI Unification**: Successfully implemented ordered streaming output and unified CLI/library systems
+  - Fixed streaming output ordering for parallel execution - steps run in parallel but display output sequentially in declaration order
+  - Eliminated mixed output between parallel steps with proper buffering and ordered display logic
+  - Fixed CLI argument parsing by removing custom logic that interfered with cobra's built-in parsing
+  - Unified output systems - CLI now uses library's UI system instead of duplicating output logic
+  - Enhanced StreamingOutputManager with proper control over streaming and step message timing
+  - Implemented proper step start and completion message ordering in declaration order
+  - Both silence and verbose modes work correctly with proper output ordering
+  - Added comprehensive test files in `tests/` directory with documentation
+  - Ready for v0.8.4 release with all streaming output issues resolved
 - **GoReleaser Configuration**: Successfully resolved GitHub repository owner reference issues
   - Updated `.goreleaser.yml` to use `AlexBurnes` instead of `burnes` for both Scoop and Homebrew tap owners
   - Fixed `docs/Deploy.md` to reference correct `AlexBurnes/buildfab-scoop-bucket` repository

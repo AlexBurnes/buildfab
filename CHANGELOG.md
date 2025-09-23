@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2025-01-27
+
 ### Fixed
+- **Streaming Output Ordering**: Fixed step start and completion messages to appear in declaration order during parallel execution
+  - Added `StreamingOutputManager` to control which step's output should be streamed
+  - Step start messages (`💻 step-name`) now appear only for the first step in declaration order
+  - Step completion messages (`✓ step-name`) now appear in the correct order
+  - Streaming output is shown only for the currently active step in declaration order
+  - Resolves mixed step messages when running parallel stages with verbose output
+- **Mixed Output Elimination**: Fixed mixed output between parallel steps during execution
+  - Implemented proper buffering and ordered display logic for parallel step execution
+  - Steps now run in parallel for performance but display output sequentially in declaration order
+  - Eliminated interleaved output between different steps running simultaneously
+  - Each step's output is displayed as a complete block when it becomes the active step
+- **CLI Argument Parsing**: Fixed CLI argument parsing issues with flag recognition
+  - Removed custom argument parsing logic that was interfering with cobra's built-in parsing
+  - Fixed issue where flags like `-c` were being treated as commands instead of flags
+  - CLI now properly uses cobra library for all argument parsing without custom interference
+  - Resolves command line parsing errors when using flags before subcommands
+- **Output System Unification**: Unified CLI and library output systems to eliminate duplication
+  - CLI now uses library's UI system (`internal/ui/ui.go`) instead of duplicating output logic
+  - Removed custom output functions from CLI (`printHeader`, `printStageHeader`, `printSimpleResult`)
+  - All output formatting is now centralized in the library's UI system
+  - Ensures consistency between CLI and library output formatting
+- **Test Organization**: Moved test files to `tests/` directory and added documentation
+  - Created `tests/README.md` with comprehensive test documentation
+  - Moved `test-streaming.yml` to `tests/` directory for better organization
+  - Added usage examples and expected behavior documentation for streaming output tests
+
+### Fixed
+- **Streaming Output Ordering**: Fixed step start and completion messages to appear in declaration order during parallel execution
+  - Added `StreamingOutputManager` to control which step's output should be streamed
+  - Step start messages (`💻 step-name`) now appear only for the first step in declaration order
+  - Step completion messages (`✓ step-name`) now appear in the correct order
+  - Streaming output is shown only for the currently active step in declaration order
+  - Resolves mixed step messages when running parallel stages with verbose output
+- **Test Organization**: Moved test files to `tests/` directory and added documentation
+  - Created `tests/README.md` with comprehensive test documentation
+  - Moved `test-streaming.yml` to `tests/` directory for better organization
+  - Added usage examples and expected behavior documentation for streaming output tests
 - **GoReleaser Configuration**: Fixed GitHub repository owner references in GoReleaser configuration
   - Updated `.goreleaser.yml` to use `AlexBurnes` instead of `burnes` for both Scoop and Homebrew tap owners
   - Updated `docs/Deploy.md` to reference correct `AlexBurnes/buildfab-scoop-bucket` repository

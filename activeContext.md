@@ -1,7 +1,7 @@
 # Active Context: buildfab
 
 ## Current Work Focus
-**GORELEASER CONFIGURATION FIXED!** Successfully resolved GitHub repository owner reference issues in GoReleaser configuration. **Fixed repository owner references** - updated `.goreleaser.yml` to use `AlexBurnes` instead of `burnes` for both Scoop and Homebrew tap owners, resolving 404 errors when GoReleaser tries to check default branches. **Updated documentation references** - fixed `docs/Deploy.md` to reference correct `AlexBurnes/buildfab-scoop-bucket` repository. **Verified GoReleaser dry run** - successfully tested GoReleaser configuration with `./bin/buildfab action goreleaser-dry-run -v` showing no more 404 errors and successful artifact creation. **Updated CHANGELOG.md** - documented GoReleaser configuration fixes in changelog. **Ready for release** - GoReleaser configuration now correctly points to AlexBurnes repositories and dry run completes successfully.
+**STREAMING OUTPUT AND CLI UNIFICATION COMPLETED!** Successfully implemented ordered streaming output for parallel execution and unified CLI/library output systems. **Fixed streaming output ordering** - steps now run in parallel but display output sequentially in declaration order, with only one step streaming at a time. **Fixed mixed output issues** - eliminated mixed output between parallel steps by implementing proper buffering and ordered display logic. **Fixed CLI argument parsing** - removed custom argument parsing logic that was interfering with cobra's built-in parsing, resolving flag recognition issues. **Unified output systems** - CLI now uses library's UI system instead of duplicating output logic, ensuring consistency between CLI and library. **Enhanced StreamingOutputManager** - implemented proper control over which step's output should be streamed and when step messages should appear. **Perfect parallel execution** - steps run simultaneously for performance but display output cleanly in declaration order. **Comprehensive testing** - verified both silence and verbose modes work correctly with proper output ordering. **Ready for v0.8.4 release** - all streaming output and CLI unification issues resolved.
 
 **AUTOMATED VERSION MANAGEMENT COMPLETED!** Successfully implemented comprehensive version management system with automatic packaging file updates. **Created version-bump-with-file script** - automated script that bumps version, updates VERSION file, and updates all packaging files (Windows Scoop, macOS Homebrew) in one command. **Updated versioning rules** - enhanced rules to use automated version bump script as recommended method. **Updated complete changes shortcut** - now uses automated version bump script for consistent packaging file updates. **Comprehensive testing** - verified script correctly updates VERSION file, Windows Scoop configuration, and macOS Homebrew formula with proper version numbers and URLs. **Perfect workflow integration** - version bumping now automatically maintains consistency across all packaging files. **VERSION 0.8.0 RELEASED!** Successfully completed automated version management implementation with comprehensive packaging file updates.
 
@@ -22,14 +22,17 @@
 **COMMAND ALIGNMENT AND DUPLICATE OUTPUT FIXES COMPLETED!** Successfully fixed command alignment and eliminated duplicate output issues. **Fixed command indentation** - multi-line commands now properly preserve relative indentation structure with 6-space base indentation. **Fixed duplicate output** - eliminated duplicate "FAILED - stage" messages by removing redundant `printSimpleResult` calls from CLI. **Perfect alignment** - commands maintain their original YAML indentation structure while being properly aligned with "to check run:" prefix. **Clean output** - single result message per stage execution with proper summary statistics.
 
 ## Recent Changes
-- **GoReleaser Configuration Fix**: Successfully resolved GitHub repository owner reference issues
-  - Updated `.goreleaser.yml` to use `AlexBurnes` instead of `burnes` for both Scoop and Homebrew tap owners
-  - Fixed `docs/Deploy.md` to reference correct `AlexBurnes/buildfab-scoop-bucket` repository
-  - Resolved 404 errors when GoReleaser tries to check default branches for package repositories
-  - Successfully tested GoReleaser dry run with `./bin/buildfab action goreleaser-dry-run -v`
-  - Dry run now completes successfully with no 404 errors and proper artifact creation
-  - Updated CHANGELOG.md to document GoReleaser configuration fixes
-  - GoReleaser configuration now correctly points to AlexBurnes repositories
+- **Streaming Output and CLI Unification**: Successfully implemented ordered streaming output and unified CLI/library systems
+  - Fixed streaming output ordering for parallel execution - steps run in parallel but display output sequentially
+  - Eliminated mixed output between parallel steps with proper buffering and ordered display logic
+  - Fixed CLI argument parsing by removing custom logic that interfered with cobra's built-in parsing
+  - Unified output systems - CLI now uses library's UI system instead of duplicating output logic
+  - Enhanced StreamingOutputManager with proper control over streaming and step message timing
+  - Implemented proper step start and completion message ordering in declaration order
+  - Added comprehensive test files in `tests/` directory with documentation
+  - Updated CHANGELOG.md to document streaming output and CLI unification fixes
+  - Both silence and verbose modes work correctly with proper output ordering
+  - Ready for v0.8.4 release with all streaming output issues resolved
 - **Automated Version Management**: Successfully implemented comprehensive version management system
   - Created `scripts/version-bump-with-file` script for automated version bumping
   - Script automatically updates VERSION file, Windows Scoop config, and macOS Homebrew formula

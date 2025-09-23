@@ -1,6 +1,7 @@
 package buildfab
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -438,26 +440,680 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// runStageInternal executes a stage using a simplified DAG approach
+// runStageInternal executes a stage using parallel execution with ordered streaming output
 func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	stage, _ := r.config.GetStage(stageName)
 	
-	// Simple sequential execution for now
-	// In a full implementation, this would use the DAG executor
+	// Build execution DAG
+	dag, err := r.buildDAG(stage.Steps)
+	if err != nil {
+		return fmt.Errorf("failed to build execution DAG: %w", err)
+	}
+	
+	// Execute DAG with parallel execution but ordered streaming output
+	results, err := r.executeDAGWithOrderedStreaming(ctx, dag, stage.Steps)
+	
+	// Check for errors in results
+	for _, result := range results {
+		if result.Status == StatusError {
+			// Find the step to check error policy
 	for _, step := range stage.Steps {
+				if step.Action == result.Name {
+					if step.OnError == "warn" {
+						// Log warning but continue
+						if r.opts.Verbose {
+							fmt.Fprintf(r.opts.ErrorOutput, "Warning: step %s failed: %v\n", step.Action, result.Error)
+						}
+						continue
+					}
+					// Default is "stop" - return error
+					return fmt.Errorf("step %s failed: %w", step.Action, result.Error)
+				}
+			}
+		}
+	}
+	
+	return err
+}
+
+// DAGNode represents a node in the execution DAG
+type DAGNode struct {
+	Step         Step
+	Action       Action
+	Dependencies []string
+	Dependents   []string
+}
+
+// StreamingOutputManager manages which step's output should be streamed
+type StreamingOutputManager struct {
+	steps     []Step
+	displayed map[string]bool
+	started   map[string]bool
+	mu        *sync.Mutex
+}
+
+// ShouldStreamOutput checks if the given step should have its output streamed
+func (s *StreamingOutputManager) ShouldStreamOutput(stepName string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Find the step in declaration order
+	stepIndex := -1
+	for i, step := range s.steps {
+		if step.Action == stepName {
+			stepIndex = i
+			break
+		}
+	}
+	
+	if stepIndex == -1 {
+		return false
+	}
+	
+	// Only allow streaming for the first step in declaration order that hasn't been displayed yet
+	// Check if all previous steps in declaration order have been displayed
+	for i := 0; i < stepIndex; i++ {
+		if !s.displayed[s.steps[i].Action] {
+			return false
+		}
+	}
+	
+	// Check if this step itself has been displayed - if so, don't stream
+	if s.displayed[stepName] {
+		return false
+	}
+	
+	return true
+}
+
+// ShouldShowStepStart checks if the given step should show its start message
+func (s *StreamingOutputManager) ShouldShowStepStart(stepName string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	// Find the step in declaration order
+	stepIndex := -1
+	for i, step := range s.steps {
+		if step.Action == stepName {
+			stepIndex = i
+			break
+		}
+	}
+	
+	if stepIndex == -1 {
+		return false
+	}
+	
+	// Check if all previous steps in declaration order have been started
+	for i := 0; i < stepIndex; i++ {
+		if !s.started[s.steps[i].Action] {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// MarkStepStarted marks a step as started
+func (s *StreamingOutputManager) MarkStepStarted(stepName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.started[stepName] = true
+}
+
+// buildDAG builds the execution DAG from stage steps
+func (r *Runner) buildDAG(steps []Step) (map[string]*DAGNode, error) {
+	dag := make(map[string]*DAGNode)
+	
+	// Create nodes for each step
+	for _, step := range steps {
 		action, exists := r.config.GetAction(step.Action)
 		if !exists {
-			return fmt.Errorf("action not found: %s", step.Action)
+			return nil, fmt.Errorf("action not found: %s", step.Action)
 		}
 		
+		node := &DAGNode{
+			Step:         step,
+			Action:       action,
+			Dependencies: step.Require,
+			Dependents:   []string{},
+		}
+		
+		dag[step.Action] = node
+	}
+	
+	// Build dependency relationships
+	for _, node := range dag {
+		for _, dep := range node.Dependencies {
+			if depNode, exists := dag[dep]; exists {
+				depNode.Dependents = append(depNode.Dependents, node.Step.Action)
+			} else {
+				return nil, fmt.Errorf("dependency not found: %s", dep)
+			}
+		}
+	}
+	
+	// Check for cycles
+	if err := r.detectCycles(dag); err != nil {
+		return nil, fmt.Errorf("circular dependency detected: %w", err)
+	}
+	
+	return dag, nil
+}
+
+// detectCycles detects cycles in the DAG using DFS
+func (r *Runner) detectCycles(dag map[string]*DAGNode) error {
+	visited := make(map[string]bool)
+	recStack := make(map[string]bool)
+	
+	var dfs func(string) error
+	dfs = func(nodeName string) error {
+		if recStack[nodeName] {
+			return fmt.Errorf("cycle detected involving node: %s", nodeName)
+		}
+		if visited[nodeName] {
+			return nil
+		}
+		
+		visited[nodeName] = true
+		recStack[nodeName] = true
+		defer func() { recStack[nodeName] = false }()
+		
+		node := dag[nodeName]
+		for _, dep := range node.Dependencies {
+			if err := dfs(dep); err != nil {
+				return err
+			}
+		}
+		
+		return nil
+	}
+	
+	for nodeName := range dag {
+		if !visited[nodeName] {
+			if err := dfs(nodeName); err != nil {
+				return err
+			}
+		}
+	}
+	
+	return nil
+}
+
+// executeDAGWithOrderedStreaming executes the DAG with parallel execution but ordered streaming output
+func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[string]*DAGNode, steps []Step) ([]Result, error) {
+	var results []Result
+	completed := make(map[string]bool)
+	failed := make(map[string]bool)
+	executing := make(map[string]bool)
+	displayed := make(map[string]bool)
+	started := make(map[string]bool)
+	
+	// Create a map of results by step name for quick lookup
+	resultMap := make(map[string]Result)
+	
+	// Create channels for communication
+	resultChan := make(chan Result, len(dag))
+	done := make(chan bool)
+	
+	// Mutex for thread-safe access to shared state
+	var mu sync.Mutex
+	
+	// Create a streaming output manager
+	streamingManager := &StreamingOutputManager{
+		steps:     steps,
+		displayed: displayed,
+		started:   make(map[string]bool),
+		mu:        &mu,
+	}
+	
+	// Start a goroutine to handle results and display them in order
+	go func() {
+		defer close(done)
+		for result := range resultChan {
+			mu.Lock()
+			results = append(results, result)
+			resultMap[result.Name] = result
+			completed[result.Name] = true
+			executing[result.Name] = false
+			
+			if result.Status == StatusError {
+				failed[result.Name] = true
+			}
+			mu.Unlock()
+			
+			// Display immediately if it's ready in declaration order
+			r.displayStepInOrder(ctx, result.Name, steps, resultMap, displayed, completed)
+			
+			// Check if we can now display the next step
+			r.checkAndDisplayNextStep(ctx, steps, resultMap, displayed, completed, started)
+		}
+	}()
+	
+	// Start execution goroutine that continuously starts new steps
+	go func() {
+		defer func() {
+			// Wait for all executing goroutines to complete before closing the channel
+			for {
+				mu.Lock()
+				allDone := true
+				for nodeName := range dag {
+					if executing[nodeName] {
+						allDone = false
+						break
+					}
+				}
+				mu.Unlock()
+				
+				if allDone {
+					break
+				}
+				
+				time.Sleep(10 * time.Millisecond)
+			}
+			close(resultChan)
+		}()
+		
+		for {
+			mu.Lock()
+			readySteps := r.getReadyStepsLocked(dag, completed, failed, executing)
+			mu.Unlock()
+			
+			if len(readySteps) == 0 {
+				// Check if all steps are completed or executing
+				mu.Lock()
+				allDone := true
+				for nodeName := range dag {
+					if !completed[nodeName] && !executing[nodeName] {
+						allDone = false
+						break
+					}
+				}
+				mu.Unlock()
+				
+				if allDone {
+					break
+				}
+				
+				// Wait a bit before checking again
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			
+			// Start ready steps immediately without waiting
+			for _, nodeName := range readySteps {
+				node := dag[nodeName]
+				
+				mu.Lock()
+				executing[nodeName] = true
+				mu.Unlock()
+				
+				// Skip if already failed and this node requires it
+				if r.hasFailedDependency(node, failed) {
+					failedDeps := r.getFailedDependencyNames(node, failed)
+					result := Result{
+						Name:   nodeName,
+						Status: StatusSkipped,
+						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
+					}
+					select {
+					case resultChan <- result:
+					case <-ctx.Done():
+						return
+					}
+					continue
+				}
+				
+				// Execute the node in parallel with streaming output control
+				go func(nodeName string, node *DAGNode) {
+					result, _ := r.executeActionForDAGWithStreamingControl(ctx, node.Action, streamingManager)
+					result.Name = nodeName
+					select {
+					case resultChan <- result:
+					case <-ctx.Done():
+						return
+					}
+				}(nodeName, node)
+				
+				// Check if we can display the first step immediately after starting execution
+				r.checkAndDisplayNextStep(ctx, steps, resultMap, displayed, completed, started)
+			}
+		}
+	}()
+	
+	<-done
+	
+	// Display any remaining steps that weren't displayed yet
+	r.displayRemainingSteps(ctx, steps, resultMap, displayed)
+	
+	return results, nil
+}
+
+// checkAndDisplayNextStep checks if the next step in declaration order can be displayed
+func (r *Runner) checkAndDisplayNextStep(ctx context.Context, steps []Step, resultMap map[string]Result, displayed map[string]bool, completed map[string]bool, started map[string]bool) {
+	// Find the next step that can be displayed
+	for _, step := range steps {
+		if !displayed[step.Action] {
+			// Check if we can display this step (either completed or currently executing)
+			if r.canDisplayStepInOrder(step, steps, displayed) {
+				// Show step start message if not already shown
+				if r.opts.StepCallback != nil && !started[step.Action] {
+					r.opts.StepCallback.OnStepStart(ctx, step.Action)
+					started[step.Action] = true
+				}
+				
+				// If completed, also show completion message
+				if completed[step.Action] {
+					r.displayStepInOrder(ctx, step.Action, steps, resultMap, displayed, completed)
+				}
+				break // Only display one step at a time
+			}
+		}
+	}
+}
+
+// displayStepInOrder displays a step only if it can be shown in declaration order
+func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps []Step, resultMap map[string]Result, displayed map[string]bool, completed map[string]bool) {
+	// Find the step in declaration order
+	for _, step := range steps {
+		if step.Action == stepName {
+			// Check if all previous steps in declaration order have been displayed
+			if r.canDisplayStepInOrder(step, steps, displayed) {
+				
+				// Only show completion message if the step is actually completed
+				if result, exists := resultMap[stepName]; exists && completed[stepName] {
+					// Display any buffered output for this step
+					if r.opts.StepCallback != nil && r.opts.Verbose && result.Message != "" {
+						r.opts.StepCallback.OnStepOutput(ctx, stepName, result.Message)
+					}
+					
+					if r.opts.StepCallback != nil {
+						status := StepStatusOK
+						message := "executed successfully"
+						
+						if result.Status == StatusWarn {
+							status = StepStatusWarn
+							message = result.Message
+						} else if result.Status == StatusError {
+							status = StepStatusError
+							message = result.Message
+						} else if result.Status == StatusSkipped {
+							status = StepStatusSkipped
+							message = result.Message
+						}
+						
+						r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, result.Duration)
+					}
+					displayed[stepName] = true
+				}
+			}
+			break
+		}
+	}
+}
+
+// canDisplayStepInOrder checks if a step can be displayed in declaration order
+func (r *Runner) canDisplayStepInOrder(step Step, steps []Step, displayed map[string]bool) bool {
+	// Find the position of this step in the declaration order
+	stepIndex := -1
+	for i, s := range steps {
+		if s.Action == step.Action {
+			stepIndex = i
+			break
+		}
+	}
+	
+	if stepIndex == -1 {
+		return false
+	}
+	
+	// Check if all previous steps in declaration order have been displayed
+	for i := 0; i < stepIndex; i++ {
+		if !displayed[steps[i].Action] {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// displayRemainingSteps displays any steps that weren't displayed yet
+func (r *Runner) displayRemainingSteps(ctx context.Context, steps []Step, resultMap map[string]Result, displayed map[string]bool) {
+	for _, step := range steps {
+		if !displayed[step.Action] {
+			if result, exists := resultMap[step.Action]; exists {
+				if r.opts.StepCallback != nil {
+					status := StepStatusOK
+					message := "executed successfully"
+					
+					if result.Status == StatusWarn {
+						status = StepStatusWarn
+						message = result.Message
+					} else if result.Status == StatusError {
+						status = StepStatusError
+						message = result.Message
+					} else if result.Status == StatusSkipped {
+						status = StepStatusSkipped
+						message = result.Message
+					}
+					
+					r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, result.Duration)
+				}
+				displayed[step.Action] = true
+			}
+		}
+	}
+}
+
+// executeDAGWithParallel executes the DAG with parallel execution
+func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAGNode, steps []Step) ([]Result, error) {
+	var results []Result
+	completed := make(map[string]bool)
+	failed := make(map[string]bool)
+	executing := make(map[string]bool)
+	
+	// Create a map of results by step name for quick lookup
+	resultMap := make(map[string]Result)
+	
+	// Create channels for communication
+	resultChan := make(chan Result, len(dag))
+	done := make(chan bool)
+	
+	// Mutex for thread-safe access to shared state
+	var mu sync.Mutex
+	
+	// Start a goroutine to handle results
+	go func() {
+		defer close(done)
+		for result := range resultChan {
+			mu.Lock()
+			results = append(results, result)
+			resultMap[result.Name] = result
+			completed[result.Name] = true
+			executing[result.Name] = false
+			
+			if result.Status == StatusError {
+				failed[result.Name] = true
+			}
+			mu.Unlock()
+		}
+	}()
+	
+	// Start execution goroutine that continuously starts new steps
+	go func() {
+		defer func() {
+			// Wait for all executing goroutines to complete before closing the channel
+			for {
+				mu.Lock()
+				allDone := true
+				for nodeName := range dag {
+					if executing[nodeName] {
+						allDone = false
+						break
+					}
+				}
+				mu.Unlock()
+				
+				if allDone {
+					break
+				}
+				
+				time.Sleep(10 * time.Millisecond)
+			}
+			close(resultChan)
+		}()
+		
+		for {
+			mu.Lock()
+			readySteps := r.getReadyStepsLocked(dag, completed, failed, executing)
+			mu.Unlock()
+			
+			if len(readySteps) == 0 {
+				// Check if all steps are completed or executing
+				mu.Lock()
+				allDone := true
+				for nodeName := range dag {
+					if !completed[nodeName] && !executing[nodeName] {
+						allDone = false
+						break
+					}
+				}
+				mu.Unlock()
+				
+				if allDone {
+					break
+				}
+				
+				// Wait a bit before checking again
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			
+			// Start ready steps immediately without waiting
+			for _, nodeName := range readySteps {
+				node := dag[nodeName]
+				
+				mu.Lock()
+				executing[nodeName] = true
+				mu.Unlock()
+				
+				// Skip if already failed and this node requires it
+				if r.hasFailedDependency(node, failed) {
+					failedDeps := r.getFailedDependencyNames(node, failed)
+					result := Result{
+						Name:   nodeName,
+						Status: StatusSkipped,
+						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
+					}
+					select {
+					case resultChan <- result:
+					case <-ctx.Done():
+						return
+					}
+					continue
+				}
+				
+				// Execute the node in parallel
+				go func(nodeName string, node *DAGNode) {
+					result, _ := r.executeActionForDAG(ctx, node.Action)
+					result.Name = nodeName
+					select {
+					case resultChan <- result:
+					case <-ctx.Done():
+						return
+					}
+				}(nodeName, node)
+			}
+		}
+	}()
+	
+	<-done
+	
+	return results, nil
+}
+
+// getReadyStepsLocked returns steps that are ready to execute (thread-safe version)
+func (r *Runner) getReadyStepsLocked(dag map[string]*DAGNode, completed map[string]bool, failed map[string]bool, executing map[string]bool) []string {
+	var ready []string
+	
+	for nodeName, node := range dag {
+		if completed[nodeName] || executing[nodeName] {
+			continue
+		}
+		
+		// Check if all dependencies are completed
+		if r.allDependenciesCompleted(node, completed) {
+			ready = append(ready, nodeName)
+		}
+	}
+	
+	return ready
+}
+
+// allDependenciesCompleted checks if all dependencies are completed
+func (r *Runner) allDependenciesCompleted(node *DAGNode, completed map[string]bool) bool {
+	for _, dep := range node.Dependencies {
+		if !completed[dep] {
+			return false
+		}
+	}
+	return true
+}
+
+// hasFailedDependency checks if any required dependency has failed
+func (r *Runner) hasFailedDependency(node *DAGNode, failed map[string]bool) bool {
+	for _, dep := range node.Dependencies {
+		if failed[dep] {
+			return true
+		}
+	}
+	return false
+}
+
+// getFailedDependencyNames returns the names of failed dependencies
+func (r *Runner) getFailedDependencyNames(node *DAGNode, failed map[string]bool) []string {
+	var failedDeps []string
+	for _, dep := range node.Dependencies {
+		if failed[dep] {
+			failedDeps = append(failedDeps, dep)
+		}
+	}
+	return failedDeps
+}
+
+// executeActionForDAGWithStreamingControl executes a single action for DAG execution with streaming control
+func (r *Runner) executeActionForDAGWithStreamingControl(ctx context.Context, action Action, streamingManager *StreamingOutputManager) (Result, error) {
+	// Step start callback will be handled by displayStepInOrder when the step becomes current
+
+	var result Result
+	var err error
+
+	if action.Uses != "" {
+		result, err = r.runBuiltInActionForDAG(ctx, action)
+	} else {
+		result, err = r.runCustomActionForDAGWithStreamingControl(ctx, action, streamingManager)
+	}
+
+	// Step completion callback will be handled by displayStepInOrder when the step completes
+
+	return result, err
+}
+
+// executeActionForDAG executes a single action for DAG execution
+func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result, error) {
 		// Call step start callback if provided
 		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepStart(ctx, step.Action)
-		}
-		
-		start := time.Now()
-		err := r.runActionInternal(ctx, action)
-		duration := time.Since(start)
+		r.opts.StepCallback.OnStepStart(ctx, action.Name)
+	}
+
+	var result Result
+	var err error
+
+	if action.Uses != "" {
+		result, err = r.runBuiltInActionForDAG(ctx, action)
+	} else {
+		result, err = r.runCustomActionForDAG(ctx, action)
+	}
 		
 		// Call step complete callback if provided
 		if r.opts.StepCallback != nil {
@@ -466,29 +1122,173 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 			
 			if err != nil {
 				status = StepStatusError
-				// Use the original error message for the callback, not the wrapped one
 				message = err.Error()
-				r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+		} else if result.Status == StatusWarn {
+			status = StepStatusWarn
+			message = result.Message
+		} else if result.Status == StatusError {
+			status = StepStatusError
+			message = result.Message
+		} else if result.Status == StatusSkipped {
+			status = StepStatusSkipped
+			message = result.Message
+		}
+		
+		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
+	}
+
+	return result, err
+}
+
+// runBuiltInActionForDAG executes a built-in action for DAG execution
+func (r *Runner) runBuiltInActionForDAG(ctx context.Context, action Action) (Result, error) {
+	if r.registry == nil {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("built-in action %s not supported: no action registry provided", action.Uses),
+		}, fmt.Errorf("built-in action %s not supported: no action registry provided", action.Uses)
+	}
+	
+	runner, exists := r.registry.GetRunner(action.Uses)
+	if !exists {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("unknown built-in action: %s", action.Uses),
+		}, fmt.Errorf("unknown built-in action: %s", action.Uses)
+	}
+	
+	result, err := runner.Run(ctx)
+	
+	// Call step output callback if provided and verbose mode is enabled
+	if r.opts.StepCallback != nil && r.opts.Verbose && result.Message != "" {
+		r.opts.StepCallback.OnStepOutput(ctx, action.Name, result.Message)
+	}
+	
+	// Return error if action failed
+	if result.Status == StatusError {
+		return result, fmt.Errorf("built-in action failed: %s", result.Message)
+	}
+	
+	return result, err
+}
+
+// runCustomActionForDAGWithStreamingControl executes a custom action for DAG execution with streaming control
+func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, action Action, streamingManager *StreamingOutputManager) (Result, error) {
+	if action.Run == "" {
+		return Result{
+			Status:  StatusError,
+			Message: "no run command specified",
+		}, fmt.Errorf("action %s has no run command", action.Name)
+	}
+	
+	// Create command
+	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
+	cmd.Dir = r.opts.WorkingDir
+	
+	// Set environment variables
+	cmd.Env = os.Environ()
+	for k, v := range r.opts.Variables {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
+	
+	var err error
+	var bufferedOutput string
+	if r.opts.Verbose && streamingManager.ShouldStreamOutput(action.Name) {
+		// Use streaming output for verbose mode and if this step should stream
+		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
+	} else {
+		// Use buffered output for non-verbose mode or if this step shouldn't stream
+		var stdout, stderr strings.Builder
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		
+		// Execute command
+		err = cmd.Run()
+		
+		// Store the output for later display when this step becomes active
+		if stdout.Len() > 0 {
+			bufferedOutput += stdout.String()
+		}
+		if stderr.Len() > 0 {
+			if bufferedOutput != "" {
+				bufferedOutput += "\n"
 			}
-			
-			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration)
+			bufferedOutput += stderr.String()
+		}
 		}
 		
 		if err != nil {
-			// Check error policy
-			if step.OnError == "warn" {
-				// Log warning but continue
-				if r.opts.Verbose {
-					fmt.Fprintf(r.opts.ErrorOutput, "Warning: step %s failed: %v\n", step.Action, err)
-				}
-				continue
-			}
-			// Default is "stop" - return error
-			return fmt.Errorf("step %s failed: %w", step.Action, err)
-		}
+		// Provide better error message with reproduction instructions
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("failed, to check run:\n  %s", action.Run),
+		}, fmt.Errorf("command failed: %w", err)
 	}
 	
-	return nil
+	return Result{
+		Status:  StatusOK,
+		Message: bufferedOutput, // Store buffered output in the result message
+	}, nil
+}
+
+// runCustomActionForDAG executes a custom action for DAG execution
+func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Result, error) {
+	if action.Run == "" {
+		return Result{
+			Status:  StatusError,
+			Message: "no run command specified",
+		}, fmt.Errorf("action %s has no run command", action.Name)
+	}
+	
+	// Create command
+	cmd := exec.CommandContext(ctx, "sh", "-c", action.Run)
+	cmd.Dir = r.opts.WorkingDir
+	
+	// Set environment variables
+	cmd.Env = os.Environ()
+	for k, v := range r.opts.Variables {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+	}
+	
+	var err error
+				if r.opts.Verbose {
+		// Use streaming output for verbose mode
+		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
+	} else {
+		// Use buffered output for non-verbose mode
+		var stdout, stderr strings.Builder
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		
+		// Execute command
+		err = cmd.Run()
+		
+		// Call step output callback if provided and verbose mode is enabled
+		if r.opts.StepCallback != nil && r.opts.Verbose {
+			if stdout.Len() > 0 {
+				r.opts.StepCallback.OnStepOutput(ctx, action.Name, stdout.String())
+			}
+			if stderr.Len() > 0 {
+				r.opts.StepCallback.OnStepOutput(ctx, action.Name, stderr.String())
+			}
+		}
+		
+		// Don't print output here - it's already handled by the step callback
+	}
+	
+	if err != nil {
+		// Provide better error message with reproduction instructions
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("failed, to check run:\n  %s", action.Run),
+		}, fmt.Errorf("command failed: %w", err)
+	}
+	
+	return Result{
+		Status:  StatusOK,
+		Message: "command executed successfully",
+	}, nil
 }
 
 // runActionInternal executes a single action
@@ -556,13 +1356,18 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	
-	// Capture output
+	var err error
+	if r.opts.Verbose {
+		// Use streaming output for verbose mode
+		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
+	} else {
+		// Use buffered output for non-verbose mode
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	
 	// Execute command
-	err := cmd.Run()
+		err = cmd.Run()
 	
 	// Call step output callback if provided and verbose mode is enabled
 	if r.opts.StepCallback != nil && r.opts.Verbose {
@@ -574,14 +1379,7 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 		}
 	}
 	
-	// Print output if verbose
-	if r.opts.Verbose {
-		if stdout.Len() > 0 {
-			fmt.Fprintf(r.opts.Output, "Output: %s\n", stdout.String())
-		}
-		if stderr.Len() > 0 {
-			fmt.Fprintf(r.opts.ErrorOutput, "Error: %s\n", stderr.String())
-		}
+		// Don't print output here - it's already handled by the step callback
 	}
 	
 	if err != nil {
@@ -590,4 +1388,67 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 	}
 	
 	return nil
+}
+
+// executeCommandWithStreaming executes a command with real-time output streaming
+func (r *Runner) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd, actionName string) error {
+	// Create pipes for stdout and stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+	
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start command: %w", err)
+	}
+	
+	// Create channels for goroutine communication
+	done := make(chan error, 1)
+	
+	// Stream stdout
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			
+			// Call step output callback if provided - this handles the printing
+			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepOutput(ctx, actionName, line)
+			}
+		}
+	}()
+	
+	// Stream stderr
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			
+			// Call step output callback if provided - this handles the printing
+			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepOutput(ctx, actionName, line)
+			}
+		}
+	}()
+	
+	// Wait for command completion
+	go func() {
+		done <- cmd.Wait()
+	}()
+	
+	// Wait for either completion or context cancellation
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		// Kill the command if context is cancelled
+		cmd.Process.Kill()
+		return ctx.Err()
+	}
 }
