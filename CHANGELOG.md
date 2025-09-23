@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.10] - 2025-09-23
+
+### Added
+- **VERSION File Integration**: Modified build process to read version from VERSION file
+  - VERSION file is now the primary source of truth for version information
+  - CMake build process prioritizes VERSION file over external version utilities
+  - Simplified version management with single source of truth
+  - Eliminates dependency on external version utility downloads
+  - All builds now consistently use VERSION file for version embedding
+  - Verified with `buildfab build` command - works perfectly
+
 ## [0.8.9] - 2025-09-23
 
 ### Fixed
