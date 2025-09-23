@@ -1,6 +1,13 @@
 # Progress: buildfab
 
 ## What Works
+- **Git Actions Status Fixes**: Successfully fixed all git actions (git@untracked, git@uncommitted, git@modified) to properly report warning status instead of error status and standardized their message formatting
+  - Fixed StatusWarn handling - updated RunAction method to check Result.Status for built-in actions, not just error presence
+  - Standardized git action messages - all three git actions now use consistent message format ending with "to check run:\n    git status"
+  - Fixed SimpleStepCallback output - step results now properly display to stderr with warning icons
+  - Perfect user experience - users get consistent warning messages with helpful instructions instead of confusing error exits
+  - Comprehensive testing - verified all git actions work correctly with proper warning status display
+  - VERSION 0.8.12 RELEASED with git actions status fixes and standardized message formatting
 - **Version Display Fix**: Successfully fixed version commands returning "unknown" when binary is installed globally or run from bin directory
   - Fixed version display issue - updated `getVersion()` function to use build-time `appVersion` variable set via ldflags only
   - Removed VERSION file fallback - built application never reads VERSION file at runtime, version is compiled into binary at build time

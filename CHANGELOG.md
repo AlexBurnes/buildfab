@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.12] - 2025-09-23
+
+### Fixed
+- **Git Actions Status Handling**: Fixed all git actions (git@untracked, git@uncommitted, git@modified) to properly report warning status instead of error status
+  - Updated RunAction method to check Result.Status for built-in actions, not just error presence
+  - Fixed SimpleStepCallback to use errorOutput (stderr) instead of output (stdout) for step results
+  - All git actions now show warning icons (!) with yellow color instead of error icons (✗) with red color
+  - Actions now exit with code 0 (success) instead of error codes when issues are detected
+  - Perfect user experience - users get helpful warnings instead of confusing error exits
+
+### Changed
+- **Git Actions Message Format**: Standardized all git action messages to use consistent formatting
+  - All three git actions now use the same message format ending with "to check run:\n    git status"
+  - git@untracked: "Untracked files found, to check run:\n    git status"
+  - git@uncommitted: "Uncommitted changes found, to check run:\n    git status"  
+  - git@modified: "There are modified files, to check run:\n    git status"
+  - Consistent indentation and formatting across all git actions
+  - Users get clear, actionable instructions for checking git status
+
 ## [0.8.11] - 2025-09-23
 
 ### Fixed

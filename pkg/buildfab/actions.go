@@ -74,9 +74,9 @@ func (a *GitUntrackedAction) Run(ctx context.Context) (Result, error) {
 	
 	if len(untracked) > 0 {
 		return Result{
-			Status:  StatusError,
-			Message: fmt.Sprintf("Untracked files found: %s", strings.Join(untracked, ", ")),
-		}, fmt.Errorf("untracked files present")
+			Status:  StatusWarn,
+			Message: "Untracked files found, to check run:\n    git status",
+		}, nil // Return nil error for warning status
 	}
 	
 	return Result{
@@ -113,9 +113,9 @@ func (a *GitUncommittedAction) Run(ctx context.Context) (Result, error) {
 	
 	if len(uncommitted) > 0 {
 		return Result{
-			Status:  StatusError,
-			Message: fmt.Sprintf("Uncommitted changes found: %s", strings.Join(uncommitted, ", ")),
-		}, fmt.Errorf("uncommitted changes present")
+			Status:  StatusWarn,
+			Message: "Uncommitted changes found, to check run:\n    git status",
+		}, nil // Return nil error for warning status
 	}
 	
 	return Result{

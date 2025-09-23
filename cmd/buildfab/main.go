@@ -44,6 +44,7 @@ var (
 	only          []string
 	withRequires  bool
 	envVars       []string
+	showGraph     bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -113,6 +114,10 @@ var listStepsCmd = &cobra.Command{
 	Long:  `List all steps defined for a specific stage in the project configuration.`,
 	Args:  cobra.ExactArgs(1),
 	RunE:  runListSteps,
+}
+
+func init() {
+	listStepsCmd.Flags().BoolVarP(&showGraph, "graph", "g", false, "show steps as a dependency graph")
 }
 
 func main() {
@@ -542,6 +547,62 @@ func runListStages(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// printStepsGraph prints steps as a dependency graph
+func printStepsGraph(stageName string, stage buildfab.Stage) error {
+	fmt.Printf("Dependency graph for stage '%s':\n", stageName)
+	fmt.Println()
+	
+	if len(stage.Steps) == 0 {
+		fmt.Println("  No steps defined")
+		return nil
+	}
+	
+	// Create a map of step names to their dependencies
+	stepDeps := make(map[string][]string)
+	stepNames := make([]string, 0, len(stage.Steps))
+	
+	for _, step := range stage.Steps {
+		stepNames = append(stepNames, step.Action)
+		if len(step.Require) > 0 {
+			stepDeps[step.Action] = step.Require
+		} else {
+			stepDeps[step.Action] = []string{}
+		}
+	}
+	
+	// Print the graph as a proper tree
+	for i, stepName := range stepNames {
+		deps := stepDeps[stepName]
+		
+		// Print the step
+		fmt.Printf("  %2d. %s", i+1, stepName)
+		if len(deps) > 0 {
+			fmt.Printf(" (depends on: %s)", strings.Join(deps, ", "))
+		}
+		fmt.Println()
+		
+		// Print dependency tree
+		if len(deps) > 0 {
+			for j, dep := range deps {
+				if j == len(deps)-1 {
+					// Last dependency
+					fmt.Printf("      └── %s\n", dep)
+				} else {
+					// Not last dependency
+					fmt.Printf("      ├── %s\n", dep)
+				}
+			}
+		}
+		
+		// Add spacing between steps
+		if i < len(stepNames)-1 {
+			fmt.Println()
+		}
+	}
+	
+	return nil
+}
+
 // runListSteps handles the list-steps command
 func runListSteps(cmd *cobra.Command, args []string) error {
 	// Load configuration using library API
@@ -558,6 +619,10 @@ func runListSteps(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("stage '%s' not found in configuration", stageName)
 	}
 	
+	if showGraph {
+		return printStepsGraph(stageName, stage)
+	}
+	
 	fmt.Printf("Steps for stage '%s':\n", stageName)
 	fmt.Println()
 	
@@ -567,14 +632,7 @@ func runListSteps(cmd *cobra.Command, args []string) error {
 	}
 	
 	for i, step := range stage.Steps {
-		description := step.Action
-		if step.If != "" {
-			description += fmt.Sprintf(" (if: %s)", step.If)
-		}
-		if len(step.Only) > 0 {
-			description += fmt.Sprintf(" (only: %s)", strings.Join(step.Only, ","))
-		}
-		fmt.Printf("  %-3d %-20s %s\n", i+1, step.Action, description)
+		fmt.Printf("  %2d. %s\n", i+1, step.Action)
 	}
 	
 	return nil

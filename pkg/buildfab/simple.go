@@ -134,7 +134,7 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
 		StepCallback: &SimpleStepCallback{
 			verbose: r.opts.Verbose,
 			debug:   r.opts.Debug,
-			output:  r.opts.Output,
+			output:  r.opts.ErrorOutput,  // Use errorOutput for step results
 			errorOutput: r.opts.ErrorOutput,
 			config:  r.config,
 		},
@@ -182,7 +182,7 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
 		StepCallback: &SimpleStepCallback{
 			verbose: r.opts.Verbose,
 			debug:   r.opts.Debug,
-			output:  r.opts.Output,
+			output:  r.opts.ErrorOutput,  // Use errorOutput for step results
 			errorOutput: r.opts.ErrorOutput,
 			config:  r.config,
 		},
@@ -214,10 +214,10 @@ const (
 
 func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
 	if c.verbose {
-		fmt.Fprintf(c.output, "  💻 %s\n", stepName)
+		fmt.Fprintf(c.errorOutput, "  💻 %s\n", stepName)
 	} else {
 		// In silence mode, show running indicator
-		fmt.Fprintf(c.output, "  %s%s%s %s running...\r", colorCyan, "○", colorReset, stepName)
+		fmt.Fprintf(c.errorOutput, "  %s%s%s %s running...\r", colorCyan, "○", colorReset, stepName)
 	}
 }
 
@@ -253,11 +253,11 @@ func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string
 		
 		if c.verbose {
 			// In verbose mode, just print the result
-			fmt.Fprintf(c.output, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
+			fmt.Fprintf(c.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
 		} else {
 			// In silence mode, replace the running indicator with the result
 			// Clear the running line and print the final result
-			fmt.Fprintf(c.output, "\r  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
+			fmt.Fprintf(c.errorOutput, "\r  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
 		}
 		c.displayed[stepName] = true
 	}

@@ -177,7 +177,7 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 		}
 
 		start := time.Now()
-		_, err := runner.Run(ctx)
+		result, err := runner.Run(ctx)
 		duration := time.Since(start)
 
 		// Call step complete callback if provided
@@ -189,6 +189,18 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 				status = StepStatusError
 				message = err.Error()
 				r.opts.StepCallback.OnStepError(ctx, actionName, err)
+			} else {
+				// Check the result status for built-in actions
+				if result.Status == StatusWarn {
+					status = StepStatusWarn
+					message = result.Message
+				} else if result.Status == StatusError {
+					status = StepStatusError
+					message = result.Message
+				} else if result.Status == StatusSkipped {
+					status = StepStatusSkipped
+					message = result.Message
+				}
 			}
 			
 			r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, duration)
