@@ -10,6 +10,29 @@ import (
 	"time"
 )
 
+// formatExecutionTime formats a duration in the requested format (e.g., '20s' or '1m 20s')
+// Only shows time for successful actions, returns empty string for errors
+func formatExecutionTime(status StepStatus, duration time.Duration) string {
+	// Only show execution time on success (OK status)
+	if status != StepStatusOK {
+		return ""
+	}
+	
+	// Format duration as requested: '20s' or '1m 20s'
+	totalSeconds := int(duration.Seconds())
+	minutes := totalSeconds / 60
+	seconds := totalSeconds % 60
+	
+	if minutes > 0 {
+		return fmt.Sprintf(" - in '%dm %ds'", minutes, seconds)
+	} else if seconds > 0 {
+		return fmt.Sprintf(" - in '%ds'", seconds)
+	} else {
+		// For sub-second durations, show as fractional seconds (e.g., '0.002s')
+		return fmt.Sprintf(" - in '%.3fs'", duration.Seconds())
+	}
+}
+
 // SimpleRunner provides a simplified interface for running stages and actions
 // without requiring callback setup. All output is handled internally.
 type SimpleRunner struct {
@@ -65,7 +88,11 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 		return fmt.Errorf("stage not found: %s", stageName)
 	}
 
-	// Stage header will be printed by the library's UI system
+	// Print stage start message
+	fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s\n\n", stageName)
+
+	// Start timing the stage execution
+	stageStart := time.Now()
 
 	// Create ordered step callback to collect results with proper ordering
 	stepCallback := NewOrderedStepCallback(stage.Steps, r.opts.Verbose, r.opts.Debug, r.opts.ErrorOutput, r.config)
@@ -88,6 +115,9 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	runner := NewRunner(r.config, complexOpts)
 	err := runner.RunStage(ctx, stageName)
 	
+	// Calculate stage execution duration
+	stageDuration := time.Since(stageStart)
+	
 	// Get collected results
 	results := stepCallback.GetResults()
 	
@@ -108,9 +138,9 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	
 	// Print summary with termination handling
 	if terminated {
-		r.printTerminatedSummary(stageName, results)
+		r.printTerminatedSummary(stageName, results, stageDuration)
 	} else {
-		r.printSummary(stageName, success, results)
+		r.printSummary(stageName, success, results, stageDuration)
 	}
 	
 	return err
@@ -252,6 +282,10 @@ func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string
 		
 		// Show step results with enhanced error messages
 		displayMessage := c.enhanceMessage(stepName, status, message)
+		
+		// Add execution time for successful actions
+		executionTime := formatExecutionTime(status, duration)
+		displayMessage += executionTime
 		
 		if c.verbose {
 			// In verbose mode, just print the result
@@ -481,7 +515,7 @@ func (r *SimpleRunner) getSkippedSteps(stageName string, executedResults []StepR
 }
 
 // printTerminatedSummary prints the stage result when execution was terminated
-func (r *SimpleRunner) printTerminatedSummary(stageName string, results []StepResult) {
+func (r *SimpleRunner) printTerminatedSummary(stageName string, results []StepResult, duration time.Duration) {
 	fmt.Fprintf(r.opts.Output, "\n")
 	fmt.Fprintf(r.opts.Output, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 	
@@ -489,7 +523,25 @@ func (r *SimpleRunner) printTerminatedSummary(stageName string, results []StepRe
 	color := colorYellow
 	status := "TERMINATED"
 	
-	fmt.Fprintf(r.opts.Output, "%s %s%s%s - %s\n", icon, color, status, colorReset, stageName)
+	// Format duration to match step execution time format: 'in 0.021s'
+	var durationStr string
+	if duration.Seconds() < 1 {
+		// For sub-second durations, show as fractional seconds (e.g., 'in 0.021s')
+		durationStr = fmt.Sprintf(" in %.3fs", duration.Seconds())
+	} else {
+		// For durations >= 1 second, show as whole seconds (e.g., 'in 3s')
+		totalSeconds := int(duration.Seconds())
+		minutes := totalSeconds / 60
+		seconds := totalSeconds % 60
+		
+		if minutes > 0 {
+			durationStr = fmt.Sprintf(" in %dm %ds", minutes, seconds)
+		} else {
+			durationStr = fmt.Sprintf(" in %ds", seconds)
+		}
+	}
+	
+	fmt.Fprintf(r.opts.Output, "%s %s%s%s - %s%s\n", icon, color, status, colorReset, stageName, durationStr)
 	
 	// Print summary
 	if len(results) > 0 {
@@ -557,7 +609,7 @@ func (r *SimpleRunner) printTerminatedSummary(stageName string, results []StepRe
 }
 
 // printSummary prints the stage result with summary
-func (r *SimpleRunner) printSummary(stageName string, success bool, results []StepResult) {
+func (r *SimpleRunner) printSummary(stageName string, success bool, results []StepResult, duration time.Duration) {
 	fmt.Fprintf(r.opts.Output, "\n")
 	fmt.Fprintf(r.opts.Output, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 	
@@ -572,7 +624,25 @@ func (r *SimpleRunner) printSummary(stageName string, success bool, results []St
 		status = "FAILED"
 	}
 	
-	fmt.Fprintf(r.opts.Output, "%s %s%s%s - %s\n", icon, color, status, colorReset, stageName)
+	// Format duration to match step execution time format: 'in 0.021s'
+	var durationStr string
+	if duration.Seconds() < 1 {
+		// For sub-second durations, show as fractional seconds (e.g., 'in 0.021s')
+		durationStr = fmt.Sprintf(" in %.3fs", duration.Seconds())
+	} else {
+		// For durations >= 1 second, show as whole seconds (e.g., 'in 3s')
+		totalSeconds := int(duration.Seconds())
+		minutes := totalSeconds / 60
+		seconds := totalSeconds % 60
+		
+		if minutes > 0 {
+			durationStr = fmt.Sprintf(" in %dm %ds", minutes, seconds)
+		} else {
+			durationStr = fmt.Sprintf(" in %ds", seconds)
+		}
+	}
+	
+	fmt.Fprintf(r.opts.Output, "%s %s%s%s - %s%s\n", icon, color, status, colorReset, stageName, durationStr)
 	
 	// Print summary
 	if len(results) > 0 {

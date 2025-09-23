@@ -1,15 +1,15 @@
 # Progress: buildfab
 
 ## What Works
-- **Shell Error Handling Fix**: Successfully implemented automatic shell error handling by adding `-euc` flags to all shell command executions
-  - Fixed shell error detection - commands that fail now properly cause actions to fail instead of continuing and reporting success
-  - Added automatic error handling - all shell commands now automatically use `sh -euc` which includes `-e` (exit on error), `-u` (exit on undefined variables), and `-c` (execute command)
-  - Fixed version-module action - the `ddffd` command that doesn't exist now properly fails the action instead of reporting success
-  - Enhanced error message formatting - improved error messages to show "to check run:" with properly aligned commands
-  - Updated all shell execution points - modified three key shell command execution methods in buildfab.go to use proper error handling flags
-  - Comprehensive testing - verified fix works correctly for single-line commands, multiline scripts, and complex actions
-  - Perfect user experience - users now get accurate error reporting when commands fail, with clear reproduction instructions
-  - VERSION 0.9.0 RELEASED with automatic shell error handling and proper failure reporting
+- **Execution Time Display Feature**: Successfully implemented comprehensive execution time measurement and display for both actions and stages
+  - Added step execution time formatting - created `formatExecutionTime` function that formats durations as requested: fractional seconds for <1s (e.g., '0.002s'), whole seconds for 1-59s (e.g., '20s'), and minutes+seconds for ≥60s (e.g., '1m 20s')
+  - Fixed timing measurement - corrected timing to measure actual step execution duration from start to completion, not including callback overhead
+  - Enhanced step completion display - successful actions now show execution time (e.g., "executed successfully - in '0.021s'") while errors and warnings don't show timing
+  - Added stage timing - stages now show start message ("▶️ Running stage: stage-name") and completion with timing ("🎉 SUCCESS - stage-name in 3s")
+  - Unified formatting - both step and stage execution times use consistent "in" format instead of parentheses for perfect consistency
+  - Updated both output systems - modified both SimpleStepCallback and OrderedOutputManager to display execution times consistently
+  - Perfect user experience - users get precise execution timing for successful operations with clear, consistent formatting
+  - VERSION 0.9.1 RELEASED with comprehensive execution time display feature and consistent formatting
 - **Ctrl+C Termination Message Fix**: Successfully fixed the issue where Ctrl+C was working but the output didn't show "TERMINATED!" after the refactoring to the new executor and output manager approach
   - Fixed termination detection - added proper context cancellation detection in both runStageInternal and executeStageWithCallback methods
   - Added printTerminatedSummary method - created new method in SimpleRunner that displays "⏹️ TERMINATED" message with yellow color and proper summary statistics

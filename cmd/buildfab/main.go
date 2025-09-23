@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/AlexBurnes/buildfab/pkg/buildfab"
-	"github.com/AlexBurnes/buildfab/internal/ui"
 	"github.com/AlexBurnes/buildfab/internal/version"
 )
 
@@ -237,20 +236,6 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
-	
-	// Print header using library UI - always show buildfab name and version
-	uiInstance := ui.New(verbose && !quiet, debug)
-	uiInstance.PrintCLIHeader("buildfab", getVersion())
-	
-	// Get project info for project check
-	projectName := "buildfab" // Default project name
-	if cfg.Project.Name != "" {
-		projectName = cfg.Project.Name
-	}
-	
-	// Get project version from version.library file or VERSION file
-	projectVersion := getProjectVersion()
-	uiInstance.PrintProjectCheck(projectName, projectVersion)
 	
 	stageName := args[0]
 	

@@ -272,7 +272,7 @@ func (o *OrderedOutputManager) showStepCompletion(stepName string) {
 	if data, exists := o.stepData[stepName]; exists {
 		// Output is now streamed immediately, so no need to show buffered output here
 		// Just show the completion message
-		o.showStepResult(stepName, data.Status, data.Message)
+		o.showStepResult(stepName, data.Status, data.Message, data.Duration)
 	}
 }
 
@@ -295,9 +295,13 @@ func (o *OrderedOutputManager) flushBufferedOutput(stepName string) {
 }
 
 // showStepResult shows the result message for a step
-func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus, message string) {
+func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus, message string, duration time.Duration) {
 	// Enhance error messages with reproduction instructions
 	enhancedMessage := o.enhanceMessage(stepName, status, message)
+	
+	// Add execution time for successful actions
+	executionTime := formatExecutionTime(status, duration)
+	enhancedMessage += executionTime
 	
 	var icon, color string
 	switch status {

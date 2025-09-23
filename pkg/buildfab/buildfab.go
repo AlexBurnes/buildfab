@@ -731,11 +731,17 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	var result Result
 	var err error
 
+	// Measure execution time from when the action actually starts to when it finishes
+	start := time.Now()
 	if action.Uses != "" {
 		result, err = r.runBuiltInActionForDAG(ctx, action)
 	} else {
 		result, err = r.runCustomActionForDAG(ctx, action)
 	}
+	duration := time.Since(start)
+	
+	// Set the duration in the result
+	result.Duration = duration
 
 	// Call step complete callback if provided
 	if r.opts.StepCallback != nil {
@@ -761,7 +767,7 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
 		}
 		
-		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
+		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, duration)
 	}
 
 	return result, err
@@ -1450,11 +1456,17 @@ func (r *Runner) executeActionForDAGWithStreamingControl(ctx context.Context, ac
 	var result Result
 	var err error
 
+	// Measure execution time from when the action actually starts to when it finishes
+	start := time.Now()
 	if action.Uses != "" {
 		result, err = r.runBuiltInActionForDAG(ctx, action)
 	} else {
 		result, err = r.runCustomActionForDAGWithStreamingControl(ctx, action, streamingManager)
 	}
+	duration := time.Since(start)
+	
+	// Set the duration in the result
+	result.Duration = duration
 
 	// Step completion callback will be handled by displayStepInOrder when the step completes
 
@@ -1471,11 +1483,17 @@ func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result
 	var result Result
 	var err error
 
+	// Measure execution time from when the action actually starts to when it finishes
+	start := time.Now()
 	if action.Uses != "" {
 		result, err = r.runBuiltInActionForDAG(ctx, action)
 	} else {
 		result, err = r.runCustomActionForDAG(ctx, action)
 	}
+	duration := time.Since(start)
+	
+	// Set the duration in the result
+	result.Duration = duration
 		
 	// Call step complete callback if provided
 	if r.opts.StepCallback != nil {
@@ -1501,7 +1519,7 @@ func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result
 			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
 		}
 		
-		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, result.Duration)
+		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, duration)
 	}
 
 	return result, err

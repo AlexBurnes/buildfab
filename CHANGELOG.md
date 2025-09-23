@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2025-09-24
+
+### Added
+- **Execution Time Display Feature**: Implemented comprehensive execution time measurement and display for both actions and stages
+  - Added step execution time formatting with `formatExecutionTime` function that formats durations as requested: fractional seconds for <1s (e.g., '0.002s'), whole seconds for 1-59s (e.g., '20s'), and minutes+seconds for ≥60s (e.g., '1m 20s')
+  - Enhanced step completion display - successful actions now show execution time (e.g., "executed successfully - in '0.021s'") while errors and warnings don't show timing
+  - Added stage timing - stages now show start message ("▶️ Running stage: stage-name") and completion with timing ("🎉 SUCCESS - stage-name in 3s")
+  - Unified formatting - both step and stage execution times use consistent "in" format instead of parentheses for perfect consistency
+  - Updated both output systems - modified both SimpleStepCallback and OrderedOutputManager to display execution times consistently
+  - Perfect user experience - users get precise execution timing for successful operations with clear, consistent formatting
+
+### Fixed
+- **Timing Measurement**: Corrected timing to measure actual step execution duration from start to completion, not including callback overhead
+- **Stage Output Format**: Unified stage output format to match action format by removing CLI header and project information display
+
+### Changed
+- **Stage Start Display**: Added stage start message display using UI.PrintStageHeader for better user feedback
+- **Stage Completion Format**: Updated stage completion messages to use "in" format instead of parentheses for consistency with step execution times
+
 ## [0.9.0] - 2025-09-23
 
 ### Added
