@@ -1,0 +1,14 @@
+project:
+  name: test-success
+  version: v0.1.0
+
+actions:
+  - name: success-command
+    run: |
+      echo "This command will succeed"
+      echo "All done!"
+
+stages:
+  test-success:
+    steps:
+      - action: success-command

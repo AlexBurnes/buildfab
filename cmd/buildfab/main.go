@@ -280,9 +280,15 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 			if testing.Testing() {
 				return err
 			}
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
-			fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
+			// Only show usage hints for stage/step not found errors, not for execution errors
+			if strings.Contains(err.Error(), "stage not found") || strings.Contains(err.Error(), "step not found") {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
+				fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
+			} else {
+				// For execution errors, just show the error without usage hints
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			}
 			os.Exit(1)
 		}
 		return nil
@@ -295,9 +301,15 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		if testing.Testing() {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
-		fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
+		// Only show usage hints for stage not found errors, not for execution errors
+		if strings.Contains(err.Error(), "stage not found") {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
+			fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
+		} else {
+			// For execution errors, SimpleRunner already handled the output via step callbacks
+			// Just exit with error code without printing the error again
+		}
 		os.Exit(1)
 	}
 	return nil
@@ -354,9 +366,15 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 		if testing.Testing() {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
-		fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
+		// Only show usage hints for action not found errors, not for execution errors
+		if strings.Contains(err.Error(), "action not found") {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
+			fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
+		} else {
+			// For execution errors, SimpleRunner already handled the output via step callbacks
+			// Just exit with error code without printing the error again
+		}
 		os.Exit(1)
 	}
 	return nil

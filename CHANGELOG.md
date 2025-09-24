@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2025-09-24
+
+### Added
+- **Single Action Status Display**: Comprehensive status display for single actions with proper SUCCESS, FAILED, and TERMINATED status handling
+  - Added final status display for single actions with "🎉 SUCCESS", "💥 FAILED", or "⏹️ TERMINATED" messages
+  - Enhanced termination handling with proper TERMINATED status when actions are interrupted with Ctrl+C
+  - Comprehensive status logic with proper priority system: TERMINATED > FAILED > SUCCESS
+
+### Fixed
+- **Double Error Messages**: Fixed issue where buildfab was showing action errors twice (once from step callback, once from CLI error handling)
+- **CLI Error Handling**: Improved CLI error handling to not show duplicate error messages for execution errors
+- **Status Display**: Single actions now show proper final status like stages do with appropriate icons and colors
+- **Termination Status**: When actions are interrupted with Ctrl+C, they now show "TERMINATED" status instead of incorrectly showing "FAILED"
+
+### Changed
+- **Error Output**: CLI now only shows usage hints for "not found" errors, not for execution errors
+- **Status Priority**: Implemented proper status priority system with appropriate visual formatting
+- **User Experience**: Users now get clean, non-duplicated error messages with accurate status feedback for all execution scenarios
+
 ## [0.10.1] - 2025-09-24
 
 ### Fixed

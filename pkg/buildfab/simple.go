@@ -155,6 +155,15 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
 	// Print action header
 	fmt.Fprintf(r.opts.Output, "▶️  Running action: %s\n\n", actionName)
 
+	// Create step callback to collect results
+	stepCallback := &SimpleStepCallback{
+		verbose: r.opts.Verbose,
+		debug:   r.opts.Debug,
+		output:  r.opts.ErrorOutput,  // Use errorOutput for step results
+		errorOutput: r.opts.ErrorOutput,
+		config:  r.config,
+	}
+
 	// Convert to complex options and use internal runner
 	complexOpts := &RunOptions{
 		ConfigPath:   r.opts.ConfigPath,
@@ -167,17 +176,42 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
 		ErrorOutput:  r.opts.ErrorOutput,
 		Only:         r.opts.Only,
 		WithRequires: r.opts.WithRequires,
-		StepCallback: &SimpleStepCallback{
-			verbose: r.opts.Verbose,
-			debug:   r.opts.Debug,
-			output:  r.opts.ErrorOutput,  // Use errorOutput for step results
-			errorOutput: r.opts.ErrorOutput,
-			config:  r.config,
-		},
+		StepCallback: stepCallback,
 	}
 
 	runner := NewRunner(r.config, complexOpts)
-	return runner.RunAction(ctx, actionName)
+	err := runner.RunAction(ctx, actionName)
+	
+	// Get collected results
+	results := stepCallback.GetResults()
+	
+	// Show final status summary for single actions
+	if len(results) > 0 {
+		// Check if execution was terminated due to context cancellation
+		terminated := ctx.Err() != nil
+		
+		// Check if any step failed
+		hasError := false
+		for _, result := range results {
+			if result.Status == StepStatusError {
+				hasError = true
+				break
+			}
+		}
+		
+		// Show final status
+		fmt.Fprintf(r.opts.Output, "\n")
+		fmt.Fprintf(r.opts.Output, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		if terminated {
+			fmt.Fprintf(r.opts.Output, "⏹️ %s%s%s - %s\n", colorYellow, "TERMINATED", colorReset, actionName)
+		} else if hasError {
+			fmt.Fprintf(r.opts.Output, "💥 %s%s%s - %s\n", colorRed, "FAILED", colorReset, actionName)
+		} else {
+			fmt.Fprintf(r.opts.Output, "🎉 %s%s%s - %s\n", colorGreen, "SUCCESS", colorReset, actionName)
+		}
+	}
+	
+	return err
 }
 
 // RunStageStep executes a specific step within a stage with automatic output handling
