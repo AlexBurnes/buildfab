@@ -1,15 +1,15 @@
 # Progress: buildfab
 
 ## What Works
-- **Execution Time Display Feature**: Successfully implemented comprehensive execution time measurement and display for both actions and stages
-  - Added step execution time formatting - created `formatExecutionTime` function that formats durations as requested: fractional seconds for <1s (e.g., '0.002s'), whole seconds for 1-59s (e.g., '20s'), and minutes+seconds for ≥60s (e.g., '1m 20s')
-  - Fixed timing measurement - corrected timing to measure actual step execution duration from start to completion, not including callback overhead
-  - Enhanced step completion display - successful actions now show execution time (e.g., "executed successfully - in '0.021s'") while errors and warnings don't show timing
-  - Added stage timing - stages now show start message ("▶️ Running stage: stage-name") and completion with timing ("🎉 SUCCESS - stage-name in 3s")
-  - Unified formatting - both step and stage execution times use consistent "in" format instead of parentheses for perfect consistency
-  - Updated both output systems - modified both SimpleStepCallback and OrderedOutputManager to display execution times consistently
-  - Perfect user experience - users get precise execution timing for successful operations with clear, consistent formatting
-  - VERSION 0.9.1 RELEASED with comprehensive execution time display feature and consistent formatting
+- **Platform Detection Variables Feature**: Successfully implemented comprehensive platform detection variables using the latest version-go library (v1.1.1) with new platform detection API
+  - Added platform variable system - created `pkg/buildfab/platform.go` with functions to detect platform, architecture, OS, OS version, and CPU count using `version.GetPlatformInfo()` from version-go v1.1.1
+  - Implemented variable interpolation - created `pkg/buildfab/variables.go` with `InterpolateVariables()` function to replace `${{ variable }}` placeholders in action commands
+  - Updated buildfab library integration - modified `pkg/buildfab/buildfab.go` and `pkg/buildfab/simple.go` to automatically include platform variables in `DefaultRunOptions()` and `DefaultSimpleRunOptions()`
+  - Enhanced CLI integration - updated `cmd/buildfab/main.go` to ensure platform variables are passed to runners in both `runActionDirect()` and `runStageDirect()` functions
+  - Updated project.yml - modified build actions to use new platform variables with `${{ platform }}`, `${{ arch }}`, `${{ os }}`, `${{ os_version }}`, and `${{ cpu }}` syntax
+  - Comprehensive testing - verified platform variables work in all execution contexts: single actions, stages, CLI execution, and API library usage
+  - Perfect integration - platform variables are automatically available in all action commands with seamless variable interpolation
+  - VERSION 0.10.0 RELEASED with comprehensive platform detection variables feature and API integration
 - **Ctrl+C Termination Message Fix**: Successfully fixed the issue where Ctrl+C was working but the output didn't show "TERMINATED!" after the refactoring to the new executor and output manager approach
   - Fixed termination detection - added proper context cancellation detection in both runStageInternal and executeStageWithCallback methods
   - Added printTerminatedSummary method - created new method in SimpleRunner that displays "⏹️ TERMINATED" message with yellow color and proper summary statistics

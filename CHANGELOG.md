@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2025-09-24
+
+### Added
+- **Platform Detection Variables Feature**: Implemented comprehensive platform detection variables using the latest version-go library (v1.1.1) with new platform detection API
+  - Added platform variable system - created `pkg/buildfab/platform.go` with functions to detect platform, architecture, OS, OS version, and CPU count using `version.GetPlatformInfo()` from version-go v1.1.1
+  - Implemented variable interpolation - created `pkg/buildfab/variables.go` with `InterpolateVariables()` function to replace `${{ variable }}` placeholders in action commands
+  - Updated buildfab library integration - modified `pkg/buildfab/buildfab.go` and `pkg/buildfab/simple.go` to automatically include platform variables in `DefaultRunOptions()` and `DefaultSimpleRunOptions()`
+  - Enhanced CLI integration - updated `cmd/buildfab/main.go` to ensure platform variables are passed to runners in both `runActionDirect()` and `runStageDirect()` functions
+  - Updated project.yml - modified build actions to use new platform variables with `${{ platform }}`, `${{ arch }}`, `${{ os }}`, `${{ os_version }}`, and `${{ cpu }}` syntax
+  - Comprehensive testing - verified platform variables work in all execution contexts: single actions, stages, CLI execution, and API library usage
+  - Perfect integration - platform variables are automatically available in all action commands with seamless variable interpolation
+
+### Changed
+- **Updated version-go dependency**: Upgraded from v0.8.22 to v1.1.1 to utilize new platform detection API
+- **Enhanced variable system**: Platform variables are now automatically included in all execution contexts
+- **Improved action execution**: All action commands now support `${{ variable }}` interpolation with platform information
+
+### Documentation
+- **Updated memory bank files**: Added platform detection variables feature to activeContext.md and progress.md
+- **Enhanced project.yml**: Added platform variable usage examples in build actions
+
 ## [0.9.1] - 2025-09-24
 
 ### Added

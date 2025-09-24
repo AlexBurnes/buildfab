@@ -167,6 +167,7 @@ actions:
   - name: build-binaries
     run: |
       # Build for current platform
+      echo "Building for platform: ${{ platform }}-${{ arch }}"
       if cmake --version | grep -q "3\.2[3-9]\|3\.[3-9]\|[4-9]\." && [ -f "./CMakeUserPresets.json" ]; then
         echo "Building with CMake preset"
         cmake --build --preset conan-release --target buildfab
@@ -198,6 +199,7 @@ actions:
   - name: build-all-platforms
     run: |
       # Build for all platforms
+      echo "Building for all platforms from ${{ platform }}-${{ arch }} (OS: ${{ os }} ${{ os_version }}, CPUs: ${{ cpu }})"
       if cmake --version | grep -q "3\.2[3-9]\|3\.[3-9]\|[4-9]\." && [ -f "./CMakeUserPresets.json" ]; then
         echo "Building with CMake preset"
         cmake --build --preset conan-release --target buildfab-all

@@ -104,12 +104,16 @@ type RunOptions struct {
 
 // DefaultRunOptions returns default run options
 func DefaultRunOptions() *RunOptions {
+	variables := make(map[string]string)
+	// Add platform variables by default
+	variables = AddPlatformVariables(variables)
+	
 	return &RunOptions{
 		ConfigPath:  ".project.yml",
 		MaxParallel: runtime.NumCPU(),
 		Verbose:     true,
 		Debug:       false,
-		Variables:   make(map[string]string),
+		Variables:   variables,
 		WorkingDir:  ".",
 		Output:      os.Stdout,
 		ErrorOutput: os.Stderr,
@@ -1566,8 +1570,17 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 		}, fmt.Errorf("action %s has no run command", action.Name)
 	}
 	
+	// Interpolate variables in the action
+	interpolatedAction, err := InterpolateAction(action, r.opts.Variables)
+	if err != nil {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("failed to interpolate variables: %v", err),
+		}, fmt.Errorf("failed to interpolate variables in action %s: %w", action.Name, err)
+	}
+	
 	// Create command with error handling flags
-	cmd := exec.CommandContext(ctx, "sh", "-euc", action.Run)
+	cmd := exec.CommandContext(ctx, "sh", "-euc", interpolatedAction.Run)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables
@@ -1576,7 +1589,6 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	
-	var err error
 	var bufferedOutput string
 	if r.opts.Verbose && streamingManager.ShouldStreamOutput(action.Name) {
 		// Use streaming output for verbose mode and if this step should stream
@@ -1625,8 +1637,17 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 		}, fmt.Errorf("action %s has no run command", action.Name)
 	}
 	
+	// Interpolate variables in the action
+	interpolatedAction, err := InterpolateAction(action, r.opts.Variables)
+	if err != nil {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("failed to interpolate variables: %v", err),
+		}, fmt.Errorf("failed to interpolate variables in action %s: %w", action.Name, err)
+	}
+	
 	// Create command with error handling flags
-	cmd := exec.CommandContext(ctx, "sh", "-euc", action.Run)
+	cmd := exec.CommandContext(ctx, "sh", "-euc", interpolatedAction.Run)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables
@@ -1635,8 +1656,7 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	
-	var err error
-				if r.opts.Verbose {
+	if r.opts.Verbose {
 		// Use streaming output for verbose mode
 		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
 	} else {
@@ -1730,8 +1750,14 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 		return fmt.Errorf("action %s has no run command", action.Name)
 	}
 	
+	// Interpolate variables in the action
+	interpolatedAction, err := InterpolateAction(action, r.opts.Variables)
+	if err != nil {
+		return fmt.Errorf("failed to interpolate variables in action %s: %w", action.Name, err)
+	}
+	
 	// Create command with error handling flags
-	cmd := exec.CommandContext(ctx, "sh", "-euc", action.Run)
+	cmd := exec.CommandContext(ctx, "sh", "-euc", interpolatedAction.Run)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables
@@ -1740,7 +1766,6 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	
-	var err error
 	if r.opts.Verbose {
 		// Use streaming output for verbose mode
 		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)

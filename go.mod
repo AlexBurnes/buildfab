@@ -3,7 +3,7 @@ module github.com/AlexBurnes/buildfab
 go 1.23.1
 
 require (
-	github.com/AlexBurnes/version-go v0.8.22
+	github.com/AlexBurnes/version-go v1.1.1
 	github.com/spf13/cobra v1.8.0
 	gopkg.in/yaml.v3 v3.0.1
 )

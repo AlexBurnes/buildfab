@@ -56,12 +56,16 @@ type SimpleRunOptions struct {
 
 // DefaultSimpleRunOptions returns default simple run options
 func DefaultSimpleRunOptions() *SimpleRunOptions {
+	variables := make(map[string]string)
+	// Add platform variables by default
+	variables = AddPlatformVariables(variables)
+	
 	return &SimpleRunOptions{
 		ConfigPath:  ".project.yml",
 		MaxParallel: runtime.NumCPU(),
 		Verbose:     false,
 		Debug:       false,
-		Variables:   make(map[string]string),
+		Variables:   variables,
 		WorkingDir:  ".",
 		Output:      os.Stdout,
 		ErrorOutput: os.Stderr,

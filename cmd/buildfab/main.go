@@ -248,6 +248,9 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		}
 	}
 	
+	// Add platform variables
+	variables = buildfab.AddPlatformVariables(variables)
+	
 	// If quiet is set, override verbose to false
 	effectiveVerbose := verbose && !quiet
 	
@@ -314,6 +317,9 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 			variables[parts[0]] = parts[1]
 		}
 	}
+	
+	// Add platform variables
+	variables = buildfab.AddPlatformVariables(variables)
 	
 	// Create simple run options
 	// If quiet is set, override verbose to false
