@@ -1,0 +1,35 @@
+# Test Windows platform detection using Wine with buildfab
+FROM ubuntu:24.04
+
+# Install Wine and dependencies
+RUN apt-get update && apt-get install -y \
+    wine \
+    wget \
+    ca-certificates \
+    xvfb \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure Wine to run headless
+ENV DISPLAY=:99
+ENV WINEDEBUG=-all
+
+# Create test directory
+WORKDIR /test
+
+# Copy the Windows buildfab utility binary
+COPY bin/buildfab-windows-amd64.exe /test/buildfab.exe
+
+# Copy platform configuration files
+COPY tests/cross-platform/windows-wine_configuration.yml /test/windows_configuration.yml
+
+# Copy VERSION file for built-in actions
+COPY VERSION /test/VERSION
+
+# Note: Using cmd.exe for Windows tests (always available in Wine)
+
+# Create test script
+COPY tests/cross-platform/test-platform-windows.sh /test/test-platform-windows.sh
+RUN chmod +x /test/test-platform-windows.sh
+
+# Initialize Wine and run tests
+CMD ["/bin/bash", "-c", "Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 & /test/test-platform-windows.sh"]

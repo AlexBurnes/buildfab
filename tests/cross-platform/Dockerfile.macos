@@ -1,0 +1,13 @@
+# macOS testing is not supported via Docker
+# This Dockerfile exists for reference but cannot be used
+# macOS testing requires a macOS host or VM
+
+FROM alpine:latest
+
+# Add informational message
+RUN echo "macOS testing via Docker is not supported" && \
+    echo "Please test macOS on an actual macOS host or VM" && \
+    echo "Use: ./bin/buildfab-darwin-amd64 -c tests/cross-platform/macos_configuration.yml check-detection"
+
+# Exit with error to indicate this is not supported
+CMD ["sh", "-c", "echo 'macOS Docker testing not supported' && exit 1"]

@@ -27,9 +27,10 @@ type Config struct {
 
 // Action represents a single action that can be executed
 type Action struct {
-	Name string `yaml:"name"`
-	Run  string `yaml:"run,omitempty"`
-	Uses string `yaml:"uses,omitempty"`
+	Name  string `yaml:"name"`
+	Run   string `yaml:"run,omitempty"`
+	Uses  string `yaml:"uses,omitempty"`
+	Shell string `yaml:"shell,omitempty"` // Optional shell specification
 }
 
 // Stage represents a collection of steps to execute
@@ -1453,6 +1454,51 @@ func (r *Runner) getFailedDependencyNames(node *DAGNode, failed map[string]bool)
 	return failedDeps
 }
 
+// getShellCommand returns the appropriate shell command and arguments
+// If userShell is specified, use that; otherwise use platform defaults
+func getShellCommand(userShell string) (string, []string, error) {
+	// If user specified a shell, use it
+	if userShell != "" {
+		// For Windows, automatically add .exe if not present
+		if runtime.GOOS == "windows" && !strings.HasSuffix(userShell, ".exe") {
+			userShell = userShell + ".exe"
+		}
+		
+		// Check if the specified shell is available
+		if _, err := exec.LookPath(userShell); err != nil {
+			return "", nil, fmt.Errorf("shell '%s' not found in PATH. Please install it or use a different shell", userShell)
+		}
+		
+		// Return appropriate arguments based on shell type
+		switch {
+		case strings.Contains(userShell, "bash"):
+			return userShell, []string{"-euc"}, nil
+		case strings.Contains(userShell, "powershell") || strings.Contains(userShell, "pwsh"):
+			return userShell, []string{"-NoProfile", "-Command"}, nil
+		case strings.Contains(userShell, "cmd"):
+			return userShell, []string{"/C"}, nil
+		case strings.Contains(userShell, "sh") || strings.Contains(userShell, "zsh") || strings.Contains(userShell, "fish"):
+			return userShell, []string{"-euc"}, nil
+		default:
+			// For unknown shells, try bash-style arguments first
+			return userShell, []string{"-euc"}, nil
+		}
+	}
+	
+	// No user shell specified - use platform defaults
+	if runtime.GOOS == "windows" {
+		// Default Windows shell: bash (Git Bash)
+		if _, err := exec.LookPath("bash.exe"); err == nil {
+			return "bash.exe", []string{"-euc"}, nil
+		}
+		// Fallback to cmd
+		return "cmd.exe", []string{"/C"}, nil
+	}
+	
+	// Default Unix shell: sh
+	return "sh", []string{"-euc"}, nil
+}
+
 // executeActionForDAGWithStreamingControl executes a single action for DAG execution with streaming control
 func (r *Runner) executeActionForDAGWithStreamingControl(ctx context.Context, action Action, streamingManager *StreamingOutputManager) (Result, error) {
 	// Step start callback will be handled by displayStepInOrder when the step becomes current
@@ -1580,7 +1626,15 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 	}
 	
 	// Create command with error handling flags
-	cmd := exec.CommandContext(ctx, "sh", "-euc", interpolatedAction.Run)
+	shell, shellArgs, err := getShellCommand(action.Shell)
+	if err != nil {
+		return Result{
+			Name:    action.Name,
+			Status:  StatusError,
+			Message: fmt.Sprintf("shell configuration error: %v", err),
+		}, fmt.Errorf("shell configuration error: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, shell, append(shellArgs, interpolatedAction.Run)...)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables
@@ -1647,7 +1701,15 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 	}
 	
 	// Create command with error handling flags
-	cmd := exec.CommandContext(ctx, "sh", "-euc", interpolatedAction.Run)
+	shell, shellArgs, err := getShellCommand(action.Shell)
+	if err != nil {
+		return Result{
+			Name:    action.Name,
+			Status:  StatusError,
+			Message: fmt.Sprintf("shell configuration error: %v", err),
+		}, fmt.Errorf("shell configuration error: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, shell, append(shellArgs, interpolatedAction.Run)...)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables
@@ -1757,7 +1819,11 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 	}
 	
 	// Create command with error handling flags
-	cmd := exec.CommandContext(ctx, "sh", "-euc", interpolatedAction.Run)
+	shell, shellArgs, err := getShellCommand(action.Shell)
+	if err != nil {
+		return fmt.Errorf("shell configuration error for action %s: %w", action.Name, err)
+	}
+	cmd := exec.CommandContext(ctx, shell, append(shellArgs, interpolatedAction.Run)...)
 	cmd.Dir = r.opts.WorkingDir
 	
 	// Set environment variables

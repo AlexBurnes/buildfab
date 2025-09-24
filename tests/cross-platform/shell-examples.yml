@@ -1,0 +1,46 @@
+# Example configurations showing different shell options
+
+project:
+  name: "shell-examples"
+  modules: ["buildfab"]
+  bin: "bin"
+
+stages:
+  shell-demo:
+    steps:
+      - action: default-shell
+      - action: bash-shell
+      - action: zsh-shell
+      - action: powershell-test
+
+actions:
+  # Default shell (platform-specific)
+  - name: default-shell
+    run: |
+      echo "=== Using default shell ==="
+      echo "Platform: ${{ platform }}"
+      echo "This uses the platform default shell"
+
+  # Explicit bash
+  - name: bash-shell
+    shell: bash
+    run: |
+      echo "=== Using bash explicitly ==="
+      echo "Platform: ${{ platform }}"
+      echo "Bash version: $BASH_VERSION"
+
+  # Explicit zsh (if available)
+  - name: zsh-shell
+    shell: zsh
+    run: |
+      echo "=== Using zsh explicitly ==="
+      echo "Platform: ${{ platform }}"
+      echo "Zsh version: $ZSH_VERSION"
+
+  # PowerShell (cross-platform)
+  - name: powershell-test
+    shell: pwsh
+    run: |
+      Write-Host "=== Using PowerShell ==="
+      Write-Host "Platform: ${{ platform }}"
+      Write-Host "PowerShell version: $PSVersionTable.PSVersion"

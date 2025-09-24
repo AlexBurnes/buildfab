@@ -1,0 +1,130 @@
+name: Cross-Platform Buildfab Detection Tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  cross-platform-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [ubuntu-24.04, debian-12, windows-wine]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+    
+    - name: Build buildfab utility
+      run: |
+        go build -o bin/buildfab-linux-amd64 ./cmd/buildfab
+        GOOS=windows GOARCH=amd64 go build -o bin/buildfab-windows-amd64.exe ./cmd/buildfab
+        GOOS=darwin GOARCH=amd64 go build -o bin/buildfab-darwin-amd64 ./cmd/buildfab
+    
+    - name: Test Ubuntu 24.04
+      if: matrix.platform == 'ubuntu-24.04'
+      run: |
+        docker build -f tests/cross-platform/Dockerfile.linux-ubuntu -t buildfab-test-ubuntu .
+        docker run --rm buildfab-test-ubuntu
+    
+    - name: Test Debian 12
+      if: matrix.platform == 'debian-12'
+      run: |
+        docker build -f tests/cross-platform/Dockerfile.linux-debian -t buildfab-test-debian .
+        docker run --rm buildfab-test-debian
+    
+    - name: Test Windows (Wine)
+      if: matrix.platform == 'windows-wine'
+      run: |
+        docker build -f tests/cross-platform/Dockerfile.windows -t buildfab-test-windows .
+        docker run --rm buildfab-test-windows
+    
+
+  platform-detection-unit-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ['1.23']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+    
+    - name: Build buildfab utility
+      run: go build -o bin/buildfab ./cmd/buildfab
+    
+    - name: Test platform detection with buildfab
+      run: |
+        echo "Testing platform detection on ${{ matrix.os }}"
+        if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+          echo "Running Linux platform detection test..."
+          ./bin/buildfab -c tests/cross-platform/linux_configuration.yml check-detection
+        elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          echo "Running Windows platform detection test..."
+          ./bin/buildfab.exe -c tests/cross-platform/windows_configuration.yml check-detection
+        elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          echo "Running macOS platform detection test..."
+          ./bin/buildfab -c tests/cross-platform/macos_configuration.yml check-detection
+        fi
+    
+    - name: Run platform detection unit tests
+      run: go test ./pkg/buildfab -v -run "TestPlatform.*|TestVariables.*"
+    
+    - name: Validate platform output
+      shell: bash
+      run: |
+        echo "Validating platform detection on ${{ matrix.os }}"
+        
+        # Set configuration file based on platform
+        if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+          CONFIG_FILE="tests/cross-platform/linux_configuration.yml"
+          BINARY="./bin/buildfab"
+        elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+          CONFIG_FILE="tests/cross-platform/windows_configuration.yml"
+          BINARY="./bin/buildfab.exe"
+        elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+          CONFIG_FILE="tests/cross-platform/macos_configuration.yml"
+          BINARY="./bin/buildfab"
+        fi
+        
+        # Test platform detection variables directly
+        PLATFORM=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "Platform:" | cut -d: -f2 | tr -d ' ')
+        ARCH=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "Architecture:" | cut -d: -f2 | tr -d ' ')
+        OS=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "OS:" | cut -d: -f2 | tr -d ' ')
+        OS_VERSION=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "OS Version:" | cut -d: -f2 | tr -d ' ')
+        CPU=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "CPU:" | cut -d: -f2 | tr -d ' ')
+        
+        echo "Platform: $PLATFORM"
+        echo "Architecture: $ARCH"
+        echo "OS: $OS"
+        echo "OS Version: $OS_VERSION"
+        echo "CPU: $CPU"
+        
+        # Validate outputs are not empty
+        [ -n "$PLATFORM" ] || (echo "Platform is empty" && exit 1)
+        [ -n "$ARCH" ] || (echo "Architecture is empty" && exit 1)
+        [ -n "$OS" ] || (echo "OS is empty" && exit 1)
+        [ -n "$OS_VERSION" ] || (echo "OS Version is empty" && exit 1)
+        [ -n "$CPU" ] || (echo "CPU count is empty" && exit 1)
+        
+        # Validate CPU is a number
+        if ! [[ "$CPU" =~ ^[0-9]+$ ]]; then
+          echo "CPU count is not a number: $CPU"
+          exit 1
+        fi
+        
+        echo "✅ All platform detection outputs are valid on ${{ matrix.os }}"

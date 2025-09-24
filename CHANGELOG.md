@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2025-09-25
+
+### Added
+- **Comprehensive cross-platform testing system**: Implemented validation testing that compares detected platform values against expected values and fails on mismatch
+- **Enhanced platform detection validation**: Added comprehensive validation for Linux (Ubuntu/Debian), Windows (Wine), and macOS platforms with proper error handling and clear success/failure messages
+- **Cross-platform test configuration**: Added `test` stage to `.project.yml` for local execution of cross-platform tests with `buildfab test`
+- **Container runtime detection**: Automatic detection of Podman (preferred) or Docker for cross-platform testing with proper fallback handling
+- **Platform-specific validation logic**: PowerShell scripting for Windows validation, bash scripting for Linux/macOS validation with proper syntax for each platform
+
+### Fixed
+- **Fixed YAML syntax errors**: Resolved malformed action definitions and dangling action configurations in `.project.yml` test stage
+- **Fixed project configuration structure**: Cleaned up test stage configuration to remove syntax errors and malformed YAML
+- **Fixed cross-platform test execution**: All tests now passing: Ubuntu, Debian, Windows (Wine), and macOS (with graceful skip on non-macOS hosts)
+- **Fixed test validation system**: Platform detection variables are actively validated against expected values with clear error messages and proper exit codes
+
+### Changed
+- **Simplified test configuration**: Removed complex Git Bash testing and focused on essential cross-platform functionality with `cmd.exe` and PowerShell for Windows
+- **Enhanced test workflow**: Streamlined test workflow with consistent container runtime detection and proper error handling throughout
+- **Updated test documentation**: Enhanced cross-platform README with validation testing details and platform-specific configuration information
+- **Improved test reliability**: Clean test suite with comprehensive validation system ensuring platform detection accuracy
+
 ## [0.10.3] - 2025-09-24
 
 ### Added

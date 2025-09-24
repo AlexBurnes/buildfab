@@ -42,6 +42,20 @@ stages:
       - action: goreleaser-dry-run
         require: [create-installers, check-goreleaser]
 
+  test:
+    steps:
+      - action: build-cross-platform-binaries
+      - action: check-binaries
+        require: [build-cross-platform-binaries]
+      - action: test-linux-ubuntu
+        require: [check-binaries]
+      - action: test-linux-debian
+        require: [check-binaries]
+      - action: test-windows
+        require: [check-binaries]
+      - action: test-macos
+        require: [check-binaries]
+
   release:
     steps:
       - action: check-conan
@@ -206,6 +220,25 @@ actions:
         cmake --build .build --target buildfab-all
       fi
 
+  - name: build-cross-platform-binaries
+    run: |
+      # Build cross-platform binaries for testing
+      echo "Building cross-platform binaries for testing..."
+      
+      # Build Linux AMD64
+      echo "Building Linux AMD64..."
+      GOOS=linux GOARCH=amd64 go build -o bin/buildfab-linux-amd64 ./cmd/buildfab
+      
+      # Build Windows AMD64
+      echo "Building Windows AMD64..."
+      GOOS=windows GOARCH=amd64 go build -o bin/buildfab-windows-amd64.exe ./cmd/buildfab
+      
+      # Build macOS AMD64
+      echo "Building macOS AMD64..."
+      GOOS=darwin GOARCH=amd64 go build -o bin/buildfab-darwin-amd64 ./cmd/buildfab
+      
+      echo "✓ Cross-platform binaries built successfully"
+
   # Installer creation actions
   - name: create-installers
     run: |
@@ -222,3 +255,133 @@ actions:
     run: |
       export PATH="$(go env GOPATH)/bin:$PATH"
       goreleaser release --clean
+
+  # Binary checking actions
+  - name: check-binaries
+    run: |
+      # Check if all required binaries exist in bin/ directory
+      echo "Checking binaries in bin/ directory..."
+      if [ -f "bin/buildfab" ]; then
+        echo "✓ Main binary found: bin/buildfab"
+        bin/buildfab --version
+      else
+        echo "✗ Main binary not found: bin/buildfab"
+        exit 1
+      fi
+      
+      # Check for cross-platform binaries if they exist
+      for platform in linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64; do
+        if [ -f "bin/buildfab-${platform}" ] || [ -f "bin/buildfab-${platform}.exe" ]; then
+          echo "✓ Cross-platform binary found: bin/buildfab-${platform}"
+        fi
+      done
+      
+      echo "✓ All required binaries are present"
+
+  # Cross-platform testing actions - using buildfab parallel execution
+  - name: test-linux-ubuntu
+    run: |
+      echo "Testing Linux Ubuntu 24.04 with container runtime..."
+      
+      # Detect container runtime (prefer podman over docker)
+      if command -v podman >/dev/null 2>&1; then
+        CONTAINER_RUNTIME="podman"
+        echo "Using Podman (rootless)"
+      elif command -v docker >/dev/null 2>&1; then
+        CONTAINER_RUNTIME="docker"
+        echo "Using Docker"
+      else
+        echo "❌ Neither podman nor docker found. Please install podman or docker."
+        exit 1
+      fi
+      
+      # Build container image for Ubuntu
+      echo "Building Ubuntu container image..."
+      $CONTAINER_RUNTIME build -f tests/cross-platform/Dockerfile.linux-ubuntu -t buildfab-test-ubuntu .
+      
+      # Run tests in Ubuntu container
+      echo "Running Ubuntu tests..."
+      $CONTAINER_RUNTIME run --rm buildfab-test-ubuntu
+      echo "✅ Ubuntu tests completed"
+
+  - name: test-linux-debian
+    run: |
+      echo "Testing Linux Debian 12 with container runtime..."
+      
+      # Detect container runtime (prefer podman over docker)
+      if command -v podman >/dev/null 2>&1; then
+        CONTAINER_RUNTIME="podman"
+        echo "Using Podman (rootless)"
+      elif command -v docker >/dev/null 2>&1; then
+        CONTAINER_RUNTIME="docker"
+        echo "Using Docker"
+      else
+        echo "❌ Neither podman nor docker found. Please install podman or docker."
+        exit 1
+      fi
+      
+      # Build container image for Debian
+      echo "Building Debian container image..."
+      $CONTAINER_RUNTIME build -f tests/cross-platform/Dockerfile.linux-debian -t buildfab-test-debian .
+      
+      # Run tests in Debian container
+      echo "Running Debian tests..."
+      $CONTAINER_RUNTIME run --rm buildfab-test-debian
+      echo "✅ Debian tests completed"
+
+  - name: test-windows
+    run: |
+      echo "Testing Windows (via Wine) with container runtime..."
+      
+      # Detect container runtime (prefer podman over docker)
+      if command -v podman >/dev/null 2>&1; then
+        CONTAINER_RUNTIME="podman"
+        echo "Using Podman (rootless)"
+      elif command -v docker >/dev/null 2>&1; then
+        CONTAINER_RUNTIME="docker"
+        echo "Using Docker"
+      else
+        echo "❌ Neither podman nor docker found. Please install podman or docker."
+        exit 1
+      fi
+      
+      # Build container image for Windows
+      echo "Building Windows container image..."
+      $CONTAINER_RUNTIME build -f tests/cross-platform/Dockerfile.windows -t buildfab-test-windows .
+      
+      # Run tests in Windows container
+      echo "Running Windows tests..."
+      $CONTAINER_RUNTIME run --rm buildfab-test-windows
+      echo "✅ Windows tests completed"
+
+  - name: test-macos
+    run: |
+      echo "Testing macOS platform detection..."
+      echo "Note: Full macOS testing requires a macOS host or VM"
+      
+      # Check if we're on a macOS host using uname
+      if [ "$(uname -s)" = "Darwin" ]; then
+        # We're on macOS, test the binary directly
+        if [ -f "bin/buildfab-darwin-amd64" ]; then
+          echo "Testing macOS binary with platform detection..."
+          if ./bin/buildfab-darwin-amd64 -c tests/cross-platform/macos_configuration.yml check-detection; then
+            echo "✅ macOS platform detection test passed"
+          else
+            echo "❌ macOS platform detection test failed"
+            exit 1
+          fi
+        else
+          echo "⚠️ macOS binary not found, building it..."
+          GOOS=darwin GOARCH=amd64 go build -o bin/buildfab-darwin-amd64 ./cmd/buildfab
+          if ./bin/buildfab-darwin-amd64 -c tests/cross-platform/macos_configuration.yml check-detection; then
+            echo "✅ macOS platform detection test passed"
+          else
+            echo "❌ macOS platform detection test failed"
+            exit 1
+          fi
+        fi
+      else
+        # We're on Linux/Windows, skip macOS testing
+        echo "⚠️ Skipping macOS test (not on macOS host - detected: $(uname -s))"
+        echo "✅ macOS test skipped - requires macOS host"
+      fi

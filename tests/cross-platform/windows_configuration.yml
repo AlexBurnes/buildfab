@@ -1,0 +1,28 @@
+project:
+  name: "buildfab-platform-test"
+  modules: ["buildfab"]
+  bin: "bin"
+
+stages:
+  check-detection:
+    steps:
+      - action: platform-info
+
+actions:
+  - name: platform-info
+    run: |
+      echo "=== Buildfab Platform Detection Test ==="
+      echo "Testing on Windows platform"
+      echo ""
+      echo "Platform: ${{ platform }}"
+      echo "Architecture: ${{ arch }}"
+      echo "OS: ${{ os }}"
+      echo "OS Version: ${{ os_version }}"
+      echo "CPU: ${{ cpu }}"
+      echo ""
+      echo "=== Platform Detection Variables Test ==="
+      echo "Testing variable interpolation with platform variables..."
+      echo "Current platform is ${{ platform }} with architecture ${{ arch }}"
+      echo "Running on ${{ os }} version ${{ os_version }} with ${{ cpu }} CPU cores"
+      echo ""
+      echo "✅ Platform detection test completed successfully"
