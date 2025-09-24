@@ -280,6 +280,9 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 			if testing.Testing() {
 				return err
 			}
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
+			fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
 			os.Exit(1)
 		}
 		return nil
@@ -292,6 +295,9 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		if testing.Testing() {
 			return err
 		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
+		fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
 		os.Exit(1)
 	}
 	return nil
@@ -342,7 +348,18 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 	actionName := args[0]
 	
 	// Run action using simple API
-	return runner.RunAction(ctx, actionName)
+	err = runner.RunAction(ctx, actionName)
+	if err != nil {
+		// In test mode, return the error instead of exiting
+		if testing.Testing() {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "To see available stages run: buildfab list-stages\n")
+		fmt.Fprintf(os.Stderr, "To see available actions run: buildfab list-actions\n")
+		os.Exit(1)
+	}
+	return nil
 }
 
 // Custom output functions removed - now using library UI system

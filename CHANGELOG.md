@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2025-09-24
+
+### Fixed
+- **Error Message Improvements**: Fixed silent error handling and improved error message grammar for non-existent stages and actions
+  - Fixed silent error handling - resolved issue where buildfab was not reporting anything when stage, name, or unknown arguments were provided
+  - Added proper error output - CLI now displays clear error messages before exiting instead of silent failures
+  - Enhanced error messages - improved grammar from "To see list stages" to "To see available stages" for better readability
+  - Added helpful guidance - error messages now include suggestions to run `buildfab list-stages` and `buildfab list-actions` to discover available options
+  - Comprehensive testing - verified all error scenarios work correctly with proper error messages and helpful guidance
+  - Perfect user experience - users now get clear, actionable error messages with helpful suggestions instead of silent failures
+
 ## [0.10.0] - 2025-09-24
 
 ### Added

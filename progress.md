@@ -1,6 +1,14 @@
 # Progress: buildfab
 
 ## What Works
+- **Error Message Improvements**: Successfully improved error message grammar and user experience for non-existent stages and actions
+  - Fixed silent error handling - resolved issue where buildfab was not reporting anything when stage, name, or unknown arguments were provided
+  - Added proper error output - CLI now displays clear error messages before exiting instead of silent failures
+  - Enhanced error messages - improved grammar from "To see list stages" to "To see available stages" for better readability
+  - Added helpful guidance - error messages now include suggestions to run `buildfab list-stages` and `buildfab list-actions` to discover available options
+  - Comprehensive testing - verified all error scenarios work correctly with proper error messages and helpful guidance
+  - Perfect user experience - users now get clear, actionable error messages with helpful suggestions instead of silent failures
+  - VERSION 0.10.1 RELEASED with enhanced user experience and proper grammar
 - **Platform Detection Variables Feature**: Successfully implemented comprehensive platform detection variables using the latest version-go library (v1.1.1) with new platform detection API
   - Added platform variable system - created `pkg/buildfab/platform.go` with functions to detect platform, architecture, OS, OS version, and CPU count using `version.GetPlatformInfo()` from version-go v1.1.1
   - Implemented variable interpolation - created `pkg/buildfab/variables.go` with `InterpolateVariables()` function to replace `${{ variable }}` placeholders in action commands
