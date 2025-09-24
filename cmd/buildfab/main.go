@@ -193,8 +193,21 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Load configuration to check if argument is a stage or action
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
-	// If config loading fails, treat as stage name (fallback behavior)
-	return runStageDirect(cmd, args)
+		// Check if it's a validation error
+		if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
+		   strings.Contains(err.Error(), "duplicate action name") ||
+		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+			// In test mode, return the error instead of exiting
+			if testing.Testing() {
+				return err
+			}
+			// Print error with line number and exit directly to avoid duplication with cobra error handling
+			enhancedError := enhanceValidationError(configPath, err)
+			fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
+			os.Exit(1)
+		}
+		// If config loading fails, treat as stage name (fallback behavior)
+		return runStageDirect(cmd, args)
 	}
 	
 	stageOrActionName := args[0]
@@ -234,6 +247,19 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	// Load configuration using library API
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
+		// Check if it's a validation error
+		if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
+		   strings.Contains(err.Error(), "duplicate action name") ||
+		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+			// In test mode, return the error instead of exiting
+			if testing.Testing() {
+				return err
+			}
+			// Print colored error with line number and exit directly
+			enhancedError := enhanceValidationError(configPath, err)
+			fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
+			os.Exit(1)
+		}
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 	
@@ -324,6 +350,19 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 	// Load configuration using library API
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
+		// Check if it's a validation error
+		if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
+		   strings.Contains(err.Error(), "duplicate action name") ||
+		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+			// In test mode, return the error instead of exiting
+			if testing.Testing() {
+				return err
+			}
+			// Print colored error with line number and exit directly
+			enhancedError := enhanceValidationError(configPath, err)
+			fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
+			os.Exit(1)
+		}
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 	
@@ -397,7 +436,7 @@ func runListActions(cmd *cobra.Command, args []string) error {
 	// Load configuration using library API
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return handleConfigLoadError(configPath, err)
 	}
 	
 	// Get built-in actions using library API
@@ -437,6 +476,19 @@ func runValidate(cmd *cobra.Command, args []string) error {
 	// Load configuration using library API
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
+		// Check if it's a validation error
+		if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
+		   strings.Contains(err.Error(), "duplicate action name") ||
+		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+			// In test mode, return the error instead of exiting
+			if testing.Testing() {
+				return err
+			}
+			// Print error with line number and exit directly to avoid duplication with cobra error handling
+			enhancedError := enhanceValidationError(configPath, err)
+			fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
+			os.Exit(1)
+		}
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 	
@@ -453,7 +505,7 @@ func runListStages(cmd *cobra.Command, args []string) error {
 	// Load configuration using library API
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return handleConfigLoadError(configPath, err)
 	}
 	
 	fmt.Println("Defined stages in project configuration:")
@@ -534,7 +586,7 @@ func runListSteps(cmd *cobra.Command, args []string) error {
 	// Load configuration using library API
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return handleConfigLoadError(configPath, err)
 	}
 	
 	stageName := args[0]
@@ -562,4 +614,114 @@ func runListSteps(cmd *cobra.Command, args []string) error {
 	}
 	
 	return nil
+}
+
+// handleConfigLoadError handles configuration loading errors with enhanced validation error messages
+func handleConfigLoadError(configPath string, err error) error {
+	// Check if it's a validation error
+	if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
+	   strings.Contains(err.Error(), "duplicate action name") ||
+	   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+		// In test mode, return the error instead of exiting
+		if testing.Testing() {
+			return err
+		}
+		// Print error with line number and exit directly to avoid duplication with cobra error handling
+		enhancedError := enhanceValidationError(configPath, err)
+		fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
+		os.Exit(1)
+	}
+	return fmt.Errorf("failed to load configuration: %w", err)
+}
+
+// enhanceValidationError adds line number information to validation errors
+func enhanceValidationError(configPath string, err error) string {
+	// Try to extract step number from error message
+	// Error format: "step X in stage Y must have an action"
+	errorStr := err.Error()
+	
+	// Read the config file to find the actual line number
+	content, readErr := os.ReadFile(configPath)
+	if readErr != nil {
+		// If we can't read the file, return original error
+		return errorStr
+	}
+	
+	lines := strings.Split(string(content), "\n")
+	
+	// Look for step validation errors
+	if strings.Contains(errorStr, "step") && strings.Contains(errorStr, "must have an action") {
+		// Extract step number from error message
+		parts := strings.Fields(errorStr)
+		var stepNum int
+		for i, part := range parts {
+			if part == "step" && i+1 < len(parts) {
+				fmt.Sscanf(parts[i+1], "%d", &stepNum)
+				break
+			}
+		}
+		
+		if stepNum > 0 {
+			// Find the build stage and count steps
+			inBuildStage := false
+			stepCount := 0
+			for lineNum, line := range lines {
+				line = strings.TrimSpace(line)
+				
+				if strings.HasPrefix(line, "build:") || strings.HasPrefix(line, "test:") {
+					inBuildStage = true
+					continue
+				}
+				
+				if inBuildStage {
+					if strings.HasPrefix(line, "  ") && !strings.HasPrefix(line, "    ") {
+						// This is a new stage or section, we're out of build stage
+						if !strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "    ") {
+							// Still in build stage
+						} else {
+							break
+						}
+					}
+					
+					if strings.HasPrefix(line, "- action:") {
+						stepCount++
+						if stepCount == stepNum {
+							// Found the problematic line
+							return fmt.Sprintf("%s:%d: %s", configPath, lineNum+1, errorStr)
+						}
+					} else if strings.HasPrefix(line, "- require:") && stepCount == stepNum-1 {
+						// This is a require line without action - this is the problem
+						return fmt.Sprintf("%s:%d: %s", configPath, lineNum+1, errorStr)
+					}
+				}
+			}
+		}
+	}
+	
+	// For other validation errors, try to find relevant lines
+	if strings.Contains(errorStr, "duplicate action name") {
+		// Extract action name from error
+		parts := strings.Fields(errorStr)
+		var actionName string
+		for i, part := range parts {
+			if part == "duplicate" && i+2 < len(parts) && parts[i+1] == "action" && parts[i+2] == "name:" {
+				if i+3 < len(parts) {
+					actionName = parts[i+3]
+					break
+				}
+			}
+		}
+		
+		if actionName != "" {
+			// Find the duplicate action definition
+			for lineNum, line := range lines {
+				if strings.Contains(line, fmt.Sprintf("name: %s", actionName)) {
+					return fmt.Sprintf("%s:%d: %s", configPath, lineNum+1, errorStr)
+				}
+			}
+		}
+	}
+	
+	// If we can't find specific line, return original error
+	return errorStr
 }

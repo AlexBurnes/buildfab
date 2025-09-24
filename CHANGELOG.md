@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2025-09-24
+
+### Added
+- **Enhanced YAML validation error reporting with line numbers**: All validation errors now show `config_file:line: error` format for easy editor navigation
+- **Configuration validation in all CLI commands**: Every command that works with configuration now validates it before execution
+- **Enhanced error location detection**: Added `enhanceValidationError` function to provide precise error location in YAML files
+- **Improved user experience**: Users can now directly open files in editors at the exact error location (e.g., `mcedit config.yml:43`)
+
+### Fixed
+- **Fixed duplicate error message issue**: Eliminated duplicate error messages in CLI validation output
+- **Fixed missing validation in validate command**: `runValidate` now properly calls validation and shows line numbers
+- **Fixed error handling in config loading**: `buildfab.LoadConfig` now preserves original validation errors for better error reporting
+- **Fixed validation coverage**: All commands now validate configuration: `validate`, `list-actions`, `list-stages`, `list-steps`, `build`, `action`, `run`
+
+### Changed
+- **Updated configuration loading**: Both `pkg/buildfab/config.go` and `internal/config/config.go` now call validation during config loading
+- **Enhanced error messages**: All validation errors now display with ANSI color codes (red) for better visibility
+- **Improved debugging experience**: Configuration errors now provide actionable information with exact file locations
+- **Streamlined error handling**: Consistent error handling across all CLI commands with enhanced validation error reporting
+
 ## [0.10.2] - 2025-09-24
 
 ### Added

@@ -60,7 +60,7 @@ func (l *Loader) Load() (*buildfab.Config, error) {
 
 	// Validate configuration
 	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("configuration validation failed: %w", err)
+		return nil, err // Return original validation error to preserve line number information
 	}
 
 	return &config, nil

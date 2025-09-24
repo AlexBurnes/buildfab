@@ -46,6 +46,11 @@ func LoadConfig(path string) (*Config, error) {
 		config.Project.BinDir = filepath.Dir(path)
 	}
 	
+	// Validate configuration
+	if err := config.Validate(); err != nil {
+		return nil, err // Return original validation error to preserve line number information
+	}
+	
 	return &config, nil
 }
 
