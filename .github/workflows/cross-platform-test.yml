@@ -81,21 +81,14 @@ jobs:
       run: |
         echo "Validating platform detection on ${{ matrix.os }}"
         
-        # Set binary based on platform
-        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          BINARY="./bin/buildfab.exe"
-        else
-          BINARY="./bin/buildfab"
-        fi
-        
         CONFIG_FILE="tests/cross-platform/unified-platform-validation.yml"
         
         # Test platform detection variables directly
-        PLATFORM=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "Platform:" | cut -d: -f2 | tr -d ' ')
-        ARCH=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "Architecture:" | cut -d: -f2 | tr -d ' ')
-        OS=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "OS:" | cut -d: -f2 | tr -d ' ')
-        OS_VERSION=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "OS Version:" | cut -d: -f2 | tr -d ' ')
-        CPU=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "CPU:" | cut -d: -f2 | tr -d ' ')
+        PLATFORM=$(./bin/buildfab -c $CONFIG_FILE check-detection 2>&1 | grep "Platform:" | cut -d: -f2 | tr -d ' ')
+        ARCH=$(./bin/buildfab -c $CONFIG_FILE check-detection 2>&1 | grep "Architecture:" | cut -d: -f2 | tr -d ' ')
+        OS=$(./bin/buildfab -c $CONFIG_FILE check-detection 2>&1 | grep "OS:" | cut -d: -f2 | tr -d ' ')
+        OS_VERSION=$(./bin/buildfab -c $CONFIG_FILE check-detection 2>&1 | grep "OS Version:" | cut -d: -f2 | tr -d ' ')
+        CPU=$(./bin/buildfab -c $CONFIG_FILE check-detection 2>&1 | grep "CPU:" | cut -d: -f2 | tr -d ' ')
         
         echo "Platform: $PLATFORM"
         echo "Architecture: $ARCH"

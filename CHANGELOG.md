@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.4] - 2025-09-25
+
+### Fixed
+- **GitHub Actions Windows binary path**: Fixed GitHub Actions Windows platform detection test by correcting binary path logic
+  - Simplified binary path handling by removing unnecessary platform-specific logic
+  - Go automatically handles .exe extension on Windows, so unified `./bin/buildfab` path works for all platforms
+  - Eliminated complex conditional logic in GitHub Actions workflow
+  - Fixed Windows test failures on windows-latest runners
+  - Enhanced cross-platform testing reliability across all GitHub Actions runners
+
 ## [0.16.3] - 2025-09-25
 
 ### Updated
