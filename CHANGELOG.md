@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.3] - 2025-09-25
+
+### Documentation
+- **Complete Changes Workflow Rule**: Updated rule-complete-changes.mdc with enhanced workflow and comprehensive push failure recovery process
+  - Enhanced workflow with proper buildfab action usage (install-binary)
+  - Added version bump type selection (patch/minor/major) based on project changes
+  - Implemented proper commit message template with `<change details>` placeholder for future use
+  - Added comprehensive push failure recovery process with detailed 5-step recovery workflow
+  - Perfect rule coverage now includes proper error handling, push failure recovery, and template-based commit messages
+  - Tested complete workflow execution with successful version bump to v0.15.3
+
 ## [0.15.2] - 2025-09-25
 
 ### Fixed
