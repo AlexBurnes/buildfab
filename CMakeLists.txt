@@ -196,10 +196,26 @@ set(BUILD_DIR "${CMAKE_SOURCE_DIR}/bin")
 # Create build directory
 file(MAKE_DIRECTORY ${BUILD_DIR})
 
-# Set build flags
+# Read VERSION file dynamically for each build
+execute_process(
+    COMMAND cat ${CMAKE_SOURCE_DIR}/VERSION
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE DYNAMIC_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE VERSION_READ_RESULT
+)
+
+if(VERSION_READ_RESULT EQUAL 0 AND DYNAMIC_VERSION)
+    message(STATUS "Dynamic VERSION: ${DYNAMIC_VERSION}")
+else()
+    message(WARNING "Failed to read VERSION file, using cached version: ${FULL_GIT_VERSION}")
+    set(DYNAMIC_VERSION ${FULL_GIT_VERSION})
+endif()
+
+# Set build flags - use dynamic version
 set(GO_BUILD_FLAGS
     -trimpath
-    -ldflags "-X main.appVersion=${FULL_GIT_VERSION} -s -w"
+    -ldflags "-X main.appVersion=${DYNAMIC_VERSION} -s -w"
 )
 
 # Set test flags
