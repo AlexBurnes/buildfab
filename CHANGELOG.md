@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **GitHub Actions platform detection tests**: Fixed failing platform-detection-unit-tests by updating workflow to use unified configuration instead of removed individual platform files
+  - Updated `.github/workflows/cross-platform-test.yml` to use `unified-platform-validation.yml` instead of `linux_configuration.yml`, `windows_configuration.yml`, and `macos_configuration.yml`
+  - Simplified platform detection test to use single unified configuration with platform-specific variants
+  - Updated `tests/cross-platform/README.md` to reflect new unified configuration approach
+  - Verified unified configuration works correctly on Linux platform with proper validation
+
 ### Future Enhancements
 - **Platform-specific tool installation**: Extend pre-check and pre-install tools for other platforms with conditional execution using `when` conditions
   - Add platform-specific variants for tool installation actions (Windows, macOS, Linux) with appropriate `when` conditions using `${{ platform }}` variable

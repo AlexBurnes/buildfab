@@ -70,16 +70,8 @@ jobs:
     - name: Test platform detection with buildfab
       run: |
         echo "Testing platform detection on ${{ matrix.os }}"
-        if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-          echo "Running Linux platform detection test..."
-          ./bin/buildfab -c tests/cross-platform/linux_configuration.yml check-detection
-        elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          echo "Running Windows platform detection test..."
-          ./bin/buildfab.exe -c tests/cross-platform/windows_configuration.yml check-detection
-        elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-          echo "Running macOS platform detection test..."
-          ./bin/buildfab -c tests/cross-platform/macos_configuration.yml check-detection
-        fi
+        echo "Running unified platform detection test..."
+        ./bin/buildfab -c tests/cross-platform/unified-platform-validation.yml check-detection
     
     - name: Run platform detection unit tests
       run: go test ./pkg/buildfab -v -run "TestPlatform.*|TestVariables.*"
@@ -89,17 +81,14 @@ jobs:
       run: |
         echo "Validating platform detection on ${{ matrix.os }}"
         
-        # Set configuration file based on platform
-        if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-          CONFIG_FILE="tests/cross-platform/linux_configuration.yml"
-          BINARY="./bin/buildfab"
-        elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-          CONFIG_FILE="tests/cross-platform/windows_configuration.yml"
+        # Set binary based on platform
+        if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
           BINARY="./bin/buildfab.exe"
-        elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-          CONFIG_FILE="tests/cross-platform/macos_configuration.yml"
+        else
           BINARY="./bin/buildfab"
         fi
+        
+        CONFIG_FILE="tests/cross-platform/unified-platform-validation.yml"
         
         # Test platform detection variables directly
         PLATFORM=$($BINARY -c $CONFIG_FILE check-detection 2>&1 | grep "Platform:" | cut -d: -f2 | tr -d ' ')

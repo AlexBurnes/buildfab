@@ -138,10 +138,8 @@ echo "macOS testing requires actual macOS host or VM"
 Test buildfab platform detection directly on each platform:
 
 ```bash
-# Test on current platform
-./bin/buildfab -c tests/cross-platform/linux_configuration.yml check-detection
-./bin/buildfab -c tests/cross-platform/windows_configuration.yml check-detection
-./bin/buildfab -c tests/cross-platform/darwin_configuration.yml check-detection
+# Test on current platform using unified configuration
+./bin/buildfab -c tests/cross-platform/unified-platform-validation.yml check-detection
 ```
 
 ### 3. GitHub Actions Testing
@@ -217,11 +215,9 @@ Running on darwin version darwin with 8 CPU cores
 - `Dockerfile.darwin` - Darwin test environment (NOT SUPPORTED - requires macOS host)
 
 ### Platform Configuration Files
-- `linux_configuration.yml` - Linux platform detection test configuration
-- `windows_configuration.yml` - Windows platform detection test configuration
+- `unified-platform-validation.yml` - Unified cross-platform validation configuration with variants
 - `windows-wine_configuration.yml` - Windows testing under Wine emulation
 - `windows-git-bash_configuration.yml` - Windows shell configuration testing
-- `darwin_configuration.yml` - macOS platform detection test configuration
 
 ### Test Scripts
 - `test-platform.sh` - Linux platform detection tests using buildfab
@@ -245,10 +241,8 @@ GOOS=darwin GOARCH=amd64 go build -o bin/buildfab-darwin-amd64 ./cmd/buildfab
 For manual testing on different platforms:
 
 ```bash
-# Test platform detection with buildfab
-./bin/buildfab -c tests/cross-platform/linux_configuration.yml check-detection
-./bin/buildfab -c tests/cross-platform/windows_configuration.yml check-detection
-./bin/buildfab -c tests/cross-platform/darwin_configuration.yml check-detection
+# Test platform detection with buildfab using unified configuration
+./bin/buildfab -c tests/cross-platform/unified-platform-validation.yml check-detection
 
 # Test comprehensive platform info
 ./bin/buildfab --help | grep -E "(platform|arch|os|cpu)"
