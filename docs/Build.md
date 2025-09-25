@@ -26,7 +26,36 @@ buildfab uses a multi-layered build system:
 
 ## Build Process
 
-### 1. CMake + Conan Build
+### 1. Self-Building with buildfab (Recommended)
+
+The buildfab project can build itself using its own configuration with automatic tool checking and installation:
+
+```bash
+# Check if all required tools are installed
+buildfab run pre-check
+
+# Install missing tools if needed
+buildfab run pre-install
+
+# Build the project using buildfab
+buildfab run build
+
+# Run tests
+buildfab run test
+
+# Create release artifacts
+buildfab run release
+```
+
+#### Build Stages
+
+- **`pre-check`**: Verify all required tools (conan, cmake, goreleaser, go, version utility, pre-push utility) are installed
+- **`pre-install`**: Install missing tools automatically
+- **`build`**: Build the project with all dependencies using CMake/Conan
+- **`test`**: Run cross-platform tests
+- **`release`**: Create release artifacts and packages
+
+### 2. Manual CMake + Conan Build
 
 ```bash
 # Create build directory
@@ -42,7 +71,7 @@ cmake --build .
 cmake --build . --target test
 ```
 
-### 2. Direct Go Build
+### 3. Direct Go Build
 
 ```bash
 # Build CLI application

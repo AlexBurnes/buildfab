@@ -4,7 +4,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.15.4-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.16.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Features
 
@@ -494,13 +494,45 @@ Remove-Item "version.zip"
 
 ### Build
 
-This project uses buildfab for its build process. Make sure you have installed buildfab and the version utility as described above.
+This project uses buildfab for its build process and can build itself using its own configuration. The buildfab project includes comprehensive self-building capabilities with automatic tool checking and installation.
+
+#### Self-Building with buildfab (Recommended)
+
+The buildfab project can build itself using its own configuration:
 
 ```bash
-# Build using buildfab (recommended)
-./scripts/buildfab run build
+# Check if all required tools are installed
+buildfab run pre-check
 
-# Or build with CMake/Conan directly
+# Install missing tools if needed
+buildfab run pre-install
+
+# Build the project using buildfab
+buildfab run build
+
+# Run tests
+buildfab run test
+
+# Create release artifacts
+buildfab run release
+```
+
+#### Build Stages
+
+The buildfab project includes several build stages:
+
+- **`pre-check`**: Check if all required tools (conan, cmake, goreleaser, go, version utility, pre-push utility) are installed
+- **`pre-install`**: Install missing tools automatically
+- **`build`**: Build the project with all dependencies
+- **`test`**: Run cross-platform tests
+- **`release`**: Create release artifacts and packages
+
+#### Manual Build (Alternative)
+
+If you prefer to build manually without using buildfab:
+
+```bash
+# Build with CMake/Conan directly
 mkdir build && cd build
 cmake ..
 cmake --build .
@@ -508,6 +540,17 @@ cmake --build .
 # Or build with Go directly
 go build -o buildfab cmd/buildfab/main.go
 ```
+
+#### Required Tools
+
+The buildfab project requires the following tools for building:
+
+- **Go 1.22+**: Programming language
+- **Conan**: Package manager for Go toolchain
+- **CMake**: Build system (optional, Conan can provide it)
+- **GoReleaser**: Release automation (installed automatically if Go is available)
+- **Version utility**: For version management (installed via pre-install stage)
+- **Pre-push utility**: For git hooks (installed via pre-install stage)
 
 ### Test
 ```bash

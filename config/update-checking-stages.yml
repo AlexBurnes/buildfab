@@ -1,4 +1,13 @@
 stages:
+  pre-check:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: check-goreleaser
+      - action: check-go
+      - action: check-version-utility
+      - action: check-pre-push-utility
+
   check-updates:
     steps:
       - action: check-buildfab-releases
@@ -10,5 +19,8 @@ stages:
 
   pre-install:
     steps:
+      - action: install-conan
+      - action: install-go
+      - action: install-goreleaser
       - action: install-version
       - action: install-pre-push

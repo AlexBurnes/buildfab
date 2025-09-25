@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Future Enhancements
+- **Platform-specific tool installation**: Extend pre-check and pre-install tools for other platforms with conditional execution using `when` conditions
+  - Add platform-specific variants for tool installation actions (Windows, macOS, Linux) with appropriate `when` conditions using `${{ platform }}` variable
+  - Ensure pre-check and pre-install stages work correctly across all supported platforms (linux/amd64, linux/arm64, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64)
+  - Use action variants with `when` conditions to execute platform-specific tool installation commands
+  - Provide platform-appropriate installation instructions and error messages
+  - Verify pre-check and pre-install stages work correctly on all target platforms
+
+## [0.16.0] - 2025-09-25
+
+### Added
+- **Self-Building Capability**: Comprehensive self-building capability for buildfab project with automatic tool checking and installation
+  - Added pre-check stage with comprehensive tool verification (conan, cmake, goreleaser, go, version utility, pre-push utility)
+  - Extended pre-install stage with automatic installation of missing tools
+  - Moved tool check actions to include files for better maintainability
+  - Updated all build stages to depend on pre-check stage for consistent tool verification
+  - Enhanced Conan installation with multiple fallback methods for externally managed Python environments
+  - Created comprehensive build system rules and guidelines
+  - Updated documentation with detailed self-building instructions and build stages
+
+## [0.15.5] - 2025-09-25
+### Added
+- **OnError Policy Functionality**: Implemented comprehensive onerror policy functionality for buildfab
+  - Fixed `onerror: warn` policy to correctly convert builtin action errors to warnings
+  - Updated git actions (git@untracked, git@modified, git@uncommitted) to return errors instead of warnings when issues are detected
+  - Enhanced step callback logic to display proper action success messages instead of generic "executed successfully"
+  - Created comprehensive test suite (`TestOnErrorPolicyWithTestActions`) with simple test actions (test@success, test@failure, test@warn) for reliable testing
+  - Fixed existing test expectations (`TestStepCallbackIntegration`) for onerror policy behavior
+  - All tests passing with proper onerror policy verification
+  - Perfect user experience: users can now use `onerror: warn` in their project.yml to convert git action errors to warnings, allowing pre-push stages to continue while still showing warning status
+
+### Fixed
+- **Version Build Issue**: Fixed CMake cache issue where buildfab binary was showing wrong version (v0.10.2 instead of v0.15.5)
+  - Cleaned build directory to force CMake to re-read VERSION file
+  - Binary now correctly shows v0.15.5 as expected
+
 ## [0.15.4] - 2025-09-25
 
 ### Added

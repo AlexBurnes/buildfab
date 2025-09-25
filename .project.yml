@@ -29,11 +29,9 @@ stages:
 
   build:
     steps:
-      - action: check-conan
-      - action: check-cmake
-      - action: check-goreleaser
+      - action: pre-check
       - action: install-conan-deps
-        require: [check-conan, check-cmake]
+        require: [pre-check]
       - action: configure-cmake
         require: [install-conan-deps]
       - action: build-binaries
@@ -45,7 +43,7 @@ stages:
       - action: create-installers
         require: [install-binary]
       - action: goreleaser-dry-run
-        require: [create-installers, check-goreleaser]
+        require: [create-installers, pre-check]
 
   test:
     steps:
@@ -63,11 +61,9 @@ stages:
 
   release:
     steps:
-      - action: check-conan
-      - action: check-cmake
-      - action: check-goreleaser
+      - action: pre-check
       - action: install-conan-deps
-        require: [check-conan, check-cmake]
+        require: [pre-check]
       - action: configure-cmake
         require: [install-conan-deps]
       - action: build-all-platforms
@@ -79,7 +75,7 @@ stages:
       - action: create-installers
         require: [install-binary]
       - action: goreleaser-release
-        require: [create-installers, check-goreleaser]
+        require: [create-installers, pre-check]
 
 actions:
   # Version and validation actions
@@ -123,41 +119,9 @@ actions:
   - name: git-modified
     uses: git@modified
 
-  # Tool check actions
-  - name: check-conan
-    run: |
-      if ! which conan >/dev/null 2>&1; then
-        echo "Conan is not installed. Install with: pip install conan"
-        exit 1
-      fi
-      conan --version
-
-  - name: check-cmake
-    run: |
-      if ! which cmake >/dev/null 2>&1; then
-        echo "CMake not found in PATH, will use Conan's CMake"
-      else
-        cmake --version
-      fi
-
-  - name: check-goreleaser
-    run: |
-      if ! which goreleaser >/dev/null 2>&1; then
-        echo "GoReleaser not found, checking Go environment..."
-        if ! which go >/dev/null 2>&1; then
-          echo "Go is not installed. Please install Go first"
-          exit 1
-        fi
-        echo "Installing GoReleaser..."
-        go install github.com/goreleaser/goreleaser@latest
-        # Add Go bin to PATH
-        export PATH="$(go env GOPATH)/bin:$PATH"
-        if ! which goreleaser >/dev/null 2>&1; then
-          echo "Failed to install GoReleaser"
-          exit 1
-        fi
-      fi
-      goreleaser --version
+  # Pre-check stage action
+  - name: pre-check
+    run: buildfab run pre-check
 
   # Dependency installation actions
   - name: install-conan-deps

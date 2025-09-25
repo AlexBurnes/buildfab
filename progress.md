@@ -1,6 +1,17 @@
 # Progress: buildfab
 
 ## What Works
+- **Self-Building Capability**: Successfully implemented comprehensive self-building capability for buildfab project with automatic tool checking and installation
+  - Added pre-check stage - comprehensive tool verification stage that checks conan, cmake, goreleaser, go, version utility, and pre-push utility installation status
+  - Extended pre-install stage - enhanced pre-install stage with automatic installation of missing tools including conan, go, goreleaser, version utility, and pre-push utility
+  - Moved actions to include files - reorganized tool check actions from main .project.yml to config/update-checking-stages.yml and config/update-checking-actions.yml for better maintainability
+  - Updated all build stages - modified build, test, and release stages to depend on pre-check stage for consistent tool verification
+  - Enhanced error handling - improved Conan installation with multiple fallback methods to handle externally managed Python environments
+  - Comprehensive documentation updates - updated README.md, Developer-workflow.md, and Build.md with detailed self-building instructions and build stages documentation
+  - Created build rules - added rule-build.mdc with comprehensive build system rules and self-building capability guidelines
+  - Perfect integration - buildfab can now build itself using its own configuration with automatic tool checking and installation
+  - Comprehensive testing - verified pre-check, pre-install, and build stages work correctly with proper tool verification and installation
+  - VERSION 0.16.0 RELEASED with comprehensive self-building capability implementation
 - **Dry Run Feature**: Successfully implemented comprehensive dry-run functionality for buildfab CLI and library with perfect formatting and multiline command support
   - Added --dry-run flag - new CLI flag that shows what would be executed without running commands
   - Implemented dry-run logic - added DryRun field to RunOptions and SimpleRunOptions structs with full support throughout the execution pipeline
@@ -318,6 +329,12 @@
 - **Test coverage improvement**: Overall project coverage improved from 58.6% to 72.5%
 
 ## What's Left to Build
+- **Platform-specific tool installation**: Extend pre-check and pre-install tools for other platforms with conditional execution using `when` conditions
+  - Add platform-specific variants for tool installation actions (Windows, macOS, Linux) with appropriate `when` conditions using `${{ platform }}` variable
+  - Ensure pre-check and pre-install stages work correctly across all supported platforms (linux/amd64, linux/arm64, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64)
+  - Use action variants with `when` conditions to execute platform-specific tool installation commands
+  - Provide platform-appropriate installation instructions and error messages
+  - Verify pre-check and pre-install stages work correctly on all target platforms
 - **Production deployment**: Release preparation and distribution setup (optional)
 - **Performance optimization**: Profile and optimize DAG execution and parallel processing (optional)
 - **Enhanced error messages**: Further improvements to user experience (optional)

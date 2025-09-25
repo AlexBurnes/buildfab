@@ -45,10 +45,13 @@ rule_type: Always
 - Tag only from green CI.
 
 ## Build/Release
-- Use GoReleaser (see `.goreleaser.yml`).
-- Windows: Scoop (own bucket).
-- Linux: tar.gz archive + `packaging/linux/install.sh`.
-- Artifacts must be reproducible: `-ldflags="-s -w ..."`; include build metadata via ldflags.
+- **Self-building capability**: buildfab can build itself using its own configuration
+- **Build stages**: Use `buildfab run pre-check`, `buildfab run pre-install`, `buildfab run build`, `buildfab run test`, `buildfab run release`
+- **Tool checking**: Automatic verification of required tools (conan, cmake, goreleaser, go, version utility, pre-push utility)
+- **Tool installation**: Automatic installation of missing tools via pre-install stage
+- **GoReleaser integration**: Use GoReleaser (see `.goreleaser.yml`) for release automation
+- **Cross-platform packaging**: Windows: Scoop (own bucket), Linux: tar.gz archive + `packaging/linux/install.sh`
+- **Reproducible builds**: Artifacts must be reproducible: `-ldflags="-s -w ..."`; include build metadata via ldflags
 
 ## Cursor + MPC (memory-base)
 - ALWAYS consult MPC for rules/specs before coding (see `.cursor/mpc-usage.md`).

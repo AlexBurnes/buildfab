@@ -1,0 +1,143 @@
+---
+description: Build system rules and self-building capability for buildfab project
+globs: 
+alwaysApply: true
+---
+# Build System Rules
+
+## Self-Building Capability
+
+The buildfab project can build itself using its own configuration with comprehensive tool checking and installation.
+
+### Build Workflow
+
+1. **Pre-check stage**: Verify all required tools are installed
+   ```bash
+   buildfab run pre-check
+   ```
+
+2. **Pre-install stage**: Install missing tools automatically
+   ```bash
+   buildfab run pre-install
+   ```
+
+3. **Build stage**: Build the project with all dependencies
+   ```bash
+   buildfab run build
+   ```
+
+4. **Test stage**: Run cross-platform tests
+   ```bash
+   buildfab run test
+   ```
+
+5. **Release stage**: Create release artifacts and packages
+   ```bash
+   buildfab run release
+   ```
+
+### Required Tools
+
+The buildfab project requires the following tools for building:
+
+- **Go 1.22+**: Programming language
+- **Conan**: Package manager for Go toolchain
+- **CMake**: Build system (optional, Conan can provide it)
+- **GoReleaser**: Release automation (installed automatically if Go is available)
+- **Version utility**: For version management (installed via pre-install stage)
+- **Pre-push utility**: For git hooks (installed via pre-install stage)
+
+### Tool Checking Actions
+
+The pre-check stage includes the following tool verification actions:
+
+- **`check-conan`**: Verify Conan package manager is installed
+- **`check-cmake`**: Verify CMake build system is available
+- **`check-goreleaser`**: Verify GoReleaser is installed (installs if Go is available)
+- **`check-go`**: Verify Go programming language is installed
+- **`check-version-utility`**: Verify version utility is in scripts/ directory
+- **`check-pre-push-utility`**: Verify pre-push utility is in scripts/ directory
+
+### Tool Installation Actions
+
+The pre-install stage includes the following tool installation actions:
+
+- **`install-conan`**: Install Conan package manager via pip
+- **`install-go`**: Provide instructions for Go installation (manual)
+- **`install-goreleaser`**: Install GoReleaser via go install
+- **`install-version`**: Download and install version utility
+- **`install-pre-push`**: Download and install pre-push utility
+
+### Build Configuration
+
+The buildfab project uses include files to organize build configuration:
+
+- **`.project.yml`**: Main project configuration with build stages
+- **`config/update-checking-stages.yml`**: Pre-check and pre-install stages
+- **`config/update-checking-actions.yml`**: Tool checking and installation actions
+
+### Build Stages Integration
+
+All build stages (build, test, release) now depend on the pre-check stage:
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: pre-check
+      - action: install-conan-deps
+        require: [pre-check]
+      # ... other build steps
+```
+
+### Error Handling
+
+- Tool check failures provide clear installation instructions
+- Missing tools are automatically installed when possible
+- Manual installation required for Go (platform-specific)
+- All tool installations are verified after completion
+
+### Documentation Requirements
+
+When implementing build system changes:
+
+1. **Update README.md**: Include self-building instructions in build section
+2. **Update Developer-workflow.md**: Add self-building workflow to development setup
+3. **Update Build.md**: Document self-building capability and build stages
+4. **Update rules**: Include build system rules in project rules
+5. **Update CHANGELOG.md**: Document build system changes
+
+### Testing Build System
+
+Test the self-building capability:
+
+```bash
+# Test pre-check stage
+buildfab run pre-check
+
+# Test pre-install stage
+buildfab run pre-install
+
+# Test complete build
+buildfab run build
+
+# Test with dry run
+buildfab run build --dry-run
+```
+
+### Integration with CI/CD
+
+The self-building capability integrates with CI/CD systems:
+
+- **GitHub Actions**: Can use buildfab stages for consistent builds
+- **Local development**: Developers can use buildfab for local builds
+- **Release automation**: GoReleaser integration for automated releases
+- **Cross-platform testing**: Automated testing across platforms
+
+### Best Practices
+
+1. **Always run pre-check first**: Verify tools before building
+2. **Use pre-install for missing tools**: Automatically install what's possible
+3. **Test build stages individually**: Verify each stage works correctly
+4. **Document tool requirements**: Keep documentation up to date
+5. **Handle tool installation failures gracefully**: Provide clear error messages

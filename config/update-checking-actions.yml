@@ -1,4 +1,121 @@
 actions:
+  # Tool check actions
+  - name: check-conan
+    run: |
+      if ! which conan >/dev/null 2>&1; then
+        echo "Conan is not installed. Install with: pip install conan"
+        exit 1
+      fi
+      conan --version
+
+  - name: check-cmake
+    run: |
+      if ! which cmake >/dev/null 2>&1; then
+        echo "CMake not found in PATH, will use Conan's CMake"
+      else
+        cmake --version
+      fi
+
+  - name: check-goreleaser
+    run: |
+      if ! which goreleaser >/dev/null 2>&1; then
+        echo "GoReleaser not found, checking Go environment..."
+        if ! which go >/dev/null 2>&1; then
+          echo "Go is not installed. Please install Go first"
+          exit 1
+        fi
+        echo "Installing GoReleaser..."
+        go install github.com/goreleaser/goreleaser@latest
+        # Add Go bin to PATH
+        export PATH="$(go env GOPATH)/bin:$PATH"
+        if ! which goreleaser >/dev/null 2>&1; then
+          echo "Failed to install GoReleaser"
+          exit 1
+        fi
+      fi
+      goreleaser --version
+
+  - name: check-go
+    run: |
+      if ! which go >/dev/null 2>&1; then
+        echo "Go is not installed. Please install Go first"
+        echo "Visit: https://golang.org/dl/"
+        exit 1
+      fi
+      go version
+
+  - name: check-version-utility
+    run: |
+      if [ ! -f "scripts/version" ]; then
+        echo "Version utility not found in scripts/ directory"
+        echo "To install: buildfab run pre-install"
+        exit 1
+      fi
+      scripts/version -V
+
+  - name: check-pre-push-utility
+    run: |
+      if [ ! -f "scripts/pre-push" ]; then
+        echo "Pre-push utility not found in scripts/ directory"
+        echo "To install: buildfab run pre-install"
+        exit 1
+      fi
+      scripts/pre-push -V
+
+  # Tool installation actions
+  - name: install-conan
+    run: |
+      echo "Installing Conan package manager..."
+      if ! which pip >/dev/null 2>&1; then
+        echo "pip is not installed. Please install Python and pip first"
+        exit 1
+      fi
+      
+      # Try to install Conan with different methods
+      if pip install conan --break-system-packages 2>/dev/null; then
+        echo "Conan installed successfully with --break-system-packages"
+      elif pip install --user conan 2>/dev/null; then
+        echo "Conan installed successfully in user directory"
+        echo "You may need to add ~/.local/bin to your PATH"
+      elif python3 -m pip install conan --break-system-packages 2>/dev/null; then
+        echo "Conan installed successfully with python3 -m pip"
+      else
+        echo "Failed to install Conan via pip. Please install manually:"
+        echo "  # Option 1: Use system package manager"
+        echo "  sudo apt install conan  # Ubuntu/Debian"
+        echo "  # Option 2: Use pipx"
+        echo "  pipx install conan"
+        echo "  # Option 3: Use virtual environment"
+        echo "  python3 -m venv venv && source venv/bin/activate && pip install conan"
+        exit 1
+      fi
+      
+      conan --version
+
+  - name: install-go
+    run: |
+      echo "Installing Go programming language..."
+      echo "Please visit https://golang.org/dl/ to download and install Go for your platform"
+      echo "After installation, ensure 'go' is in your PATH"
+      if which go >/dev/null 2>&1; then
+        echo "Go is already installed: $(go version)"
+      else
+        echo "Go installation required - please install manually from https://golang.org/dl/"
+        exit 1
+      fi
+
+  - name: install-goreleaser
+    run: |
+      echo "Installing GoReleaser..."
+      if ! which go >/dev/null 2>&1; then
+        echo "Go is not installed. Please install Go first"
+        exit 1
+      fi
+      go install github.com/goreleaser/goreleaser@latest
+      # Add Go bin to PATH
+      export PATH="$(go env GOPATH)/bin:$PATH"
+      goreleaser --version
+
   # Update checking actions
   - name: check-buildfab-releases
     run: |

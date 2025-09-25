@@ -66,3 +66,11 @@
 - **Windows**: Scoop manifest for package manager
 - **macOS**: Homebrew formula (future)
 - **Cross-platform**: Static binaries for all supported platforms
+
+## Future Platform Enhancements
+- **Platform-specific tool installation**: Extend pre-check and pre-install tools for other platforms with conditional execution using `when` conditions
+  - Add platform-specific variants for tool installation actions (Windows, macOS, Linux) with appropriate `when` conditions using `${{ platform }}` variable
+  - Ensure pre-check and pre-install stages work correctly across all supported platforms (linux/amd64, linux/arm64, windows/amd64, windows/arm64, darwin/amd64, darwin/arm64)
+  - Use action variants with `when` conditions to execute platform-specific tool installation commands
+  - Provide platform-appropriate installation instructions and error messages
+  - Verify pre-check and pre-install stages work correctly on all target platforms

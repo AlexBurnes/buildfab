@@ -100,7 +100,31 @@ scripts/version bump major    # for breaking changes
 
 ### 3. Build and Test
 
-#### Local Build
+#### Self-Building with buildfab (Recommended)
+
+The buildfab project can build itself using its own configuration:
+
+```bash
+# Check if all required tools are installed
+buildfab run pre-check
+
+# Install missing tools if needed
+buildfab run pre-install
+
+# Build the project using buildfab
+buildfab run build
+
+# Run tests
+buildfab run test
+
+# Create release artifacts (dry run)
+buildfab run release
+```
+
+#### Manual Build (Alternative)
+
+If you prefer to build manually without using buildfab:
+
 ```bash
 # Build with Go directly
 go build -o buildfab cmd/buildfab/main.go
@@ -110,6 +134,14 @@ mkdir build && cd build
 cmake ..
 cmake --build .
 ```
+
+#### Build Stages Available
+
+- **`pre-check`**: Verify all required tools are installed
+- **`pre-install`**: Install missing tools automatically
+- **`build`**: Build the project with all dependencies
+- **`test`**: Run cross-platform tests
+- **`release`**: Create release artifacts and packages
 
 #### Testing
 ```bash
