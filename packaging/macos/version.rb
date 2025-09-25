@@ -1,12 +1,12 @@
 class Buildfab < Formula
   desc "Go-based automation runner with DAG executor"
   homepage "https://github.com/AlexBurnes/buildfab"
-  url "https://github.com/AlexBurnes/buildfab/releases/download/v0.16.4/buildfab_darwin_amd64.tar.gz"
+  url "https://github.com/AlexBurnes/buildfab/releases/download/v0.16.5/buildfab_darwin_amd64.tar.gz"
   sha256 "PLACEHOLDER_SHA256"
   license "MIT"
   
   if Hardware::CPU.arm?
-    url "https://github.com/AlexBurnes/buildfab/releases/download/v0.16.4/buildfab_darwin_arm64.tar.gz"
+    url "https://github.com/AlexBurnes/buildfab/releases/download/v0.16.5/buildfab_darwin_arm64.tar.gz"
     sha256 "PLACEHOLDER_SHA256_ARM64"
   end
 

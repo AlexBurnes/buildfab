@@ -4,20 +4,23 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.16.4-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.16.5-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Features
 
-- **YAML-driven configuration**: Define stages and actions in `project.yml` files
-- **Include system**: Organize complex configurations by including external YAML files with glob patterns
-- **DAG-based execution**: Parallel execution with explicit dependencies and cycle detection
-- **Built-in action registry**: Extensible system for common automation tasks (git checks, version validation)
-- **Custom action support**: Execute shell commands and external tools with variable interpolation
-- **Conditional execution**: Step-level `if` conditions using powerful expression language
-- **Library API**: Embeddable Go library for integration with other tools
-- **Version integration**: Full integration with AlexBurnes/version-go for comprehensive version support
-- **Variable interpolation**: GitHub-style `${{ }}` syntax for Git and version variables
-- **Cross-platform compatibility**: Linux, Windows, macOS (amd64/arm64)
+buildfab provides a comprehensive automation framework with powerful features for project automation:
+
+- **YAML-driven configuration** with intuitive syntax and modular organization
+- **DAG-based execution** with parallel processing and dependency management  
+- **Built-in actions** for common tasks (git checks, version validation)
+- **Action variants** for platform-specific execution
+- **Conditional execution** with powerful expression language
+- **Variable interpolation** with GitHub-style `${{ }}` syntax
+- **Include system** for organizing complex configurations
+- **Library API** for embedding in other tools
+- **Cross-platform support** (Linux, Windows, macOS)
+
+📖 **See [Features and Examples](docs/Features-and-examples.md) for comprehensive documentation with detailed examples and usage patterns.**
 
 ## Quick Start
 
@@ -559,6 +562,8 @@ go test ./... -race
 
 ## Documentation
 
+- [Features and Examples](docs/Features-and-examples.md) - Comprehensive features documentation with detailed examples
+- [YAML Syntax Reference](docs/YAML-syntax-reference.md) - Complete YAML configuration syntax reference
 - [Project Specification](docs/Project-specification.md) - Complete technical specification
 - [API Reference](docs/Library.md) - Library API documentation
 - [Developer Workflow](docs/Developer-workflow.md) - Development setup and workflow

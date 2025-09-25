@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.5] - 2025-09-25
+
+### Documentation
+- **Comprehensive features documentation**: Created comprehensive Features-and-examples.md with detailed examples and usage patterns
+  - Added complete documentation of all buildfab features with practical examples
+  - Included action variants, conditional execution, include system, and variable interpolation examples
+  - Added advanced usage examples for multi-platform builds, environment-specific deployment, and conditional testing
+  - Provided comprehensive CLI usage examples and library API examples
+  - Added best practices section for configuration organization, error handling, performance, and security
+- **YAML syntax reference**: Created comprehensive YAML-syntax-reference.md with complete syntax documentation
+  - Added complete reference for all YAML configuration fields, types, and usage examples
+  - Documented expression language with all operators, helper functions, and variable types
+  - Provided validation rules and error handling documentation
+  - Included complete examples for simple projects, cross-platform builds, modular configurations, and complex conditional pipelines
+- **README improvements**: Updated README.md to link to comprehensive documentation instead of inline features
+  - Simplified features section with key highlights and link to detailed documentation
+  - Added proper documentation navigation with links to all comprehensive guides
+  - Improved user experience with better organization and discoverability of documentation
+
 ## [0.16.4] - 2025-09-25
 
 ### Fixed
