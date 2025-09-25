@@ -1,0 +1,228 @@
+project:
+  name: "buildfab-unified-platform-test"
+  modules: ["buildfab"]
+  bin: "bin"
+
+stages:
+  check-detection:
+    steps:
+      - action: platform-validation-test
+
+actions:
+  - name: platform-validation-test
+    variants:
+      # Linux variant - uses bash with Linux-specific validation
+      - when: "${{ platform == 'linux' }}"
+        run: |
+          echo "=== Buildfab Platform Detection Validation Test (Linux) ==="
+          echo "Testing on: $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2 2>/dev/null || echo "Unknown Linux")"
+          echo ""
+          
+          # Expected values for Linux
+          expected_platform="linux"
+          expected_arch="amd64"
+          expected_cpu_min=1
+          
+          # Get actual values from buildfab variables
+          actual_platform="${{ platform }}"
+          actual_arch="${{ arch }}"
+          actual_os="${{ os }}"
+          actual_os_version="${{ os_version }}"
+          actual_cpu="${{ cpu }}"
+          
+          echo "=== Validation Results ==="
+          
+          # Validate platform
+          if [ "$actual_platform" = "$expected_platform" ]; then
+              echo "✅ Platform: $actual_platform (CORRECT)"
+          else
+              echo "❌ Platform: $actual_platform (EXPECTED: $expected_platform)"
+              exit 1
+          fi
+          
+          # Validate architecture
+          if [ "$actual_arch" = "$expected_arch" ]; then
+              echo "✅ Architecture: $actual_arch (CORRECT)"
+          else
+              echo "❌ Architecture: $actual_arch (EXPECTED: $expected_arch)"
+              exit 1
+          fi
+          
+          # Validate OS (should be ubuntu or debian)
+          if [ "$actual_os" = "ubuntu" ] || [ "$actual_os" = "debian" ]; then
+              echo "✅ OS: $actual_os (CORRECT - valid Linux distribution)"
+          else
+              echo "❌ OS: $actual_os (EXPECTED: ubuntu or debian)"
+              exit 1
+          fi
+          
+          # Validate OS Version (should be numeric)
+          if echo "$actual_os_version" | grep -qE '^[0-9]+(\.[0-9]+)*$'; then
+              echo "✅ OS Version: $actual_os_version (CORRECT - valid version format)"
+          else
+              echo "❌ OS Version: $actual_os_version (EXPECTED: numeric version like 24.04 or 12)"
+              exit 1
+          fi
+          
+          # Validate CPU count (should be positive integer)
+          if [ "$actual_cpu" -ge "$expected_cpu_min" ]; then
+              echo "✅ CPU: $actual_cpu cores (CORRECT - >= $expected_cpu_min)"
+          else
+              echo "❌ CPU: $actual_cpu cores (EXPECTED: >= $expected_cpu_min)"
+              exit 1
+          fi
+          
+          echo ""
+          echo "=== All Platform Detection Validations Passed! ==="
+          echo "✅ Platform detection test completed successfully"
+
+      # macOS variant - uses bash with macOS-specific validation
+      - when: "${{ platform == 'darwin' }}"
+        run: |
+          echo "=== Buildfab Platform Detection Validation Test (macOS) ==="
+          echo "Testing on macOS platform"
+          echo ""
+          
+          # Expected values for macOS
+          expected_platform="darwin"
+          expected_os="darwin"
+          expected_cpu_min=1
+          
+          # Get actual values from buildfab variables
+          actual_platform="${{ platform }}"
+          actual_arch="${{ arch }}"
+          actual_os="${{ os }}"
+          actual_os_version="${{ os_version }}"
+          actual_cpu="${{ cpu }}"
+          
+          echo "=== Validation Results ==="
+          
+          # Validate platform
+          if [ "$actual_platform" = "$expected_platform" ]; then
+              echo "✅ Platform: $actual_platform (CORRECT)"
+          else
+              echo "❌ Platform: $actual_platform (EXPECTED: $expected_platform)"
+              exit 1
+          fi
+          
+          # Validate architecture (could be amd64 or arm64 on macOS)
+          if [ "$actual_arch" = "amd64" ] || [ "$actual_arch" = "arm64" ]; then
+              echo "✅ Architecture: $actual_arch (CORRECT - valid macOS architecture)"
+          else
+              echo "❌ Architecture: $actual_arch (EXPECTED: amd64 or arm64)"
+              exit 1
+          fi
+          
+          # Validate OS
+          if [ "$actual_os" = "$expected_os" ]; then
+              echo "✅ OS: $actual_os (CORRECT)"
+          else
+              echo "❌ OS: $actual_os (EXPECTED: $expected_os)"
+              exit 1
+          fi
+          
+          # Validate OS Version (should be numeric like 14.0, 15.0, etc.)
+          if echo "$actual_os_version" | grep -qE '^[0-9]+(\.[0-9]+)*$'; then
+              echo "✅ OS Version: $actual_os_version (CORRECT - valid version format)"
+          else
+              echo "❌ OS Version: $actual_os_version (EXPECTED: numeric version like 14.0 or 15.0)"
+              exit 1
+          fi
+          
+          # Validate CPU count (should be positive integer)
+          if [ "$actual_cpu" -ge "$expected_cpu_min" ]; then
+              echo "✅ CPU: $actual_cpu cores (CORRECT - >= $expected_cpu_min)"
+          else
+              echo "❌ CPU: $actual_cpu cores (EXPECTED: >= $expected_cpu_min)"
+              exit 1
+          fi
+          
+          echo ""
+          echo "=== All Platform Detection Validations Passed! ==="
+          echo "✅ Platform detection test completed successfully"
+
+      # Windows variant - uses PowerShell with Windows-specific validation
+      - when: "${{ platform == 'windows' }}"
+        shell: powershell
+        run: |
+          Write-Host "=== Buildfab Platform Detection Validation Test (Windows) ==="
+          Write-Host "Testing on Windows platform with PowerShell"
+          Write-Host ""
+          
+          # Expected values for Windows
+          $expected_platform = "windows"
+          $expected_arch = "amd64"
+          $expected_os = "windows"
+          $expected_cpu_min = 1
+          
+          # Get actual values from buildfab variables
+          $actual_platform = "${{ platform }}"
+          $actual_arch = "${{ arch }}"
+          $actual_os = "${{ os }}"
+          $actual_os_version = "${{ os_version }}"
+          $actual_cpu = [int]"${{ cpu }}"
+          
+          Write-Host "=== Validation Results ==="
+          
+          # Validate platform
+          if ($actual_platform -eq $expected_platform) {
+              Write-Host "✅ Platform: $actual_platform (CORRECT)"
+          } else {
+              Write-Host "❌ Platform: $actual_platform (EXPECTED: $expected_platform)"
+              exit 1
+          }
+          
+          # Validate architecture
+          if ($actual_arch -eq $expected_arch) {
+              Write-Host "✅ Architecture: $actual_arch (CORRECT)"
+          } else {
+              Write-Host "❌ Architecture: $actual_arch (EXPECTED: $expected_arch)"
+              exit 1
+          }
+          
+          # Validate OS
+          if ($actual_os -eq $expected_os) {
+              Write-Host "✅ OS: $actual_os (CORRECT)"
+          } else {
+              Write-Host "❌ OS: $actual_os (EXPECTED: $expected_os)"
+              exit 1
+          }
+          
+          # Validate OS Version (should contain "windows")
+          if ($actual_os_version -like "*windows*") {
+              Write-Host "✅ OS Version: $actual_os_version (CORRECT - contains 'windows')"
+          } else {
+              Write-Host "❌ OS Version: $actual_os_version (EXPECTED: should contain 'windows')"
+              exit 1
+          }
+          
+          # Validate CPU count (should be positive integer)
+          if ($actual_cpu -ge $expected_cpu_min) {
+              Write-Host "✅ CPU: $actual_cpu cores (CORRECT - >= $expected_cpu_min)"
+          } else {
+              Write-Host "❌ CPU: $actual_cpu cores (EXPECTED: >= $expected_cpu_min)"
+              exit 1
+          }
+          
+          Write-Host ""
+          Write-Host "=== All Platform Detection Validations Passed! ==="
+          Write-Host "✅ Platform detection test completed successfully"
+
+      # Fallback variant for unknown platforms - just display info
+      - when: "${{ true }}"
+        run: |
+          echo "=== Buildfab Platform Detection Test (Unknown Platform) ==="
+          echo "Testing on unknown platform - displaying platform information"
+          echo ""
+          echo "Platform: ${{ platform }}"
+          echo "Architecture: ${{ arch }}"
+          echo "OS: ${{ os }}"
+          echo "OS Version: ${{ os_version }}"
+          echo "CPU: ${{ cpu }}"
+          echo ""
+          echo "=== Platform Detection Variables Test ==="
+          echo "Testing variable interpolation with platform variables..."
+          echo "Current platform is ${{ platform }} with architecture ${{ arch }}"
+          echo "Running on ${{ os }} version ${{ os_version }} with ${{ cpu }} CPU cores"
+          echo ""
+          echo "✅ Platform detection test completed successfully (info only)"

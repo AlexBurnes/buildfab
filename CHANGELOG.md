@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2025-09-25
+
+### Added
+- **Unified Cross-Platform Configuration**: Created single unified cross-platform configuration using variants for platform validation testing
+- **Variant-based approach**: Created `tests/cross-platform/unified-platform-validation.yml` with platform-specific variants using `when` conditions with `${{ }}` expression syntax
+- **Comprehensive platform validation**: Each variant has appropriate validation logic for Linux (Ubuntu/Debian), macOS (Darwin), and Windows (PowerShell) platforms
+- **Infrastructure updates**: Modified Dockerfiles and test scripts to use unified configuration instead of individual platform-specific files
+
+### Changed
+- **Condition evaluation**: Fixed variant conditions to use `platform` variable instead of `os` variable for proper platform detection
+- **Test infrastructure**: Updated cross-platform testing to use single unified configuration file
+
+### Removed
+- **Individual platform configurations**: Removed `linux_configuration.yml`, `macos_configuration.yml`, and `windows_configuration.yml` files
+- **Alternative Windows shell variant**: Removed cmd.exe variant from unified configuration to simplify structure
+
+### Fixed
+- **Platform detection**: Corrected variant condition evaluation to properly detect Linux, macOS, and Windows platforms
+- **Dockerfile references**: Updated Dockerfiles to reference unified configuration instead of individual platform files
+
 ## [0.14.0] - 2025-09-25
 
 ### Added

@@ -22,8 +22,8 @@ WORKDIR /test
 COPY bin/buildfab-linux-amd64 /test/buildfab
 RUN chmod +x /test/buildfab
 
-# Copy platform configuration files
-COPY tests/cross-platform/linux_configuration.yml /test/linux_configuration.yml
+# Copy unified platform configuration
+COPY tests/cross-platform/unified-platform-validation.yml /test/unified-platform-validation.yml
 
 # Create test script
 COPY tests/cross-platform/test-platform.sh /test/test-platform.sh

@@ -1,0 +1,52 @@
+project:
+  name: "buildfab-debug-test"
+  modules: ["buildfab"]
+  bin: "bin"
+
+stages:
+  debug-conditions:
+    steps:
+      - action: debug-platform-vars
+
+actions:
+  - name: debug-platform-vars
+    variants:
+      # Test Linux condition
+      - when: "${{ os == 'linux' }}"
+        run: |
+          echo "=== LINUX VARIANT MATCHED ==="
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+          echo "OS Version: ${{ os_version }}"
+          echo "CPU: ${{ cpu }}"
+          
+      # Test macOS condition  
+      - when: "${{ os == 'darwin' }}"
+        run: |
+          echo "=== MACOS VARIANT MATCHED ==="
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+          echo "OS Version: ${{ os_version }}"
+          echo "CPU: ${{ cpu }}"
+          
+      # Test Windows condition
+      - when: "${{ os == 'windows' }}"
+        run: |
+          echo "=== WINDOWS VARIANT MATCHED ==="
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+          echo "OS Version: ${{ os_version }}"
+          echo "CPU: ${{ cpu }}"
+          
+      # Fallback
+      - when: "${{ true }}"
+        run: |
+          echo "=== FALLBACK VARIANT MATCHED ==="
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+          echo "OS Version: ${{ os_version }}"
+          echo "CPU: ${{ cpu }}"

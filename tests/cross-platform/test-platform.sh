@@ -12,7 +12,7 @@ echo "Testing platform detection with buildfab..."
 
 # Run buildfab check-detection action
 echo "Running buildfab check-detection action..."
-if ! ./buildfab -c linux_configuration.yml check-detection; then
+if ! ./buildfab -c unified-platform-validation.yml check-detection; then
     echo "   ❌ FAIL: buildfab check-detection failed"
     exit 1
 fi
