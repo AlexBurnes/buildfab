@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.2] - 2025-09-25
+
 ### Fixed
+- **Platform detection test output**: Fixed platform detection test output to return clean values without validation text for better automation and CI/CD integration
+  - Updated `tests/cross-platform/unified-platform-validation.yml` to output clean values (e.g., "CPU: 8" instead of "CPU: 8cores(CORRECT->=1)")
+  - Removed validation text from success messages for all platform variants (Linux, macOS, Windows)
+  - Simplified output parsing for GitHub Actions and other automation systems
+  - Verified clean output works correctly with existing validation scripts
 - **GitHub Actions platform detection tests**: Fixed failing platform-detection-unit-tests by updating workflow to use unified configuration instead of removed individual platform files
   - Updated `.github/workflows/cross-platform-test.yml` to use `unified-platform-validation.yml` instead of `linux_configuration.yml`, `windows_configuration.yml`, and `macos_configuration.yml`
   - Simplified platform detection test to use single unified configuration with platform-specific variants
