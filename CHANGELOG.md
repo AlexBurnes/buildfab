@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2025-09-25
+
+### Added
+- **Include Feature**: Comprehensive include system for organizing complex configurations into smaller, manageable files
+- **Include field**: Added `include` field to Config struct supporting file patterns in YAML configuration
+- **File pattern matching**: Support for both exact file paths and glob patterns with comprehensive resolution logic
+- **Exact file path support**: Include specific files that must exist or configuration fails with syntax error
+- **Glob pattern support**: Include files matching patterns (e.g., `config/*.yml`, `file-*.yml`) where directory must exist but files are optional
+- **Circular include detection**: Prevents infinite loops with proper visited file tracking and error reporting
+- **File deduplication**: Ensures same file isn't processed multiple times when matching multiple patterns
+- **Nested includes**: Included files can also have includes, creating hierarchical configuration structure
+- **Comprehensive error handling**: Clear error messages for missing files, invalid patterns, and circular dependencies
+- **Configuration merging**: Later includes override earlier ones with proper action and stage merging logic
+- **YAML file filtering**: Only `.yml` and `.yaml` files are processed from glob patterns
+
+### Changed
+- **Configuration loading**: Enhanced both internal and public configuration loading to process include patterns
+- **Documentation**: Updated Project Specification and README with detailed include feature documentation and examples
+- **Examples**: Added complete example configuration demonstrating how to split configurations across multiple files
+
+### Documentation
+- **Project Specification**: Enhanced `docs/Project-specification.md` with include behavior specification and validation expectations
+- **README**: Added comprehensive include feature documentation with behavior explanation and usage examples
+- **Example configurations**: Created complete example in `examples/` directory showing split configuration approach
+- **Include behavior**: Documented exact file path vs glob pattern behavior with clear error handling rules
+
+### Testing
+- **Include resolver tests**: Created extensive test suite in `internal/config/include_test.go` covering all scenarios
+- **Configuration loading tests**: Added comprehensive tests in `pkg/buildfab/config_include_test.go` for include processing
+- **Error condition testing**: Tests for circular includes, missing files, invalid patterns, and merge behavior
+- **Integration testing**: Verified include feature works correctly with configuration validation and stage execution
+
 ## [0.14.1] - 2025-09-25
 
 ### Added

@@ -1,0 +1,21 @@
+# Development stages
+
+stages:
+  dev-setup:
+    steps:
+      - action: common-setup
+      - action: check-deps
+
+  dev-test:
+    steps:
+      - action: test
+
+  dev-build:
+    steps:
+      - action: build
+      - action: install
+
+  quick-check:
+    steps:
+      - action: lint
+      - action: test

@@ -1,0 +1,26 @@
+# Example buildfab configuration demonstrating the include feature
+# This shows how to organize complex configurations into smaller, manageable files
+
+project:
+  name: "include-example"
+
+# Include external configuration files
+include:
+  - actions/common.yml     # Common actions used across stages
+  - actions/test.yml       # Testing-related actions
+  - actions/build.yml      # Build-related actions
+  - stages/ci.yml          # CI/CD stages
+  - stages/dev.yml         # Development stages
+
+# Main configuration can also define actions and stages
+actions:
+  - name: main-action
+    run: echo "This is the main action defined in the root config"
+
+stages:
+  main:
+    steps:
+      - action: main-action
+      - action: common-setup  # From actions/common.yml
+      - action: test          # From actions/test.yml
+      - action: build         # From actions/build.yml

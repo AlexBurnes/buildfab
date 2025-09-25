@@ -58,6 +58,27 @@ func (l *Loader) Load() (*buildfab.Config, error) {
 		return nil, fmt.Errorf("failed to parse YAML configuration: %w", err)
 	}
 
+	// Process includes if present
+	if len(config.Include) > 0 {
+		baseDir := filepath.Dir(l.configPath)
+		resolver := NewIncludeResolver(baseDir)
+		
+		// Resolve include patterns
+		includedFiles, err := resolver.ResolveIncludes(config.Include)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve includes: %w", err)
+		}
+		
+		// Load included configurations
+		includedConfig, err := resolver.LoadIncludedConfigs(includedFiles)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load included configurations: %w", err)
+		}
+		
+		// Merge included configurations
+		mergeConfig(&config, includedConfig)
+	}
+
 	// Validate configuration
 	if err := config.Validate(); err != nil {
 		return nil, err // Return original validation error to preserve line number information
@@ -133,6 +154,68 @@ func resolveString(s string, variables map[string]string) (string, error) {
 	}
 	
 	return result, nil
+}
+
+// mergeConfig merges included configuration into the main config
+func mergeConfig(config *buildfab.Config, included *PartialConfig) {
+	// Merge actions (later actions override earlier ones with same name)
+	for _, action := range included.Actions {
+		// Convert to buildfab.Action type
+		buildfabAction := buildfab.Action{
+			Name:     action.Name,
+			Run:      action.Run,
+			Uses:     action.Uses,
+			Shell:    action.Shell,
+			Variants: make([]buildfab.ActionVariant, len(action.Variants)),
+		}
+		
+		// Copy variants
+		for i, variant := range action.Variants {
+			buildfabAction.Variants[i] = buildfab.ActionVariant{
+				When:  variant.When,
+				Run:   variant.Run,
+				Uses:  variant.Uses,
+				Shell: variant.Shell,
+			}
+		}
+		
+		// Check if action already exists
+		found := false
+		for i, existing := range config.Actions {
+			if existing.Name == buildfabAction.Name {
+				config.Actions[i] = buildfabAction
+				found = true
+				break
+			}
+		}
+		if !found {
+			config.Actions = append(config.Actions, buildfabAction)
+		}
+	}
+	
+	// Merge stages (later stages override earlier ones)
+	if config.Stages == nil {
+		config.Stages = make(map[string]buildfab.Stage)
+	}
+	for name, stage := range included.Stages {
+		// Convert to buildfab.Stage type
+		buildfabStage := buildfab.Stage{
+			Steps: make([]buildfab.Step, len(stage.Steps)),
+		}
+		
+		// Copy steps
+		for i, step := range stage.Steps {
+			buildfabStage.Steps[i] = buildfab.Step{
+				Action:  step.Action,
+				Require: step.Require,
+				OnError: step.OnError,
+				If:      step.If,
+				Only:    step.Only,
+			}
+		}
+		
+		config.Stages[name] = buildfabStage
+	}
 }
 
 // GetDefaultVariables returns default variables available for interpolation

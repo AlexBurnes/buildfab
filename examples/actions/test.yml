@@ -1,0 +1,27 @@
+# Testing-related actions
+
+actions:
+  - name: test
+    run: |
+      echo "Running tests..."
+      go test ./...
+
+  - name: test-coverage
+    run: |
+      echo "Running tests with coverage..."
+      go test -cover ./...
+
+  - name: test-race
+    run: |
+      echo "Running tests with race detection..."
+      go test -race ./...
+
+  - name: lint
+    run: |
+      echo "Running linter..."
+      golangci-lint run
+
+  - name: lint-fix
+    run: |
+      echo "Running linter with auto-fix..."
+      golangci-lint run --fix

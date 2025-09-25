@@ -1,0 +1,31 @@
+# CI/CD stages
+
+stages:
+  ci:
+    steps:
+      - action: common-setup
+      - action: check-deps
+      - action: lint
+      - action: test
+      - action: test-coverage
+      - action: build
+
+  release:
+    steps:
+      - action: common-setup
+      - action: check-deps
+      - action: test
+      - action: build-static
+      - action: build-cross
+      - action: cleanup
+
+  pre-commit:
+    steps:
+      - action: lint-fix
+      - action: test
+
+  pre-push:
+    steps:
+      - action: test
+      - action: test-race
+      - action: build

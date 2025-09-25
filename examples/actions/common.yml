@@ -1,0 +1,20 @@
+# Common actions used across multiple stages
+
+actions:
+  - name: common-setup
+    run: |
+      echo "Setting up common environment..."
+      echo "Platform: ${{ platform }}"
+      echo "Architecture: ${{ arch }}"
+      echo "OS: ${{ os }}"
+
+  - name: cleanup
+    run: |
+      echo "Cleaning up temporary files..."
+      rm -rf /tmp/buildfab-*
+
+  - name: check-deps
+    run: |
+      echo "Checking dependencies..."
+      which go || echo "Go not found"
+      which git || echo "Git not found"

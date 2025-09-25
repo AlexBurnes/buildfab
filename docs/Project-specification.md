@@ -29,6 +29,12 @@ The YAML file contains:
 
 * `project`:
   * `name` (string), `modules` (list), optional `bin` directory
+* `include` (optional list of strings):
+  * File patterns to include from other YAML files
+  * Supports exact file paths and glob patterns
+  * **Exact file paths**: Must exist or configuration fails (e.g., `file.yml`, `directory/file.yml`)
+  * **Glob patterns**: Don't fail if no matches found (e.g., `file-*.yml`, `directory/*.yml`)
+  * **Directory requirements**: Directory must exist for glob patterns, but no files required
 * `actions` (list of objects):
   * `name` (string),
   * Either `run: |` (multiline shell) **or** `uses: <provider@builtin>`
@@ -40,11 +46,19 @@ The YAML file contains:
     * `only:` list of labels/conditions (e.g., `[release]`),
     * `if:` condition expression (e.g., `"os == 'linux'"`)
 
+**Include behavior:**
+* **Exact file paths**: `file.yml`, `directory/file.yml` - fails with syntax error if file doesn't exist
+* **Glob patterns**: `file-*.yml`, `directory/*.yml` - doesn't fail if no files match pattern
+* **Directory validation**: Directory must exist for glob patterns, fails if directory doesn't exist
+* **Merge order**: Included files are merged in declaration order, later includes override earlier ones
+* **Circular includes**: Detected and prevented to avoid infinite loops
+
 **Validation expectations (v1):**
 * All referenced actions exist
 * No cyclic dependencies among steps (DAG)
 * `only:` is syntactically valid and left to the runner's condition evaluator
 * `if:` expressions are syntactically valid and use the same expression language as action variants
+* Include files exist (for exact paths) and directories exist (for glob patterns)
 
 ## 4) CLI Specification
 

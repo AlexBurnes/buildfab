@@ -21,8 +21,9 @@ type Config struct {
 		BinDir  string   `yaml:"bin,omitempty"`
 	} `yaml:"project"`
 	
-	Actions []Action `yaml:"actions"`
-	Stages  map[string]Stage `yaml:"stages"`
+	Include []string          `yaml:"include,omitempty"` // File patterns to include
+	Actions []Action          `yaml:"actions"`
+	Stages  map[string]Stage  `yaml:"stages"`
 }
 
 // Action represents a single action that can be executed

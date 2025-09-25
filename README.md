@@ -4,11 +4,12 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.14.1-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.15.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Features
 
 - **YAML-driven configuration**: Define stages and actions in `project.yml` files
+- **Include system**: Organize complex configurations by including external YAML files with glob patterns
 - **DAG-based execution**: Parallel execution with explicit dependencies and cycle detection
 - **Built-in action registry**: Extensible system for common automation tasks (git checks, version validation)
 - **Custom action support**: Execute shell commands and external tools with variable interpolation
@@ -280,6 +281,81 @@ func main() {
 ## Configuration
 
 See [Project Specification](docs/Project-specification.md) for complete configuration reference.
+
+### Include Feature
+
+buildfab supports including external YAML files to organize complex configurations into smaller, manageable files:
+
+```yaml
+project:
+  name: "my-project"
+
+# Include other configuration files
+include:
+  - actions.yml          # Exact file path (must exist)
+  - config/*.yml         # Glob pattern (directory must exist, files optional)
+  - stages/common.yml    # Subdirectory file
+
+# Main configuration
+actions:
+  - name: main-action
+    run: echo "main action"
+```
+
+#### Include Behavior
+
+- **Exact file paths** (`actions.yml`, `config/file.yml`): Must exist or configuration fails
+- **Glob patterns** (`config/*.yml`, `file-*.yml`): Directory must exist, but no files required
+- **Merge order**: Later includes override earlier ones
+- **Circular includes**: Detected and prevented
+- **YAML files only**: Only `.yml` and `.yaml` files are processed
+
+#### Example: Split Configuration
+
+**Main file (`project.yml`)**:
+```yaml
+project:
+  name: "my-project"
+
+include:
+  - actions/test.yml
+  - actions/build.yml
+  - stages/ci.yml
+
+stages:
+  pre-push:
+    steps:
+      - action: test
+      - action: build
+```
+
+**Actions file (`actions/test.yml`)**:
+```yaml
+actions:
+  - name: test
+    run: go test ./...
+  - name: test-coverage
+    run: go test -cover ./...
+```
+
+**Actions file (`actions/build.yml`)**:
+```yaml
+actions:
+  - name: build
+    run: go build ./...
+  - name: build-static
+    run: go build -ldflags="-s -w" ./...
+```
+
+**Stages file (`stages/ci.yml`)**:
+```yaml
+stages:
+  ci:
+    steps:
+      - action: test
+      - action: build
+      - action: test-coverage
+```
 
 ## Library Usage
 

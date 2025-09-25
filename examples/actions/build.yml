@@ -1,0 +1,24 @@
+# Build-related actions
+
+actions:
+  - name: build
+    run: |
+      echo "Building application..."
+      go build ./...
+
+  - name: build-static
+    run: |
+      echo "Building static binary..."
+      CGO_ENABLED=0 go build -ldflags="-s -w" ./...
+
+  - name: build-cross
+    run: |
+      echo "Building cross-platform binaries..."
+      GOOS=linux GOARCH=amd64 go build ./...
+      GOOS=windows GOARCH=amd64 go build ./...
+      GOOS=darwin GOARCH=amd64 go build ./...
+
+  - name: install
+    run: |
+      echo "Installing application..."
+      go install ./...
