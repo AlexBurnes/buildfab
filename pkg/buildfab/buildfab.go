@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,10 +28,19 @@ type Config struct {
 
 // Action represents a single action that can be executed
 type Action struct {
-	Name  string `yaml:"name"`
+	Name     string          `yaml:"name"`
+	Run      string          `yaml:"run,omitempty"`
+	Uses     string          `yaml:"uses,omitempty"`
+	Shell    string          `yaml:"shell,omitempty"` // Optional shell specification
+	Variants []ActionVariant `yaml:"variants,omitempty"` // Optional variants for conditional execution
+}
+
+// ActionVariant represents a conditional variant of an action
+type ActionVariant struct {
+	When  string `yaml:"when"`  // Condition expression (e.g., "${{ os == 'linux' }}")
 	Run   string `yaml:"run,omitempty"`
 	Uses  string `yaml:"uses,omitempty"`
-	Shell string `yaml:"shell,omitempty"` // Optional shell specification
+	Shell string `yaml:"shell,omitempty"`
 }
 
 // Stage represents a collection of steps to execute
@@ -382,6 +392,80 @@ func (c *Config) GetAction(name string) (Action, bool) {
 	return Action{}, false
 }
 
+// SelectVariant selects the first matching variant for an action based on when conditions
+func (a *Action) SelectVariant(variables map[string]string) (*ActionVariant, error) {
+	if len(a.Variants) == 0 {
+		// No variants, return nil to indicate action should use direct run/uses
+		return nil, nil
+	}
+	
+	// Evaluate each variant's when condition
+	for _, variant := range a.Variants {
+		matches, err := evaluateCondition(variant.When, variables)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate condition '%s' for action %s: %w", variant.When, a.Name, err)
+		}
+		
+		if matches {
+			return &variant, nil
+		}
+	}
+	
+	// No variant matched - action should be skipped
+	return nil, nil
+}
+
+// evaluateCondition evaluates a when condition expression
+func evaluateCondition(condition string, variables map[string]string) (bool, error) {
+	// Remove ${{ }} wrapper if present
+	condition = strings.TrimSpace(condition)
+	if strings.HasPrefix(condition, "${{") && strings.HasSuffix(condition, "}}") {
+		condition = strings.TrimSpace(condition[3 : len(condition)-2])
+	}
+	
+	// Simple condition evaluation - supports basic comparisons
+	// Examples: "os = 'linux'", "platform == 'windows'", "arch = 'amd64'"
+	
+	// Check for equality comparison (support both == and =)
+	var parts []string
+	if strings.Contains(condition, " == ") {
+		parts = strings.SplitN(condition, " == ", 2)
+	} else if strings.Contains(condition, " = ") {
+		parts = strings.SplitN(condition, " = ", 2)
+	}
+	
+	if len(parts) == 2 {
+		left := strings.TrimSpace(parts[0])
+		right := strings.TrimSpace(parts[1])
+		
+		// Remove quotes from right side if present
+		if (strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'")) ||
+		   (strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\"")) {
+			right = right[1 : len(right)-1]
+		}
+		
+		// Get variable value
+		value, exists := variables[left]
+		if !exists {
+			return false, fmt.Errorf("undefined variable: %s", left)
+		}
+		
+		return value == right, nil
+	}
+	
+	// Check for boolean variables (just the variable name)
+	if value, exists := variables[condition]; exists {
+		// Try to parse as boolean
+		if boolValue, err := strconv.ParseBool(value); err == nil {
+			return boolValue, nil
+		}
+		// If not a boolean, treat non-empty string as true
+		return value != "", nil
+	}
+	
+	return false, fmt.Errorf("unsupported condition format: %s", condition)
+}
+
 // GetStage returns the stage with the specified name
 func (c *Config) GetStage(name string) (Stage, bool) {
 	stage, exists := c.Stages[name]
@@ -413,12 +497,31 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("action name is required")
 		}
 		
-		if action.Run == "" && action.Uses == "" {
-			return fmt.Errorf("action %s must have either 'run' or 'uses'", action.Name)
-		}
-		
-		if action.Run != "" && action.Uses != "" {
-			return fmt.Errorf("action %s cannot have both 'run' and 'uses'", action.Name)
+		// Check if action has variants
+		if len(action.Variants) > 0 {
+			// Action with variants: validate variants instead of direct run/uses
+			for i, variant := range action.Variants {
+				if variant.When == "" {
+					return fmt.Errorf("action %s variant %d must have 'when' condition", action.Name, i)
+				}
+				
+				if variant.Run == "" && variant.Uses == "" {
+					return fmt.Errorf("action %s variant %d must have either 'run' or 'uses'", action.Name, i)
+				}
+				
+				if variant.Run != "" && variant.Uses != "" {
+					return fmt.Errorf("action %s variant %d cannot have both 'run' and 'uses'", action.Name, i)
+				}
+			}
+		} else {
+			// Action without variants: validate direct run/uses
+			if action.Run == "" && action.Uses == "" {
+				return fmt.Errorf("action %s must have either 'run' or 'uses'", action.Name)
+			}
+			
+			if action.Run != "" && action.Uses != "" {
+				return fmt.Errorf("action %s cannot have both 'run' and 'uses'", action.Name)
+			}
 		}
 		
 		if actionNames[action.Name] {
@@ -738,10 +841,58 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 
 	// Measure execution time from when the action actually starts to when it finishes
 	start := time.Now()
-	if action.Uses != "" {
-		result, err = r.runBuiltInActionForDAG(ctx, action)
+	
+	// Handle variants - select appropriate variant or skip if no match
+	variant, variantErr := action.SelectVariant(r.opts.Variables)
+	if variantErr != nil {
+		result = Result{
+			Status:  StatusError,
+			Message: variantErr.Error(),
+			Error:   variantErr,
+		}
+		duration := time.Since(start)
+		result.Duration = duration
+		
+		// Call step complete callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusError, variantErr.Error(), duration)
+		}
+		
+		return result, variantErr
+	}
+	
+	// If variant is nil and action has variants, it means no variant matched - skip
+	if variant == nil && len(action.Variants) > 0 {
+		result = Result{
+			Status:  StatusSkipped,
+			Message: "no matching variant",
+		}
+		duration := time.Since(start)
+		result.Duration = duration
+		
+		// Call step complete callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", duration)
+		}
+		
+		return result, nil // Not an error, just skipped
+	}
+	
+	// Use variant if available, otherwise use action directly
+	effectiveAction := action
+	if variant != nil {
+		effectiveAction = Action{
+			Name:  action.Name,
+			Run:   variant.Run,
+			Uses:  variant.Uses,
+			Shell: variant.Shell,
+		}
+	}
+	
+	if effectiveAction.Uses != "" {
+		result, err = r.runBuiltInActionForDAG(ctx, effectiveAction)
 	} else {
-		result, err = r.runCustomActionForDAG(ctx, action)
+		result, err = r.runCustomActionForDAG(ctx, effectiveAction)
 	}
 	duration := time.Since(start)
 	
@@ -1759,11 +1910,43 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 
 // runActionInternal executes a single action
 func (r *Runner) runActionInternal(ctx context.Context, action Action) error {
-	if action.Uses != "" {
-		return r.runBuiltInAction(ctx, action)
+	// Select variant if action has variants
+	variant, err := action.SelectVariant(r.opts.Variables)
+	if err != nil {
+		return err
 	}
 	
-	return r.runCustomAction(ctx, action)
+	// If variant is nil and action has variants, it means no variant matched - skip
+	if variant == nil && len(action.Variants) > 0 {
+		// Call step complete callback with skipped status if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", 0)
+		}
+		
+		// Print skip message if verbose mode is enabled
+		if r.opts.Verbose {
+			fmt.Fprintf(r.opts.Output, "→ %s: skipped (no matching variant)\n", action.Name)
+		}
+		
+		return nil // Not an error, just skipped
+	}
+	
+	// Use variant if available, otherwise use action directly
+	effectiveAction := action
+	if variant != nil {
+		effectiveAction = Action{
+			Name:  action.Name,
+			Run:   variant.Run,
+			Uses:  variant.Uses,
+			Shell: variant.Shell,
+		}
+	}
+	
+	if effectiveAction.Uses != "" {
+		return r.runBuiltInAction(ctx, effectiveAction)
+	}
+	
+	return r.runCustomAction(ctx, effectiveAction)
 }
 
 // runBuiltInAction executes a built-in action

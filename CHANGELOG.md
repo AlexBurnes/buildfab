@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2025-09-23
+
+### Added
+- **Action Variants Feature**: Implemented comprehensive action variants feature allowing conditional execution of different commands within a single action based on `when` conditions
+- **ActionVariant struct**: New type supporting `when` conditions with `run`, `uses`, and `shell` fields for conditional execution
+- **Enhanced Action struct**: Added `Variants` field to support multiple variants per action with first-matching selection logic
+- **Conditional evaluation system**: Created `evaluateCondition()` function supporting both `==` and `=` operators with variable interpolation using `${{ variable }}` syntax
+- **Variant selection logic**: `SelectVariant()` method picks first matching variant or returns nil for skipping when no conditions match
+- **Comprehensive test suite**: Created extensive test coverage for variant selection, condition evaluation, validation, and end-to-end execution scenarios
+- **Example YAML configurations**: Added `test-variants.yml`, `test-variants-simple.yml`, and `test-variants-clean.yml` demonstrating variants usage
+
+### Changed
+- **Updated execution flow**: Modified both `runActionInternal()` and `executeActionForDAGWithCallback()` to handle variant selection and skipped actions with proper status reporting
+- **Enhanced validation**: Updated `Config.Validate()` to ensure actions with variants don't have direct `run`/`uses` fields and each variant has required fields
+- **Improved condition syntax**: Support both `==` and `=` operators for equality comparisons in `when` conditions for better user experience
+
+### Technical Details
+- **Action variants**: Actions can now define multiple variants with `when` conditions that are evaluated in order
+- **Condition evaluation**: Supports simple equality comparisons with variable interpolation (`${{ os == 'linux' }}`, `${{ platform = 'windows' }}`)
+- **Automatic skipping**: Actions with variants that don't match any condition are automatically skipped with clear reason
+- **Variable integration**: Variants work seamlessly with existing platform variables (`os`, `platform`, `arch`, `os_version`, `cpu`) and custom variables
+- **Backward compatibility**: Existing actions without variants continue to work exactly as before
+
 ## [0.11.0] - 2025-09-25
 
 ### Added

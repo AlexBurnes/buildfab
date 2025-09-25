@@ -1,0 +1,64 @@
+project:
+  name: "buildfab-variants-clean-test"
+  modules: ["buildfab"]
+
+stages:
+  test-variants:
+    steps:
+      - action: build-cpp
+      - action: test-platform
+      - action: git-check
+
+actions:
+  # Example: Build C++ with platform-specific commands using clean = syntax
+  - name: build-cpp
+    variants:
+      - when: ${{ platform = 'linux' }}
+        run: |
+          echo "Building for Linux..."
+          cmake -S . -B build && cmake --build build -j
+      - when: ${{ platform = 'windows' }}
+        shell: powershell
+        run: |
+          Write-Host "Building for Windows..."
+          cmake -S . -B build -G "Visual Studio 17 2022"
+          cmake --build build --config Release
+      - when: ${{ platform = 'darwin' }}
+        run: |
+          echo "Building for macOS..."
+          cmake -S . -B build -G "Xcode"
+          cmake --build build --config Release
+
+  # Example: Platform detection test
+  - name: test-platform
+    variants:
+      - when: ${{ platform = 'linux' }}
+        run: |
+          echo "Running Linux platform tests..."
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+          echo "OS Version: ${{ os_version }}"
+          echo "CPU Count: ${{ cpu }}"
+      - when: ${{ platform = 'windows' }}
+        run: |
+          echo "Running Windows platform tests..."
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+      - when: ${{ platform = 'darwin' }}
+        run: |
+          echo "Running macOS platform tests..."
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+
+  # Example: Mixed run and uses variants with clean syntax
+  - name: git-check
+    variants:
+      - when: ${{ platform = 'linux' }}
+        uses: git@untracked
+      - when: ${{ platform = 'windows' }}
+        run: git status --porcelain | findstr "^??"
+      - when: ${{ platform = 'darwin' }}
+        uses: git@untracked

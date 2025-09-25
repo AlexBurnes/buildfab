@@ -1,0 +1,129 @@
+project:
+  name: "buildfab-variants-test"
+  modules: ["buildfab"]
+
+stages:
+  test-variants:
+    steps:
+      - action: build-cpp
+      - action: test-platform
+      - action: deploy-service
+
+actions:
+  # Example: Build C++ with platform-specific commands
+  - name: build-cpp
+    variants:
+      - when: ${{ platform == 'linux' }}
+        run: |
+          echo "Building for Linux..."
+          cmake -S . -B build && cmake --build build -j
+      - when: ${{ platform == 'windows' }}
+        shell: powershell
+        run: |
+          Write-Host "Building for Windows..."
+          cmake -S . -B build -G "Visual Studio 17 2022"
+          cmake --build build --config Release
+      - when: ${{ platform == 'darwin' }}
+        run: |
+          echo "Building for macOS..."
+          cmake -S . -B build -G "Xcode"
+          cmake --build build --config Release
+
+  # Example: Platform detection test
+  - name: test-platform
+    variants:
+      - when: ${{ platform == 'linux' }}
+        run: |
+          echo "Running Linux platform tests..."
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+      - when: ${{ platform == 'windows' }}
+        run: |
+          echo "Running Windows platform tests..."
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+      - when: ${{ platform == 'darwin' }}
+        run: |
+          echo "Running macOS platform tests..."
+          echo "Platform: ${{ platform }}"
+          echo "OS: ${{ os }}"
+          echo "Arch: ${{ arch }}"
+
+  # Example: Service deployment with environment-specific logic
+  - name: deploy-service
+    variants:
+      - when: ${{ env == 'production' }}
+        run: |
+          echo "Deploying to production..."
+          echo "Using production configuration"
+          # Production deployment commands here
+      - when: ${{ env == 'staging' }}
+        run: |
+          echo "Deploying to staging..."
+          echo "Using staging configuration"
+          # Staging deployment commands here
+      - when: ${{ env == 'development' }}
+        run: |
+          echo "Deploying to development..."
+          echo "Using development configuration"
+          # Development deployment commands here
+
+  # Example: Mixed run and uses variants
+  - name: git-check
+    variants:
+      - when: ${{ os == 'linux' }}
+        uses: git@untracked
+      - when: ${{ os == 'windows' }}
+        run: git status --porcelain | findstr "^??"
+      - when: ${{ os == 'darwin' }}
+        uses: git@untracked
+
+  # Example: Architecture-specific builds
+  - name: build-arch-specific
+    variants:
+      - when: ${{ arch == 'amd64' }}
+        run: |
+          echo "Building for AMD64..."
+          go build -o bin/app-amd64 ./cmd/app
+      - when: ${{ arch == 'arm64' }}
+        run: |
+          echo "Building for ARM64..."
+          go build -o bin/app-arm64 ./cmd/app
+
+  # Example: Boolean condition
+  - name: debug-info
+    variants:
+      - when: ${{ debug }}
+        run: |
+          echo "Debug mode enabled"
+          echo "Verbose logging activated"
+          echo "Platform: ${{ platform }}"
+          echo "Architecture: ${{ arch }}"
+      - when: ${{ !debug }}
+        run: echo "Debug mode disabled"
+
+  # Example: Complex condition with multiple variables
+  - name: conditional-test
+    variants:
+      - when: ${{ os == 'linux' && arch == 'amd64' }}
+        run: |
+          echo "Running Linux AMD64 specific tests..."
+          # Linux AMD64 specific test commands
+      - when: ${{ os == 'windows' && arch == 'amd64' }}
+        run: |
+          echo "Running Windows AMD64 specific tests..."
+          # Windows AMD64 specific test commands
+      - when: ${{ os == 'darwin' && arch == 'arm64' }}
+        run: |
+          echo "Running macOS ARM64 specific tests..."
+          # macOS ARM64 specific test commands
+
+  # Example: Fallback action (no variants - always runs)
+  - name: always-run
+    run: |
+      echo "This action always runs regardless of platform"
+      echo "Current platform: ${{ platform }}"
+      echo "Current OS: ${{ os }}"
+      echo "Current architecture: ${{ arch }}"

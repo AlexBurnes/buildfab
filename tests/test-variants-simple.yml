@@ -1,0 +1,19 @@
+project:
+  name: "buildfab-variants-test"
+  modules: ["buildfab"]
+
+stages:
+  test-variants:
+    steps:
+      - action: build-cpp
+
+actions:
+  # Example: Build C++ with platform-specific commands
+  - name: build-cpp
+    variants:
+      - when: ${{ platform == 'linux' }}
+        run: echo "Building for Linux..."
+      - when: ${{ platform == 'windows' }}
+        run: echo "Building for Windows..."
+      - when: ${{ platform == 'darwin' }}
+        run: echo "Building for macOS..."

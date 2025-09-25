@@ -1,6 +1,16 @@
 # Progress: buildfab
 
 ## What Works
+- **Action Variants Feature**: Successfully implemented comprehensive action variants feature allowing conditional execution of different commands within a single action based on when conditions
+  - Added ActionVariant struct - new type supporting when conditions with run, uses, and shell fields for conditional execution
+  - Enhanced Action struct - added Variants field to support multiple variants per action with first-matching selection logic
+  - Implemented conditional evaluation - created evaluateCondition() function supporting both == and = operators with variable interpolation using ${{ variable }} syntax
+  - Added variant selection logic - SelectVariant() method picks first matching variant or returns nil for skipping when no conditions match
+  - Updated execution flow - modified both runActionInternal() and executeActionForDAGWithCallback() to handle variant selection and skipped actions with proper status reporting
+  - Enhanced validation - updated Config.Validate() to ensure actions with variants don't have direct run/uses fields and each variant has required fields
+  - Comprehensive testing - created extensive test suite covering variant selection, condition evaluation, validation, and end-to-end execution scenarios
+  - Perfect user experience - actions are automatically skipped with clear reason when no variants match, maintaining clean execution flow
+  - VERSION 0.12.0 RELEASED with comprehensive action variants feature and conditional execution system
 - **Cross-Platform Testing System**: Successfully implemented comprehensive cross-platform testing with validation testing, simplified configuration, and comprehensive platform coverage
   - Implemented validation testing - replaced simple value display with active validation that compares detected platform values against expected values and fails on mismatch
   - Enhanced platform detection tests - added comprehensive validation for Linux (Ubuntu/Debian), Windows (Wine), and macOS platforms with proper error handling and clear success/failure messages
