@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.3] - 2025-09-25
+
+### Updated
+- **Version-go library**: Updated from v1.1.1 to v1.2.5 to fix macOS OS version detection
+  - Fixed macOS platform detection to return numeric version (e.g., "15.0") instead of "darwin"
+  - Improved cross-platform compatibility for platform detection tests
+  - Enhanced platform variable accuracy across all supported platforms
+
 ## [0.16.2] - 2025-09-25
 
 ### Fixed
