@@ -36,8 +36,9 @@ func formatExecutionTime(status StepStatus, duration time.Duration) string {
 // SimpleRunner provides a simplified interface for running stages and actions
 // without requiring callback setup. All output is handled internally.
 type SimpleRunner struct {
-	config *Config
-	opts   *SimpleRunOptions
+	config   *Config
+	opts     *SimpleRunOptions
+	registry ActionRegistry
 }
 
 // SimpleRunOptions configures simple stage execution
@@ -46,6 +47,7 @@ type SimpleRunOptions struct {
 	MaxParallel int               // Maximum parallel execution (default: CPU count)
 	Verbose     bool              // Enable verbose output
 	Debug       bool              // Enable debug output
+	DryRun      bool              // Show what would be executed without running commands
 	Variables   map[string]string // Additional variables for interpolation
 	WorkingDir  string            // Working directory for execution
 	Output      io.Writer         // Output writer (default: os.Stdout)
@@ -80,8 +82,9 @@ func NewSimpleRunner(config *Config, opts *SimpleRunOptions) *SimpleRunner {
 		opts = DefaultSimpleRunOptions()
 	}
 	return &SimpleRunner{
-		config: config,
-		opts:   opts,
+		config:   config,
+		opts:     opts,
+		registry: NewDefaultActionRegistry(),
 	}
 }
 
@@ -90,6 +93,11 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	stage, exists := r.config.GetStage(stageName)
 	if !exists {
 		return fmt.Errorf("stage not found: %s", stageName)
+	}
+
+	// Handle dry-run mode differently
+	if r.opts.DryRun {
+		return r.executeStageDryRun(ctx, stageName, stage.Steps)
 	}
 
 	// Print stage start message
@@ -107,6 +115,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 		MaxParallel:  r.opts.MaxParallel,
 		Verbose:      r.opts.Verbose,
 		Debug:        r.opts.Debug,
+		DryRun:       r.opts.DryRun,
 		Variables:    r.opts.Variables,
 		WorkingDir:   r.opts.WorkingDir,
 		Output:       r.opts.Output,
@@ -170,6 +179,7 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
 		MaxParallel:  r.opts.MaxParallel,
 		Verbose:      r.opts.Verbose,
 		Debug:        r.opts.Debug,
+		DryRun:       r.opts.DryRun,
 		Variables:    r.opts.Variables,
 		WorkingDir:   r.opts.WorkingDir,
 		Output:       r.opts.Output,
@@ -243,6 +253,7 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
 		MaxParallel:  r.opts.MaxParallel,
 		Verbose:      r.opts.Verbose,
 		Debug:        r.opts.Debug,
+		DryRun:       r.opts.DryRun,
 		Variables:    r.opts.Variables,
 		WorkingDir:   r.opts.WorkingDir,
 		Output:       r.opts.Output,
@@ -273,14 +284,6 @@ type SimpleStepCallback struct {
 	config      *Config // Store config to access action details
 }
 
-const (
-	colorReset  = "\033[0m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorRed    = "\033[31m"
-	colorCyan   = "\033[36m"
-	colorGray   = "\033[90m"
-)
 
 func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
 	if c.verbose {
@@ -379,6 +382,12 @@ func (c *SimpleStepCallback) GetResults() []StepResult {
 // enhanceMessage improves error messages to match v0.5.0 style
 func (c *SimpleStepCallback) enhanceMessage(stepName string, status StepStatus, message string) string {
 	switch status {
+	case StepStatusOK:
+		// For dry-run messages, return as-is
+		if strings.Contains(message, "would execute") {
+			return message
+		}
+		return message
 	case StepStatusError:
 		// Check if message already contains reproduction instructions
 		if strings.Contains(message, "to check run:") {
@@ -745,6 +754,203 @@ func (r *SimpleRunner) printSummary(stageName string, success bool, results []St
 			fmt.Fprintf(r.opts.Output, "   %s%s%s %s%-8s %3d%s\n", color, icon, colorReset, color, status.String(), count, colorReset)
 		}
 	}
+}
+
+// executeStageDryRun simulates stage execution for dry-run mode
+func (r *SimpleRunner) executeStageDryRun(ctx context.Context, stageName string, steps []Step) error {
+	// Print stage header
+	fmt.Fprintf(r.opts.Output, "▶️  Dry run stage: %s\n\n", stageName)
+	
+	// Count total steps
+	totalSteps := len(steps)
+	skippedSteps := 0
+	executedSteps := 0
+	
+	// Process each step
+	for _, step := range steps {
+		// Check if step should be executed based on conditions
+		shouldExecute, err := r.shouldExecuteStepByCondition(ctx, step)
+		if err != nil {
+			return fmt.Errorf("failed to evaluate step condition: %w", err)
+		}
+		
+		if !shouldExecute {
+			skippedSteps++
+			if r.opts.Verbose {
+				fmt.Fprintf(r.opts.Output, "→ %s: would skip (condition not met)\n", step.Action)
+			}
+			continue
+		}
+		
+		// Check if step should be executed based on only filter
+		if len(r.opts.Only) > 0 {
+			stepMatches := false
+			for _, label := range r.opts.Only {
+				for _, stepLabel := range step.Only {
+					if stepLabel == label {
+						stepMatches = true
+						break
+					}
+				}
+			}
+			if !stepMatches {
+				skippedSteps++
+				if r.opts.Verbose {
+					fmt.Fprintf(r.opts.Output, "→ %s: would skip (not in only filter)\n", step.Action)
+				}
+				continue
+			}
+		}
+		
+		executedSteps++
+		
+		// Simulate action execution
+		action, exists := r.config.GetAction(step.Action)
+		if !exists {
+			// Check if it's a built-in action
+			if runner, exists := r.registry.GetRunner(step.Action); exists {
+				description := runner.Description()
+				if r.opts.Verbose {
+					fmt.Fprintf(r.opts.Output, "  ✓ %s would execute built-in action: %s\n", step.Action, description)
+				}
+			} else {
+				if r.opts.Verbose {
+					fmt.Fprintf(r.opts.Output, "  ✗ %s would fail (action not found)\n", step.Action)
+				}
+			}
+		} else {
+			// Simulate custom action execution
+			err := r.runActionInternalDryRun(ctx, action)
+			if err != nil {
+				if r.opts.Verbose {
+					fmt.Fprintf(r.opts.Output, "  ✗ %s would fail (%v)\n", step.Action, err)
+				}
+			}
+		}
+	}
+	
+	// Print summary
+	fmt.Fprintf(r.opts.Output, "\n")
+	fmt.Fprintf(r.opts.Output, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Fprintf(r.opts.Output, "🔍 %s%s%s - %s\n", colorCyan, "DRY RUN", colorReset, stageName)
+	fmt.Fprintf(r.opts.Output, "\n")
+	fmt.Fprintf(r.opts.Output, "📊 Summary:\n")
+	fmt.Fprintf(r.opts.Output, "   %s%s%s %s%-8s %3d%s\n", colorGreen, "✓", colorReset, colorGreen, "would run", executedSteps, colorReset)
+	fmt.Fprintf(r.opts.Output, "   %s%s%s %s%-8s %3d%s\n", colorGray, "→", colorReset, colorGray, "skipped", skippedSteps, colorReset)
+	fmt.Fprintf(r.opts.Output, "   %s%s%s %s%-8s %3d%s\n", colorGray, "?", colorReset, colorGray, "total", totalSteps, colorReset)
+	
+	return nil
+}
+
+// shouldExecuteStepByCondition determines if a step should be executed based on its if condition
+func (r *SimpleRunner) shouldExecuteStepByCondition(ctx context.Context, step Step) (bool, error) {
+	// If no if condition is specified, execute the step
+	if step.If == "" {
+		return true, nil
+	}
+	
+	// Evaluate the if condition using the expression evaluator
+	shouldExecute, err := evaluateCondition(step.If, r.opts.Variables)
+	if err != nil {
+		return false, fmt.Errorf("failed to evaluate if condition for step %s: %w", step.Action, err)
+	}
+	
+	return shouldExecute, nil
+}
+
+// runActionInternalDryRun simulates action execution for dry-run mode
+func (r *SimpleRunner) runActionInternalDryRun(ctx context.Context, action Action) error {
+	// Select variant if action has variants
+	variant, err := action.SelectVariant(r.opts.Variables)
+	if err != nil {
+		return err
+	}
+	
+	// If variant is nil and action has variants, it means no variant matched - skip
+	if variant == nil && len(action.Variants) > 0 {
+		return nil // Not an error, just skipped
+	}
+	
+	// Use variant if available, otherwise use action directly
+	effectiveAction := action
+	if variant != nil {
+		effectiveAction = Action{
+			Name:  action.Name,
+			Run:   variant.Run,
+			Uses:  variant.Uses,
+			Shell: variant.Shell,
+		}
+	}
+	
+	if effectiveAction.Uses != "" {
+		return r.runBuiltInActionDryRun(ctx, effectiveAction)
+	}
+	
+	return r.runCustomActionDryRun(ctx, effectiveAction)
+}
+
+// runBuiltInActionDryRun simulates built-in action execution for dry-run mode
+func (r *SimpleRunner) runBuiltInActionDryRun(ctx context.Context, action Action) error {
+	if r.registry == nil {
+		return fmt.Errorf("built-in action %s not supported: no action registry provided", action.Uses)
+	}
+	
+	runner, exists := r.registry.GetRunner(action.Uses)
+	if !exists {
+		return fmt.Errorf("unknown built-in action: %s", action.Uses)
+	}
+	
+	description := runner.Description()
+	
+	// Print what would be executed if verbose mode is enabled
+	if r.opts.Verbose {
+		fmt.Fprintf(r.opts.Output, "  ✓ %s would execute built-in action: %s\n", action.Name, description)
+	}
+	
+	return nil
+}
+
+// runCustomActionDryRun simulates custom action execution for dry-run mode
+func (r *SimpleRunner) runCustomActionDryRun(ctx context.Context, action Action) error {
+	if action.Run == "" {
+		return fmt.Errorf("action %s has no run command", action.Name)
+	}
+	
+	// Interpolate variables in the action
+	interpolatedAction, err := InterpolateAction(action, r.opts.Variables)
+	if err != nil {
+		return fmt.Errorf("failed to interpolate variables in action %s: %w", action.Name, err)
+	}
+	
+	// Get shell command info
+	shell, shellArgs, err := getShellCommand(action.Shell)
+	if err != nil {
+		return fmt.Errorf("shell configuration error for action %s: %w", action.Name, err)
+	}
+	
+	// Build the full command
+	fullCommand := append(shellArgs, interpolatedAction.Run)
+	commandStr := shell + " " + strings.Join(fullCommand, " ")
+	
+	// Print what would be executed if verbose mode is enabled
+	if r.opts.Verbose {
+		fmt.Fprintf(r.opts.Output, "  💻 %s\n", action.Name)
+		fmt.Fprintf(r.opts.Output, "   ✓ %s, would execute command:\n", action.Name)
+		
+		// Handle multiline commands with proper indentation
+		lines := strings.Split(commandStr, "\n")
+		for i, line := range lines {
+			if i == 0 {
+				// First line with 6 spaces indentation
+				fmt.Fprintf(r.opts.Output, "      %s\n", line)
+			} else {
+				// Subsequent lines with 6 spaces indentation
+				fmt.Fprintf(r.opts.Output, "      %s\n", line)
+			}
+		}
+	}
+	
+	return nil
 }
 
 // Simple convenience functions for even easier usage

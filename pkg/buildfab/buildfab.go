@@ -13,6 +13,16 @@ import (
 	"time"
 )
 
+// Color constants for output formatting
+const (
+	colorReset  = "\033[0m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorRed    = "\033[31m"
+	colorCyan   = "\033[36m"
+	colorGray   = "\033[90m"
+)
+
 // Config represents the buildfab configuration loaded from YAML
 type Config struct {
 	Project struct {
@@ -104,6 +114,7 @@ type RunOptions struct {
 	MaxParallel int               // Maximum parallel execution (default: CPU count)
 	Verbose     bool              // Enable verbose output
 	Debug       bool              // Enable debug output
+	DryRun      bool              // Show what would be executed without running commands
 	Variables   map[string]string // Additional variables for interpolation
 	WorkingDir  string            // Working directory for execution
 	Output      io.Writer         // Output writer (default: os.Stdout)
@@ -191,6 +202,15 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 			r.opts.StepCallback.OnStepStart(ctx, actionName)
 		}
 
+		// Handle dry-run mode for built-in actions
+		if r.opts.DryRun {
+			description := runner.Description()
+			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepComplete(ctx, actionName, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0)
+			}
+			return nil
+		}
+
 		start := time.Now()
 		result, err := runner.Run(ctx)
 		duration := time.Since(start)
@@ -235,6 +255,21 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 	if r.opts.StepCallback != nil {
 		r.opts.StepCallback.OnStepStart(ctx, actionName)
 	}
+
+		// Handle dry-run mode for custom actions
+		if r.opts.DryRun {
+			err := r.runActionInternalDryRun(ctx, action)
+			if r.opts.StepCallback != nil {
+				status := StepStatusOK
+				message := "would execute action"
+				if err != nil {
+					status = StepStatusError
+					message = err.Error()
+				}
+				r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, 0)
+			}
+			return err
+		}
 
 	start := time.Now()
 	err := r.runActionInternal(ctx, action)
@@ -539,6 +574,11 @@ func (c *Config) Validate() error {
 func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	stage, _ := r.config.GetStage(stageName)
 	
+	// Handle dry-run mode for stages
+	if r.opts.DryRun {
+		return r.executeStageDryRun(ctx, stageName, stage.Steps)
+	}
+	
 	// If we have a step callback, use it for execution
 	if r.opts.StepCallback != nil {
 		return r.executeStageWithCallback(ctx, stage.Steps)
@@ -586,6 +626,92 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	}
 	
 	return err
+}
+
+// executeStageDryRun simulates stage execution for dry-run mode
+func (r *Runner) executeStageDryRun(ctx context.Context, stageName string, steps []Step) error {
+	// Print stage header
+	fmt.Fprintf(r.opts.Output, "▶️  Dry run stage: %s\n\n", stageName)
+	
+	// Count total steps
+	totalSteps := len(steps)
+	skippedSteps := 0
+	executedSteps := 0
+	
+	// Process each step
+	for _, step := range steps {
+		// Check if step should be executed based on conditions
+		shouldExecute, err := r.shouldExecuteStepByCondition(ctx, step)
+		if err != nil {
+			return fmt.Errorf("failed to evaluate step condition: %w", err)
+		}
+		
+		if !shouldExecute {
+			skippedSteps++
+			if r.opts.Verbose {
+				fmt.Fprintf(r.opts.Output, "→ %s: would skip (condition not met)\n", step.Action)
+			}
+			continue
+		}
+		
+		// Check if step should be executed based on only filter
+		if len(r.opts.Only) > 0 {
+			stepMatches := false
+			for _, label := range r.opts.Only {
+				for _, stepLabel := range step.Only {
+					if stepLabel == label {
+						stepMatches = true
+						break
+					}
+				}
+			}
+			if !stepMatches {
+				skippedSteps++
+				if r.opts.Verbose {
+					fmt.Fprintf(r.opts.Output, "→ %s: would skip (not in only filter)\n", step.Action)
+				}
+				continue
+			}
+		}
+		
+		executedSteps++
+		
+		// Simulate action execution
+		action, exists := r.config.GetAction(step.Action)
+		if !exists {
+			// Check if it's a built-in action
+			if runner, exists := r.registry.GetRunner(step.Action); exists {
+				description := runner.Description()
+				if r.opts.Verbose {
+					fmt.Fprintf(r.opts.Output, "✓ %s: would execute built-in action: %s\n", step.Action, description)
+				}
+			} else {
+				if r.opts.Verbose {
+					fmt.Fprintf(r.opts.Output, "✗ %s: would fail (action not found)\n", step.Action)
+				}
+			}
+		} else {
+			// Simulate custom action execution
+			err := r.runActionInternalDryRun(ctx, action)
+			if err != nil {
+				if r.opts.Verbose {
+					fmt.Fprintf(r.opts.Output, "✗ %s: would fail (%v)\n", step.Action, err)
+				}
+			}
+		}
+	}
+	
+	// Print summary
+	fmt.Fprintf(r.opts.Output, "\n")
+	fmt.Fprintf(r.opts.Output, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+	fmt.Fprintf(r.opts.Output, "🔍 %s%s%s - %s\n", colorCyan, "DRY RUN", colorReset, stageName)
+	fmt.Fprintf(r.opts.Output, "\n")
+	fmt.Fprintf(r.opts.Output, "📊 Summary:\n")
+	fmt.Fprintf(r.opts.Output, "   %s%s%s %s%-8s %3d%s\n", colorGreen, "✓", colorReset, colorGreen, "would run", executedSteps, colorReset)
+	fmt.Fprintf(r.opts.Output, "   %s%s%s %s%-8s %3d%s\n", colorGray, "→", colorReset, colorGray, "skipped", skippedSteps, colorReset)
+	fmt.Fprintf(r.opts.Output, "   %s%s%s %s%-8s %3d%s\n", colorGray, "?", colorReset, colorGray, "total", totalSteps, colorReset)
+	
+	return nil
 }
 
 // executeStageWithCallback executes a stage using the step callback for output management
@@ -1976,6 +2102,92 @@ func (r *Runner) runActionInternal(ctx context.Context, action Action) error {
 	}
 	
 	return r.runCustomAction(ctx, effectiveAction)
+}
+
+// runActionInternalDryRun simulates action execution for dry-run mode
+func (r *Runner) runActionInternalDryRun(ctx context.Context, action Action) error {
+	// Select variant if action has variants
+	variant, err := action.SelectVariant(r.opts.Variables)
+	if err != nil {
+		return err
+	}
+	
+	// If variant is nil and action has variants, it means no variant matched - skip
+	if variant == nil && len(action.Variants) > 0 {
+		// Print skip message if verbose mode is enabled
+		if r.opts.Verbose {
+			fmt.Fprintf(r.opts.Output, "→ %s: would skip (no matching variant)\n", action.Name)
+		}
+		return nil // Not an error, just skipped
+	}
+	
+	// Use variant if available, otherwise use action directly
+	effectiveAction := action
+	if variant != nil {
+		effectiveAction = Action{
+			Name:  action.Name,
+			Run:   variant.Run,
+			Uses:  variant.Uses,
+			Shell: variant.Shell,
+		}
+	}
+	
+	if effectiveAction.Uses != "" {
+		return r.runBuiltInActionDryRun(ctx, effectiveAction)
+	}
+	
+	return r.runCustomActionDryRun(ctx, effectiveAction)
+}
+
+// runBuiltInActionDryRun simulates built-in action execution for dry-run mode
+func (r *Runner) runBuiltInActionDryRun(ctx context.Context, action Action) error {
+	if r.registry == nil {
+		return fmt.Errorf("built-in action %s not supported: no action registry provided", action.Uses)
+	}
+	
+	runner, exists := r.registry.GetRunner(action.Uses)
+	if !exists {
+		return fmt.Errorf("unknown built-in action: %s", action.Uses)
+	}
+	
+	description := runner.Description()
+	
+	// Print what would be executed if verbose mode is enabled
+	if r.opts.Verbose {
+		fmt.Fprintf(r.opts.Output, "✓ %s: would execute built-in action: %s\n", action.Name, description)
+	}
+	
+	return nil
+}
+
+// runCustomActionDryRun simulates custom action execution for dry-run mode
+func (r *Runner) runCustomActionDryRun(ctx context.Context, action Action) error {
+	if action.Run == "" {
+		return fmt.Errorf("action %s has no run command", action.Name)
+	}
+	
+	// Interpolate variables in the action
+	interpolatedAction, err := InterpolateAction(action, r.opts.Variables)
+	if err != nil {
+		return fmt.Errorf("failed to interpolate variables in action %s: %w", action.Name, err)
+	}
+	
+	// Get shell command info
+	shell, shellArgs, err := getShellCommand(action.Shell)
+	if err != nil {
+		return fmt.Errorf("shell configuration error for action %s: %w", action.Name, err)
+	}
+	
+	// Build the full command
+	fullCommand := append(shellArgs, interpolatedAction.Run)
+	commandStr := shell + " " + strings.Join(fullCommand, " ")
+	
+	// Print what would be executed if verbose mode is enabled
+	if r.opts.Verbose {
+		fmt.Fprintf(r.opts.Output, "✓ %s: would execute command: %s\n", action.Name, commandStr)
+	}
+	
+	return nil
 }
 
 // runBuiltInAction executes a built-in action

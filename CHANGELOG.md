@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.4] - 2025-09-25
+
+### Added
+- **Dry Run Mode**: Added comprehensive `--dry-run` flag support for both CLI and library usage
+  - New `--dry-run` global flag that shows what would be executed without running commands
+  - Added `DryRun` field to `RunOptions` and `SimpleRunOptions` structs for library integration
+  - Custom actions display interpolated commands that would be executed with perfect formatting
+  - Built-in actions show their descriptions indicating what they would do
+  - Stage execution shows step-by-step execution plan with command details and summary statistics
+  - Perfect command formatting with 💻 icon, ✓ checkmark, and proper multiline indentation
+  - Supports quiet mode (`--quiet`) for summary-only output
+  - Perfect for testing configurations and understanding execution plans before running
+  - Updated README.md with usage examples and comprehensive documentation
+
 ## [0.15.3] - 2025-09-25
 
 ### Documentation

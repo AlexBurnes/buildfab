@@ -4,7 +4,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.15.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.15.4-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Features
 
@@ -83,6 +83,7 @@ buildfab provides several command-line options to control execution behavior:
 - **`--max-parallel`**: Maximum parallel execution (default: CPU count)
 - **`--only`**: Only run steps matching these labels
 - **`--with-requires`**: Include required dependencies when running single step
+- **`--dry-run`**: Show what would be executed without running commands
 
 #### Environment
 - **`--env`**: Export environment variables to actions
@@ -108,6 +109,15 @@ buildfab run pre-push --only test,lint
 
 # Run with environment variables
 buildfab run pre-push --env GO_VERSION=1.23.1 --env BUILD_TARGET=linux
+
+# Preview what would be executed without running commands
+buildfab run pre-push --dry-run
+
+# Dry run with quiet mode (shows only summary)
+buildfab run pre-push --dry-run --quiet
+
+# Dry run a single action
+buildfab action version@check --dry-run
 ```
 
 ## Installation and Git Hook Setup

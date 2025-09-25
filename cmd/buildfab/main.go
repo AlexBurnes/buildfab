@@ -60,6 +60,7 @@ var (
 	verbose       bool
 	quiet         bool
 	debug         bool
+	dryRun        bool
 	configPath    string
 	maxParallel   int
 	workingDir    string
@@ -147,6 +148,7 @@ func main() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", true, "enable verbose output (default)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "disable verbose output (silence mode)")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug output")
+	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "show what would be executed without running commands")
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", ".project.yml", "path to configuration file")
 	rootCmd.PersistentFlags().IntVar(&maxParallel, "max-parallel", 0, "maximum parallel execution (default: CPU count)")
 	rootCmd.PersistentFlags().StringVarP(&workingDir, "working-dir", "w", ".", "working directory for execution")
@@ -286,6 +288,7 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		MaxParallel: maxParallel,
 		Verbose:     effectiveVerbose,
 		Debug:       debug,
+		DryRun:      dryRun,
 		Variables:   variables,
 		WorkingDir:  workingDir,
 		Output:      os.Stdout,
@@ -386,6 +389,7 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 		MaxParallel: maxParallel,
 		Verbose:     effectiveVerbose,
 		Debug:       debug,
+		DryRun:      dryRun,
 		Variables:   variables,
 		WorkingDir:  workingDir,
 		Output:      os.Stdout,
