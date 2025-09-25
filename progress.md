@@ -1,6 +1,17 @@
 # Progress: buildfab
 
 ## What Works
+- **Update Checking Feature**: Successfully implemented comprehensive update checking system for buildfab and its utilities
+  - Added check-updates stage - created modular include files for update checking stages and actions in config/ directory
+  - Implemented GitHub API integration - added actions to check for latest releases of buildfab, pre-push utility, and version utility using GitHub API
+  - Added pre-install stage - created actions to download and install latest versions of utilities into scripts/ directory
+  - Used buildfab platform variables - leveraged built-in ${{ platform }} and ${{ arch }} variables for cross-platform compatibility
+  - Fixed version comparison issues - resolved version format mismatches by stripping 'v' prefix from GitHub release tags
+  - Created modular configuration - organized update checking into separate include files for better maintainability
+  - Added proper error handling - implemented onerror: warn policy for update checks to prevent build failures
+  - Comprehensive testing - verified all update checking actions work correctly across different platforms and version scenarios
+  - Perfect user experience - users get clear update notifications and easy installation instructions
+  - VERSION 0.15.1 RELEASED with update checking feature and comprehensive GitHub integration
 - **Include Feature**: Successfully implemented comprehensive include system for organizing complex configurations into smaller, manageable files
   - Added include field to Config struct - updated pkg/buildfab/buildfab.go to support include field in YAML configuration
   - Implemented file pattern matching and resolution - created internal/config/include.go with IncludeResolver that handles both exact file paths and glob patterns
@@ -12,7 +23,7 @@
   - Updated documentation - enhanced docs/Project-specification.md and README.md with detailed include feature documentation and examples
   - Created example configurations - added complete example in examples/ directory showing how to split configurations across multiple files
   - Perfect user experience - users can now organize complex configurations into logical, maintainable files with clear error messages and comprehensive validation
-  - Ready for v0.15.0 release with include feature implementation
+  - VERSION 0.15.0 RELEASED with include feature implementation
 - **Unified Cross-Platform Configuration**: Successfully created a single unified cross-platform configuration using variants for platform validation testing
   - Implemented variant-based approach - created tests/cross-platform/unified-platform-validation.yml with platform-specific variants using when conditions with ${{ }} expression syntax
   - Added comprehensive platform validation - each variant has appropriate validation logic for Linux (Ubuntu/Debian), macOS (Darwin), and Windows (PowerShell) platforms

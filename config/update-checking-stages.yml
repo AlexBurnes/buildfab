@@ -1,0 +1,14 @@
+stages:
+  check-updates:
+    steps:
+      - action: check-buildfab-releases
+        onerror: warn
+      - action: check-pre-push-releases
+        onerror: warn
+      - action: check-version-releases
+        onerror: warn
+
+  pre-install:
+    steps:
+      - action: install-version
+      - action: install-pre-push

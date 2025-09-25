@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2025-09-25
+
+### Added
+- **Update Checking Feature**: Comprehensive update checking system for buildfab and its utilities
+- **Check-updates stage**: Added modular stage to check for updates of buildfab, pre-push utility, and version utility
+- **GitHub API integration**: Actions to fetch latest release information from GitHub repositories
+- **Pre-install stage**: Added stage to download and install latest versions of utilities into scripts/ directory
+- **Platform variable support**: Used buildfab built-in `${{ platform }}` and `${{ arch }}` variables for cross-platform compatibility
+- **Modular configuration**: Organized update checking into separate include files for better maintainability
+- **Error handling**: Implemented `onerror: warn` policy for update checks to prevent build failures
+
+### Fixed
+- **Version comparison**: Fixed version format mismatches by stripping 'v' prefix from GitHub release tags
+- **Pre-push utility detection**: Corrected file path from `scripts/prepush` to `scripts/pre-push` for proper detection
+- **Repository URLs**: Updated all GitHub API calls and download URLs to use correct repository names
+
+### Changed
+- **Installation actions**: Updated to use correct GitHub release URLs with platform-specific install scripts
+- **Update checking logic**: Enhanced to properly compare versions and provide clear update notifications
+
 ## [0.15.0] - 2025-09-25
 
 ### Added

@@ -3,6 +3,10 @@ project:
   modules: ["buildfab"]
   bin: "bin"
 
+include:
+  - "config/update-checking-stages.yml"
+  - "config/update-checking-actions.yml"
+
 stages:
   pre-push:
     steps:
@@ -385,3 +389,4 @@ actions:
         echo "⚠️ Skipping macOS test (not on macOS host - detected: $(uname -s))"
         echo "✅ macOS test skipped - requires macOS host"
       fi
+
