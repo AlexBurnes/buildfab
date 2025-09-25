@@ -172,17 +172,13 @@ func TestStepCallbackIntegration(t *testing.T) {
 	
 	if failingActionComplete == nil {
 		t.Errorf("Expected 'failing-action' step to complete, but it wasn't found")
-	} else if failingActionComplete.Status != StepStatusError {
-		t.Errorf("Expected 'failing-action' step status to be Error, got %v", failingActionComplete.Status)
+	} else if failingActionComplete.Status != StepStatusWarn {
+		t.Errorf("Expected 'failing-action' step status to be Warn (due to onerror: warn), got %v", failingActionComplete.Status)
 	}
 
-	// Verify error callback was called
-	if onStepErrorCalls != 1 {
-		t.Errorf("Expected 1 OnStepError call, got %d", onStepErrorCalls)
-	}
-
-	if stepErrorCalls[0].StepName != "failing-action" {
-		t.Errorf("Expected error step to be 'failing-action', got '%s'", stepErrorCalls[0].StepName)
+	// Verify error callback was NOT called (because onerror: warn converts error to warning)
+	if onStepErrorCalls != 0 {
+		t.Errorf("Expected 0 OnStepError calls (due to onerror: warn), got %d", onStepErrorCalls)
 	}
 
 	// Stage should complete successfully due to warn policy

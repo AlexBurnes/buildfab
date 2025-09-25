@@ -916,7 +916,16 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 				
 				// Execute the node in parallel
 				go func(nodeName string, node *DAGNode) {
-					result, _ := r.executeActionForDAGWithCallback(ctx, node.Action)
+					// Find the step configuration
+					var stepConfig *Step
+					for _, step := range steps {
+						if step.Action == nodeName {
+							stepConfig = &step
+							break
+						}
+					}
+					
+					result, _ := r.executeActionForDAGWithCallback(ctx, node.Action, stepConfig)
 					result.Name = nodeName
 					// Check if context was cancelled during execution
 					if ctx.Err() != nil {
@@ -924,6 +933,7 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 						result.Message = "cancelled"
 						result.Error = ctx.Err()
 					}
+					
 					resultChan <- result
 				}(nodeName, node)
 			}
@@ -936,7 +946,7 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 }
 
 // executeActionForDAGWithCallback executes a single action for DAG execution using step callbacks
-func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Action) (Result, error) {
+func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Action, stepConfig *Step) (Result, error) {
 	// Call step start callback if provided
 	if r.opts.StepCallback != nil {
 		r.opts.StepCallback.OnStepStart(ctx, action.Name)
@@ -1004,6 +1014,13 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	
 	// Set the duration in the result
 	result.Duration = duration
+
+	// Apply onerror policy if step has one
+	if result.Status == StatusError && stepConfig != nil && stepConfig.OnError == "warn" {
+		// Convert error to warning
+		result.Status = StatusWarn
+		err = nil // Clear the error since it's now a warning
+	}
 
 	// Call step complete callback if provided
 	if r.opts.StepCallback != nil {
@@ -1696,6 +1713,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 				go func(nodeName string, node *DAGNode) {
 					result, _ := r.executeActionForDAG(ctx, node.Action)
 					result.Name = nodeName
+					
 					select {
 					case resultChan <- result:
 					case <-ctxDone:
@@ -1850,33 +1868,6 @@ func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result
 	
 	// Set the duration in the result
 	result.Duration = duration
-		
-	// Call step complete callback if provided
-	if r.opts.StepCallback != nil {
-		status := StepStatusOK
-		message := "executed successfully"
-		
-		// Prioritize result status and message over error when available
-		if result.Status == StatusError {
-			status = StepStatusError
-			message = result.Message
-			if err != nil {
-				r.opts.StepCallback.OnStepError(ctx, action.Name, err)
-			}
-		} else if result.Status == StatusWarn {
-			status = StepStatusWarn
-			message = result.Message
-		} else if result.Status == StatusSkipped {
-			status = StepStatusSkipped
-			message = result.Message
-		} else if err != nil {
-			status = StepStatusError
-			message = err.Error()
-			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
-		}
-		
-		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, duration)
-	}
 
 	return result, err
 }

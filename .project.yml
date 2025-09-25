@@ -23,6 +23,7 @@ stages:
       # Run Git checks for all versions      
       - action: git-untracked
       - action: git-uncommitted
+
       - action: git-modified
         onerror: warn
 

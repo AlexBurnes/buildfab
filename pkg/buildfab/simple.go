@@ -200,12 +200,15 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
 		// Check if execution was terminated due to context cancellation
 		terminated := ctx.Err() != nil
 		
-		// Check if any step failed
+		// Check if any step failed or has warnings
 		hasError := false
+		hasWarning := false
 		for _, result := range results {
 			if result.Status == StepStatusError {
 				hasError = true
 				break
+			} else if result.Status == StepStatusWarn {
+				hasWarning = true
 			}
 		}
 		
@@ -216,6 +219,8 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
 			fmt.Fprintf(r.opts.Output, "⏹️ %s%s%s - %s\n", colorYellow, "TERMINATED", colorReset, actionName)
 		} else if hasError {
 			fmt.Fprintf(r.opts.Output, "💥 %s%s%s - %s\n", colorRed, "FAILED", colorReset, actionName)
+		} else if hasWarning {
+			fmt.Fprintf(r.opts.Output, "⚠️ %s%s%s - %s\n", colorYellow, "WARNING", colorReset, actionName)
 		} else {
 			fmt.Fprintf(r.opts.Output, "🎉 %s%s%s - %s\n", colorGreen, "SUCCESS", colorReset, actionName)
 		}
