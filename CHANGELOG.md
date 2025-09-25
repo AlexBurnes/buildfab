@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2025-09-25
+
+### Added
+- **Enhanced When Conditions Expression Language**: Implemented comprehensive expression language for `when` conditions similar to GitHub Actions
+- **Expression evaluation engine**: New `pkg/buildfab/expression.go` with full expression parsing and evaluation system supporting variables, operators, and helper functions
+- **Variable system**: Support for `os`, `arch`, `env.VAR`, `inputs.NAME`, `matrix.os`, `ci`, `branch` with proper variable resolution and user variable override
+- **Logical operators**: Complete support for `&&`, `||`, `!` with proper operator precedence and parentheses handling
+- **Comparison operators**: Support for `==`, `!=`, `<`, `<=`, `>`, `>=` with lexicographic string comparison and numeric comparison
+- **Helper functions**: `contains()`, `startsWith()`, `endsWith()`, `matches()`, `fileExists()`, `semverCompare()` with comprehensive error handling
+- **Enhanced condition evaluation**: Updated `evaluateCondition()` function to use new expression system while maintaining backward compatibility
+- **Comprehensive test suite**: Created extensive test coverage with 25+ expression tests, 15+ helper function tests, and 20+ condition evaluation tests
+
+### Fixed
+- **Variable resolution**: User variables now properly override platform variables in expression context
+- **String-to-boolean conversion**: Fixed `toBool()` function to properly convert non-empty strings to `true` (except "false")
+- **Operator precedence**: Fixed logical operator parsing to handle parentheses and nested expressions correctly
+- **Type handling**: Enhanced type conversion functions to handle `int` and `int64` types in numeric comparisons
+
+### Changed
+- **Expression system integration**: `evaluateCondition()` function now uses new expression evaluation engine
+- **Backward compatibility**: Old simple equality checks continue to work while new complex expressions are supported
+- **Test coverage**: Updated existing variants tests to work with new expression system
+
 ## [0.12.0] - 2025-09-23
 
 ### Added

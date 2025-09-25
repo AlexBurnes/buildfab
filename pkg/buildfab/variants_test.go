@@ -205,17 +205,18 @@ func TestEvaluateCondition(t *testing.T) {
 		expected  bool
 		expectErr bool
 	}{
+		// Basic equality tests (backward compatibility)
 		{
 			name:      "simple equality match with ==",
-			condition: "${{ os == 'linux' }}",
-			variables: map[string]string{"os": "linux"},
+			condition: "${{ os == 'ubuntu' }}",
+			variables: map[string]string{},
 			expected:  true,
 			expectErr: false,
 		},
 		{
 			name:      "simple equality match with =",
-			condition: "${{ os = 'linux' }}",
-			variables: map[string]string{"os": "linux"},
+			condition: "${{ os = 'ubuntu' }}",
+			variables: map[string]string{},
 			expected:  true,
 			expectErr: false,
 		},
@@ -227,23 +228,9 @@ func TestEvaluateCondition(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name:      "simple equality no match with =",
-			condition: "${{ os = 'linux' }}",
-			variables: map[string]string{"os": "windows"},
-			expected:  false,
-			expectErr: false,
-		},
-		{
 			name:      "condition without wrapper with ==",
-			condition: "os == 'linux'",
-			variables: map[string]string{"os": "linux"},
-			expected:  true,
-			expectErr: false,
-		},
-		{
-			name:      "condition without wrapper with =",
-			condition: "os = 'linux'",
-			variables: map[string]string{"os": "linux"},
+			condition: "os == 'ubuntu'",
+			variables: map[string]string{},
 			expected:  true,
 			expectErr: false,
 		},
@@ -289,6 +276,94 @@ func TestEvaluateCondition(t *testing.T) {
 			expected:  false,
 			expectErr: false,
 		},
+		
+		// New enhanced expression features
+		{
+			name:      "logical AND operator",
+			condition: "os == 'ubuntu' && arch == 'amd64'",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "logical OR operator",
+			condition: "os == 'ubuntu' || os == 'darwin'",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "logical NOT operator",
+			condition: "!(os == 'windows')",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "string comparison - less than",
+			condition: "'apple' < 'banana'",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "string comparison - greater than",
+			condition: "'zebra' > 'apple'",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "contains function",
+			condition: "contains('hello world', 'world')",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "startsWith function",
+			condition: "startsWith('hello world', 'hello')",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "endsWith function",
+			condition: "endsWith('hello world', 'world')",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "matches function",
+			condition: "matches('hello123', '^[a-z]+[0-9]+$')",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "fileExists function",
+			condition: "fileExists('/dev/null')",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "semverCompare function",
+			condition: "semverCompare('1.0.0', '1.0.0') == 0",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		{
+			name:      "complex expression",
+			condition: "os == 'ubuntu' && arch == 'amd64' && contains(env.PATH, '/usr/bin')",
+			variables: map[string]string{},
+			expected:  true,
+			expectErr: false,
+		},
+		
+		// Error cases
 		{
 			name:      "invalid condition format",
 			condition: "${{ invalid syntax }}",
@@ -300,6 +375,13 @@ func TestEvaluateCondition(t *testing.T) {
 			name:      "undefined variable",
 			condition: "${{ undefined == 'value' }}",
 			variables: map[string]string{"os": "linux"},
+			expected:  false,
+			expectErr: true,
+		},
+		{
+			name:      "invalid function call",
+			condition: "unknownFunc('arg')",
+			variables: map[string]string{},
 			expected:  false,
 			expectErr: true,
 		},

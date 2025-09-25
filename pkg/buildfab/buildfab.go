@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -415,55 +414,13 @@ func (a *Action) SelectVariant(variables map[string]string) (*ActionVariant, err
 	return nil, nil
 }
 
-// evaluateCondition evaluates a when condition expression
+// evaluateCondition evaluates a when condition expression using the enhanced expression system
 func evaluateCondition(condition string, variables map[string]string) (bool, error) {
-	// Remove ${{ }} wrapper if present
-	condition = strings.TrimSpace(condition)
-	if strings.HasPrefix(condition, "${{") && strings.HasSuffix(condition, "}}") {
-		condition = strings.TrimSpace(condition[3 : len(condition)-2])
-	}
+	// Create expression context with variables
+	ctx := NewExpressionContext(variables)
 	
-	// Simple condition evaluation - supports basic comparisons
-	// Examples: "os = 'linux'", "platform == 'windows'", "arch = 'amd64'"
-	
-	// Check for equality comparison (support both == and =)
-	var parts []string
-	if strings.Contains(condition, " == ") {
-		parts = strings.SplitN(condition, " == ", 2)
-	} else if strings.Contains(condition, " = ") {
-		parts = strings.SplitN(condition, " = ", 2)
-	}
-	
-	if len(parts) == 2 {
-		left := strings.TrimSpace(parts[0])
-		right := strings.TrimSpace(parts[1])
-		
-		// Remove quotes from right side if present
-		if (strings.HasPrefix(right, "'") && strings.HasSuffix(right, "'")) ||
-		   (strings.HasPrefix(right, "\"") && strings.HasSuffix(right, "\"")) {
-			right = right[1 : len(right)-1]
-		}
-		
-		// Get variable value
-		value, exists := variables[left]
-		if !exists {
-			return false, fmt.Errorf("undefined variable: %s", left)
-		}
-		
-		return value == right, nil
-	}
-	
-	// Check for boolean variables (just the variable name)
-	if value, exists := variables[condition]; exists {
-		// Try to parse as boolean
-		if boolValue, err := strconv.ParseBool(value); err == nil {
-			return boolValue, nil
-		}
-		// If not a boolean, treat non-empty string as true
-		return value != "", nil
-	}
-	
-	return false, fmt.Errorf("unsupported condition format: %s", condition)
+	// Evaluate the expression using the new expression system
+	return EvaluateExpression(condition, ctx)
 }
 
 // GetStage returns the stage with the specified name

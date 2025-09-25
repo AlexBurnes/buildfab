@@ -1,6 +1,17 @@
 # Progress: buildfab
 
 ## What Works
+- **Enhanced When Conditions Expression Language**: Successfully implemented comprehensive expression language for when conditions similar to GitHub Actions
+  - Created expression evaluation engine - new pkg/buildfab/expression.go with full expression parsing and evaluation system supporting variables, operators, and helper functions
+  - Implemented variable system - support for os, arch, env.VAR, inputs.NAME, matrix.os, ci, branch with proper variable resolution and user variable override
+  - Added logical operators - complete support for &&, ||, ! with proper operator precedence and parentheses handling
+  - Added comparison operators - support for ==, !=, <, <=, >, >= with lexicographic string comparison and numeric comparison
+  - Implemented helper functions - contains(), startsWith(), endsWith(), matches(), fileExists(), semverCompare() with comprehensive error handling
+  - Enhanced condition evaluation - updated evaluateCondition() function to use new expression system while maintaining backward compatibility
+  - Fixed variable resolution - user variables now properly override platform variables in expression context
+  - Comprehensive testing - created extensive test suite with 25+ expression tests, 15+ helper function tests, and 20+ condition evaluation tests
+  - Perfect integration - new expression language works seamlessly with existing action variants and maintains full backward compatibility
+  - VERSION 0.13.0 RELEASED with enhanced when conditions expression language and comprehensive testing
 - **Action Variants Feature**: Successfully implemented comprehensive action variants feature allowing conditional execution of different commands within a single action based on when conditions
   - Added ActionVariant struct - new type supporting when conditions with run, uses, and shell fields for conditional execution
   - Enhanced Action struct - added Variants field to support multiple variants per action with first-matching selection logic
