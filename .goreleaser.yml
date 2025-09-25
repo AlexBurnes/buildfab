@@ -32,7 +32,7 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
-    name_template: "{{ .ProjectName }}_{{ if eq .Os \"darwin\" }}macos{{ else }}{{ .Os }}{{ end }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
       - README.md
@@ -47,7 +47,7 @@ release:
   draft: false
   extra_files:
     - glob: "installers/buildfab-linux-*-install.sh"
-    - glob: "installers/buildfab-macos-*-install.sh"
+    - glob: "installers/buildfab-darwin-*-install.sh"
 
 
 scoop:

@@ -141,7 +141,7 @@ Test buildfab platform detection directly on each platform:
 # Test on current platform
 ./bin/buildfab -c tests/cross-platform/linux_configuration.yml check-detection
 ./bin/buildfab -c tests/cross-platform/windows_configuration.yml check-detection
-./bin/buildfab -c tests/cross-platform/macos_configuration.yml check-detection
+./bin/buildfab -c tests/cross-platform/darwin_configuration.yml check-detection
 ```
 
 ### 3. GitHub Actions Testing
@@ -214,20 +214,20 @@ Running on darwin version darwin with 8 CPU cores
 - `Dockerfile.linux-debian` - Debian 12 test environment with buildfab
 - `Dockerfile.windows` - Windows test environment using Wine with buildfab
 - `Dockerfile.windows-with-git-bash` - Windows shell configuration test environment
-- `Dockerfile.macos` - macOS test environment (NOT SUPPORTED - requires macOS host)
+- `Dockerfile.darwin` - Darwin test environment (NOT SUPPORTED - requires macOS host)
 
 ### Platform Configuration Files
 - `linux_configuration.yml` - Linux platform detection test configuration
 - `windows_configuration.yml` - Windows platform detection test configuration
 - `windows-wine_configuration.yml` - Windows testing under Wine emulation
 - `windows-git-bash_configuration.yml` - Windows shell configuration testing
-- `macos_configuration.yml` - macOS platform detection test configuration
+- `darwin_configuration.yml` - macOS platform detection test configuration
 
 ### Test Scripts
 - `test-platform.sh` - Linux platform detection tests using buildfab
 - `test-platform-windows.sh` - Windows platform detection tests using buildfab
 - `test-platform-windows-git-bash.sh` - Windows shell configuration tests
-- `test-platform-macos.sh` - macOS platform detection tests using buildfab
+- `test-platform-darwin.sh` - Darwin platform detection tests using buildfab
 
 ## Building Test Binaries
 
@@ -248,7 +248,7 @@ For manual testing on different platforms:
 # Test platform detection with buildfab
 ./bin/buildfab -c tests/cross-platform/linux_configuration.yml check-detection
 ./bin/buildfab -c tests/cross-platform/windows_configuration.yml check-detection
-./bin/buildfab -c tests/cross-platform/macos_configuration.yml check-detection
+./bin/buildfab -c tests/cross-platform/darwin_configuration.yml check-detection
 
 # Test comprehensive platform info
 ./bin/buildfab --help | grep -E "(platform|arch|os|cpu)"

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2] - 2025-09-25
+
+### Fixed
+- **Darwin/macOS Naming Consistency**: Fixed all darwin/macos naming inconsistencies throughout the project
+  - Updated GoReleaser configuration to use consistent darwin naming in archive names
+  - Renamed installer scripts from macos to darwin naming (buildfab-darwin-amd64-install.sh, buildfab-darwin-arm64-install.sh)
+  - Updated Homebrew formula to use darwin archive names (buildfab_darwin_amd64.tar.gz, buildfab_darwin_arm64.tar.gz)
+  - Fixed cross-platform test files to use darwin naming (test-platform-darwin.sh, Dockerfile.darwin)
+  - Updated all documentation to use consistent darwin naming throughout
+  - Perfect consistency - all binary names, archive names, installer scripts, and documentation now use consistent darwin naming
+
 ## [0.15.1] - 2025-09-25
 
 ### Added

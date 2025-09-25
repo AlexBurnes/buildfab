@@ -21,7 +21,7 @@ mkdir -p "$TARGET_DIR"
 
 # Platforms and architectures to build
 # Note: Windows uses Scoop for installation, so we don't create shell script installers for Windows
-PLATFORMS=("linux" "macos")
+PLATFORMS=("linux" "darwin")
 ARCHS=("amd64" "arm64")
 
 echo "[INFO] Creating simple installers for version $CLEAN_VERSION"

@@ -217,7 +217,7 @@ docker build --no-cache -f Dockerfile.linux-ubuntu -t version-test-ubuntu .
 Edit the test scripts in this directory:
 - `test-platform.sh` - Linux test logic
 - `test-platform-windows.sh` - Windows test logic
-- `test-platform-macos.sh` - macOS test logic
+- `test-platform-darwin.sh` - Darwin test logic
 
 ### Adding New Platform Tests
 1. Add new command to test scripts

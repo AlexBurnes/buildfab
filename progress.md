@@ -1,6 +1,15 @@
 # Progress: buildfab
 
 ## What Works
+- **Darwin/macOS Naming Consistency**: Successfully fixed all darwin/macos naming inconsistencies throughout the project
+  - Updated GoReleaser configuration - removed darwin-to-macos conversion in archive name template to use consistent darwin naming
+  - Fixed installer scripts - renamed all macos installer scripts to use darwin naming (buildfab-darwin-amd64-install.sh, buildfab-darwin-arm64-install.sh)
+  - Updated packaging files - modified Homebrew formula and packaging README to use darwin archive names (buildfab_darwin_amd64.tar.gz, buildfab_darwin_arm64.tar.gz)
+  - Fixed cross-platform test files - renamed test-platform-macos.sh to test-platform-darwin.sh and updated all references
+  - Updated Docker files - renamed Dockerfile.macos to Dockerfile.darwin and updated all content references
+  - Comprehensive documentation updates - updated all documentation to use consistent darwin naming throughout
+  - Perfect consistency - all binary names, archive names, installer scripts, and documentation now use consistent darwin naming instead of mixed darwin/macos usage
+  - VERSION 0.15.2 RELEASED with darwin/macos naming consistency fixes across entire project
 - **Update Checking Feature**: Successfully implemented comprehensive update checking system for buildfab and its utilities
   - Added check-updates stage - created modular include files for update checking stages and actions in config/ directory
   - Implemented GitHub API integration - added actions to check for latest releases of buildfab, pre-push utility, and version utility using GitHub API

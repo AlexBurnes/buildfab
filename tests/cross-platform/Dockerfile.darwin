@@ -1,0 +1,13 @@
+# Darwin testing is not supported via Docker
+# This Dockerfile exists for reference but cannot be used
+# Darwin testing requires a macOS host or VM
+
+FROM alpine:latest
+
+# Add informational message
+RUN echo "Darwin testing via Docker is not supported" && \
+    echo "Please test Darwin on an actual macOS host or VM" && \
+    echo "Use: ./bin/buildfab-darwin-amd64 -c tests/cross-platform/darwin_configuration.yml check-detection"
+
+# Exit with error to indicate this is not supported
+CMD ["sh", "-c", "echo 'Darwin Docker testing not supported' && exit 1"]
