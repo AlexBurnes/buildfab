@@ -423,6 +423,22 @@ func evaluateCondition(condition string, variables map[string]string) (bool, err
 	return EvaluateExpression(condition, ctx)
 }
 
+// shouldExecuteStepByCondition determines if a step should be executed based on its if condition
+func (r *Runner) shouldExecuteStepByCondition(ctx context.Context, step Step) (bool, error) {
+	// If no if condition is specified, execute the step
+	if step.If == "" {
+		return true, nil
+	}
+	
+	// Evaluate the if condition using the expression evaluator
+	shouldExecute, err := evaluateCondition(step.If, r.opts.Variables)
+	if err != nil {
+		return false, fmt.Errorf("failed to evaluate if condition for step %s: %w", step.Action, err)
+	}
+	
+	return shouldExecute, nil
+}
+
 // GetStage returns the stage with the specified name
 func (c *Config) GetStage(name string) (Stage, bool) {
 	stage, exists := c.Stages[name]
@@ -758,9 +774,15 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 				if !r.shouldExecuteStep(ctx, node) {
 					result := Result{
 						Name:   nodeName,
-						Status: StatusOK,
+						Status: StatusSkipped,
 						Message: "skipped (condition not met)",
 					}
+					
+					// Call step callback for skipped step
+					if r.opts.StepCallback != nil {
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0)
+					}
+					
 					resultChan <- result
 					continue
 				}
@@ -888,9 +910,16 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 
 // shouldExecuteStep checks if a step should be executed based on conditions
 func (r *Runner) shouldExecuteStep(ctx context.Context, node *DAGNode) bool {
-	// For now, always execute steps
-	// In the future, this could check conditions, labels, etc.
-	return true
+	// Check if step should be executed based on its if condition
+	shouldExecute, err := r.shouldExecuteStepByCondition(ctx, node.Step)
+	if err != nil {
+		// If there's an error evaluating the condition, log it and skip the step
+		if r.opts.Verbose {
+			fmt.Fprintf(r.opts.ErrorOutput, "Warning: failed to evaluate if condition for step %s: %v\n", node.Step.Action, err)
+		}
+		return false
+	}
+	return shouldExecute
 }
 
 // DAGNode represents a node in the execution DAG
@@ -1210,6 +1239,27 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 					continue
 				}
 				
+				// Check if step should be executed based on conditions
+				if !r.shouldExecuteStep(ctx, node) {
+					result := Result{
+						Name:   nodeName,
+						Status: StatusSkipped,
+						Message: "skipped (condition not met)",
+					}
+					
+					// Call step callback for skipped step
+					if r.opts.StepCallback != nil {
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0)
+					}
+					
+					select {
+					case resultChan <- result:
+					case <-ctxDone:
+						return
+					}
+					continue
+				}
+				
 				// Execute the node in parallel with streaming output control
 				go func(nodeName string, node *DAGNode) {
 					result, err := r.executeActionForDAGWithStreamingControl(ctx, node.Action, streamingManager)
@@ -1486,6 +1536,27 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 						Status: StatusSkipped,
 						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
 					}
+					select {
+					case resultChan <- result:
+					case <-ctxDone:
+						return
+					}
+					continue
+				}
+				
+				// Check if step should be executed based on conditions
+				if !r.shouldExecuteStep(ctx, node) {
+					result := Result{
+						Name:   nodeName,
+						Status: StatusSkipped,
+						Message: "skipped (condition not met)",
+					}
+					
+					// Call step callback for skipped step
+					if r.opts.StepCallback != nil {
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0)
+					}
+					
 					select {
 					case resultChan <- result:
 					case <-ctxDone:

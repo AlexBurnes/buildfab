@@ -1,0 +1,28 @@
+project:
+  name: "test-step-if-condition-complex"
+  modules: ["test"]
+
+actions:
+  - name: linux-action
+    run: |
+      echo "This action runs on Linux"
+      
+  - name: contains-action
+    run: |
+      echo "This action runs when OS contains 'linux'"
+      
+  - name: always-action
+    run: |
+      echo "This action always runs"
+
+stages:
+  test-conditional-steps:
+    steps:
+      - action: linux-action
+        if: "os == 'ubuntu'"
+        
+      - action: contains-action
+        if: "contains(os, 'ubuntu')"
+        
+      - action: always-action
+        # No if condition - should always run

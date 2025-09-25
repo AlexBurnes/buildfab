@@ -1,0 +1,28 @@
+project:
+  name: "test-step-if-condition-skip"
+  modules: ["test"]
+
+actions:
+  - name: linux-action
+    run: |
+      echo "This action runs on Linux"
+      
+  - name: windows-action
+    run: |
+      echo "This action runs on Windows"
+      
+  - name: always-action
+    run: |
+      echo "This action always runs"
+
+stages:
+  test-conditional-steps:
+    steps:
+      - action: linux-action
+        if: "os == 'ubuntu'"
+        
+      - action: windows-action
+        if: "os == 'windows'"
+        
+      - action: always-action
+        # No if condition - should always run

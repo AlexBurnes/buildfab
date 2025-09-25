@@ -12,6 +12,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 - **DAG-based execution**: Parallel execution with explicit dependencies and cycle detection
 - **Built-in action registry**: Extensible system for common automation tasks (git checks, version validation)
 - **Custom action support**: Execute shell commands and external tools with variable interpolation
+- **Conditional execution**: Step-level `if` conditions using powerful expression language
 - **Library API**: Embeddable Go library for integration with other tools
 - **Version integration**: Full integration with AlexBurnes/version-go for comprehensive version support
 - **Variable interpolation**: GitHub-style `${{ }}` syntax for Git and version variables
@@ -44,6 +45,7 @@ stages:
     steps:
       - action: test
       - action: lint
+        if: "os == 'linux'"  # Only run lint on Linux
 ```
 
 2. Run the pre-push stage:

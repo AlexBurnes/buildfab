@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2025-09-25
+
+### Added
+- **Step If Condition Feature**: Implemented conditional execution for stage steps using the existing expression evaluator
+- **Step if condition support**: Steps can now use `if` conditions with the same powerful expression language as action variants
+- **Conditional step execution**: Added `shouldExecuteStepByCondition()` function that evaluates `if` conditions using existing `evaluateCondition()` and `EvaluateExpression()` functions
+- **Enhanced DAG execution**: Updated all three DAG execution loops (`executeDAGWithCallback`, `executeDAGWithOrderedStreaming`, `executeDAGWithParallel`) to check step conditions before execution
+- **Proper skip handling**: Steps that fail `if` conditions are marked with `StatusSkipped` and properly displayed in output with "skipped (condition not met)" status
+- **Step callback integration**: Skipped steps trigger `OnStepComplete` with `StepStatusSkipped` to ensure they appear in ordered output display
+- **Comprehensive testing**: Created unit tests (`pkg/buildfab/step_if_condition_test.go`) and integration tests (`tests/test-step-if-condition*.yml`) for various condition scenarios
+- **Documentation updates**: Enhanced `docs/Project-specification.md` and `README.md` to document step `if` condition support with examples
+- **Platform variable support**: Steps can use `os`, `arch`, `platform` variables and helper functions in `if` conditions
+- **Logical operators**: Full support for `&&`, `||`, `!` operators in step conditions
+- **Helper functions**: Support for `contains()`, `startsWith()`, `endsWith()`, `matches()`, `fileExists()`, `semverCompare()` in step conditions
+
+### Documentation
+- **Updated Project Specification**: Added `if` condition support for steps in configuration format and validation expectations
+- **Updated README**: Added step `if` condition feature to Features section with usage example
+- **Enhanced Examples**: Added conditional execution examples showing platform-specific step execution
+
 ## [0.13.0] - 2025-09-25
 
 ### Added

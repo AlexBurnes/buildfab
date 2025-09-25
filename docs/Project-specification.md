@@ -37,12 +37,14 @@ The YAML file contains:
     * `action: <name>` (required),
     * `require:` string or list of action names,
     * `onerror:` `warn` | `stop` (default `stop`),
-    * `only:` list of labels/conditions (e.g., `[release]`)
+    * `only:` list of labels/conditions (e.g., `[release]`),
+    * `if:` condition expression (e.g., `"os == 'linux'"`)
 
 **Validation expectations (v1):**
 * All referenced actions exist
 * No cyclic dependencies among steps (DAG)
 * `only:` is syntactically valid and left to the runner's condition evaluator
+* `if:` expressions are syntactically valid and use the same expression language as action variants
 
 ## 4) CLI Specification
 
@@ -90,6 +92,7 @@ The YAML file contains:
 
 ### 5.3 Conditions & Policies
 
+* **`if:`** a condition expression that determines whether a step should be executed. Uses the same expression language as action variants. Example: `if: "os == 'linux'"`. If the condition evaluates to false → step is skipped (status = SKIP)
 * **`only:`** a list of labels; a step runs only if all required labels are present in the current run context. Example: `only: [release]`. The CLI `--only` flag provides labels. If `only` is set and the label is absent → step is skipped (status = SKIP)
 * **`onerror:`** `warn` allows the DAG to continue; `stop` blocks dependents from starting (default)
 

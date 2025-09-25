@@ -1,0 +1,21 @@
+project:
+  name: "test-step-if-condition-fail"
+  modules: ["test"]
+
+actions:
+  - name: never-action
+    run: |
+      echo "This action should never run"
+      
+  - name: always-action
+    run: |
+      echo "This action always runs"
+
+stages:
+  test-conditional-steps:
+    steps:
+      - action: never-action
+        if: "os == 'nonexistent'"
+        
+      - action: always-action
+        # No if condition - should always run

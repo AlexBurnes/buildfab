@@ -1,0 +1,16 @@
+project:
+  name: "test-debug-platform"
+  modules: ["test"]
+
+actions:
+  - name: debug-platform
+    run: |
+      echo "Platform variables:"
+      echo "os: ${{ os }}"
+      echo "arch: ${{ arch }}"
+      echo "platform: ${{ platform }}"
+
+stages:
+  debug:
+    steps:
+      - action: debug-platform
