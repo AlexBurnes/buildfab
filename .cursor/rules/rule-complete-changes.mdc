@@ -52,8 +52,8 @@ date +%Y-%m-%d
 
 7. **Git operations**
    - Stage all changes: `git add .`
-   - Commit with proper format: `git commit -m "type(scope): v$(cat VERSION), brief description" -m "<change details>"`
-   - Create tag: `git tag $(cat VERSION)`
+   - Commit with proper format: `git commit -m "type(scope): vX.Y.Z, brief description" -m "changes details"`
+   - Create tag: `git tag vX.Y.Z`
    - Push with tag: `git push origin master --tags`
    - **NEVER** push with flag --no-verify
    - **If push fails**: Fix project issues, commit fixes, delete failed tag, retag, and push again
@@ -64,10 +64,13 @@ date +%Y-%m-%d
    ```
 
 ## Commit Format
-Follow the established pattern from git log with semantic formatting:
+Follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 ```
-type(scope): v$(cat VERSION), brief description
-<change details>
+type(scope): vX.Y.Z, brief description
+
+changes details
+
+footer information optional
 ```
 
 Examples:
@@ -111,12 +114,12 @@ If `git push origin master --tags` fails due to project issues:
 
 3. **Delete failed tag**
    ```bash
-   git tag -d $(cat VERSION)
+   git tag -d vX.Y.Z
    ```
 
 4. **Retag with same version**
    ```bash
-   git tag $(cat VERSION)
+   git tag vX.Y.Z
    ```
 
 5. **Push again**
