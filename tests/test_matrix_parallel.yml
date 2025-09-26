@@ -1,0 +1,172 @@
+project:
+  name: "matrix-parallel-tests"
+  modules: ["matrix-testing"]
+
+actions:
+  - name: cpu-intensive
+    run: |
+      echo "Starting CPU-intensive task ${{ matrix.task_id }}"
+      echo "Duration: ${{ matrix.duration }} seconds"
+      echo "Parallel level: ${{ matrix.parallel_level }}"
+      
+      # Simulate CPU-intensive work
+      for i in $(seq 1 ${{ matrix.duration }}); do
+        echo "  [Task ${{ matrix.task_id }}] Step $i/${{ matrix.duration }}"
+        # CPU work - calculate some math
+        python3 -c "
+import time
+import math
+start = time.time()
+while time.time() - start < 0.5:
+    [math.sqrt(x) for x in range(1000)]
+" 2>/dev/null || echo "    (Python not available, using sleep)"
+        sleep 0.3
+      done
+      echo "Completed CPU-intensive task ${{ matrix.task_id }}"
+
+  - name: io-intensive
+    run: |
+      echo "Starting IO-intensive task ${{ matrix.task_id }}"
+      echo "Files to process: ${{ matrix.file_count }}"
+      
+      # Simulate IO work
+      for i in $(seq 1 ${{ matrix.file_count }}); do
+        echo "  [Task ${{ matrix.task_id }}] Processing file $i/${{ matrix.file_count }}"
+        # Simulate file operations
+        echo "File $i content" > /tmp/matrix_test_${{ matrix.task_id }}_$i.txt 2>/dev/null || echo "    (File creation simulated)"
+        sleep 0.2
+        rm -f /tmp/matrix_test_${{ matrix.task_id }}_$i.txt 2>/dev/null || true
+      done
+      echo "Completed IO-intensive task ${{ matrix.task_id }}"
+
+  - name: network-simulation
+    run: |
+      echo "Starting network simulation ${{ matrix.simulation_id }}"
+      echo "Target: ${{ matrix.target }}"
+      echo "Packets: ${{ matrix.packets }}"
+      
+      # Simulate network operations
+      for i in $(seq 1 ${{ matrix.packets }}); do
+        echo "  [Sim ${{ matrix.simulation_id }}] Packet $i/${{ matrix.packets }} to ${{ matrix.target }}"
+        # Simulate network delay
+        sleep 0.1
+      done
+      echo "Completed network simulation ${{ matrix.simulation_id }}"
+
+  - name: memory-intensive
+    run: |
+      echo "Starting memory-intensive task ${{ matrix.task_id }}"
+      echo "Memory chunks: ${{ matrix.chunks }}"
+      
+      # Simulate memory work
+      python3 -c "
+import time
+import sys
+chunks = ${{ matrix.chunks }}
+print(f'Allocating {chunks} memory chunks...')
+for i in range(chunks):
+    data = [0] * 10000  # 10k integers per chunk
+    print(f'  [Task ${{ matrix.task_id }}] Chunk {i+1}/{chunks}')
+    time.sleep(0.1)
+print('Memory task completed')
+" 2>/dev/null || echo "    (Python not available, using sleep simulation)"
+      echo "Completed memory-intensive task ${{ matrix.task_id }}"
+
+stages:
+  # CPU-intensive parallel test
+  cpu-parallel:
+    steps:
+      - action: cpu-intensive
+        matrix:
+          values:
+            task_id: ["CPU-A", "CPU-B", "CPU-C", "CPU-D", "CPU-E"]
+            duration: [3, 4, 2, 5, 3]
+            parallel_level: ["high", "medium", "low", "high", "medium"]
+          strategy:
+            max_parallel: 3
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # IO-intensive parallel test
+  io-parallel:
+    steps:
+      - action: io-intensive
+        matrix:
+          values:
+            task_id: ["IO-1", "IO-2", "IO-3", "IO-4"]
+            file_count: [5, 8, 3, 6]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Network simulation parallel test
+  network-parallel:
+    steps:
+      - action: network-simulation
+        matrix:
+          values:
+            simulation_id: ["NET-1", "NET-2", "NET-3", "NET-4", "NET-5"]
+            target: ["server1", "server2", "server3", "server1", "server2"]
+            packets: [10, 15, 8, 12, 6]
+          strategy:
+            max_parallel: 4
+            fail_fast: false
+            continue_on_error: false
+            order: "random"
+
+  # Memory-intensive parallel test
+  memory-parallel:
+    steps:
+      - action: memory-intensive
+        matrix:
+          values:
+            task_id: ["MEM-1", "MEM-2", "MEM-3"]
+            chunks: [20, 30, 25]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Mixed workload test
+  mixed-workload:
+    steps:
+      - action: cpu-intensive
+        matrix:
+          values:
+            task_id: ["MIX-CPU-1", "MIX-CPU-2"]
+            duration: [2, 3]
+            parallel_level: ["medium", "high"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+      - action: io-intensive
+        matrix:
+          values:
+            task_id: ["MIX-IO-1", "MIX-IO-2"]
+            file_count: [4, 6]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Stress test with many parallel jobs
+  stress-test:
+    steps:
+      - action: cpu-intensive
+        matrix:
+          values:
+            task_id: ["STRESS-1", "STRESS-2", "STRESS-3", "STRESS-4", "STRESS-5", "STRESS-6", "STRESS-7", "STRESS-8"]
+            duration: [1, 1, 1, 1, 1, 1, 1, 1]
+            parallel_level: ["low", "low", "low", "low", "low", "low", "low", "low"]
+          strategy:
+            max_parallel: 4
+            fail_fast: false
+            continue_on_error: false
+            order: "random"

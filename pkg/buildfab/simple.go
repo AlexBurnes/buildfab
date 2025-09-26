@@ -90,9 +90,22 @@ func NewSimpleRunner(config *Config, opts *SimpleRunOptions) *SimpleRunner {
 
 // RunStage executes a specific stage with automatic output handling
 func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
+	fmt.Fprintf(os.Stderr, "[DEBUG] SimpleRunner.RunStage called with stageName=%s\n", stageName)
 	stage, exists := r.config.GetStage(stageName)
 	if !exists {
 		return fmt.Errorf("stage not found: %s", stageName)
+	}
+	
+	// Debug output
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] SimpleRunner.RunStage: stageName=%s\n", stageName)
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Steps: %+v\n", stage.Steps)
+		for i, step := range stage.Steps {
+			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step %d: %+v\n", i, step)
+			if step.Matrix != nil {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix config: %+v\n", step.Matrix)
+			}
+		}
 	}
 
 	// Handle dry-run mode differently

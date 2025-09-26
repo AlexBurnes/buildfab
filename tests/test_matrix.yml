@@ -1,0 +1,186 @@
+project:
+  name: "matrix-tests"
+  modules: ["matrix-testing"]
+
+actions:
+  - name: echo-matrix
+    run: |
+      echo "Matrix values: os=${{ matrix.os }}"
+      echo "Platform: ${{ platform }}, Architecture: ${{ arch }}"
+      sleep 1  # Simulate some work
+
+  - name: long-running-test
+    run: |
+      echo "Starting long-running test for ${{ matrix.test_name }}"
+      echo "Duration: ${{ matrix.duration }} seconds"
+      for i in $(seq 1 ${{ matrix.duration }}); do
+        echo "  [${{ matrix.test_name }}] Progress: $i/${{ matrix.duration }}"
+        sleep 1
+      done
+      echo "Completed long-running test: ${{ matrix.test_name }}"
+
+  - name: parallel-workload
+    run: |
+      echo "Parallel workload ${{ matrix.workload_id }} starting"
+      echo "CPU intensive task for ${{ matrix.duration }} seconds"
+      # Simulate CPU intensive work
+      for i in $(seq 1 ${{ matrix.duration }}); do
+        echo "  [Workload ${{ matrix.workload_id }}] Step $i/${{ matrix.duration }}"
+        # Some CPU work
+        python3 -c "import time; [x*x for x in range(1000)]" 2>/dev/null || echo "    (Python not available, using sleep)"
+        sleep 0.5
+      done
+      echo "Parallel workload ${{ matrix.workload_id }} completed"
+
+  - name: failing-test
+    run: |
+      echo "This test will fail for ${{ matrix.test_case }}"
+      if [ "${{ matrix.test_case }}" = "fail" ]; then
+        echo "Simulating failure for test case: ${{ matrix.test_case }}"
+        exit 1
+      else
+        echo "Success for test case: ${{ matrix.test_case }}"
+      fi
+
+  - name: platform-specific-test
+    run: |
+      echo "Platform-specific test for ${{ matrix.platform }}"
+      case "${{ matrix.platform }}" in
+        "linux")
+          echo "Running Linux-specific commands"
+          uname -a
+          ;;
+        "windows")
+          echo "Running Windows-specific commands"
+          echo "OS: Windows"
+          ;;
+        "macos")
+          echo "Running macOS-specific commands"
+          uname -a
+          ;;
+        *)
+          echo "Unknown platform: ${{ matrix.platform }}"
+          ;;
+      esac
+
+stages:
+  # Basic matrix test with single dimension
+  basic-matrix:
+    steps:
+      - action: echo-matrix
+        matrix:
+          values:
+            os: ["linux", "windows", "macos"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Multi-dimensional matrix test (simulated with single dimension for now)
+  multi-dimension-matrix:
+    steps:
+      - action: echo-matrix
+        matrix:
+          values:
+            os: ["linux", "windows"]
+            version: ["1.0", "2.0"]
+            arch: ["amd64", "arm64"]
+          strategy:
+            max_parallel: 4
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Long-running tests with different durations
+  long-running-tests:
+    steps:
+      - action: long-running-test
+        matrix:
+          values:
+            test_name: ["unit", "integration", "e2e", "performance"]
+            duration: [3, 5, 2, 4]  # Different durations for each test
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: true
+            order: "fifo"
+
+  # Parallel workload test
+  parallel-workload:
+    steps:
+      - action: parallel-workload
+        matrix:
+          values:
+            workload_id: ["A", "B", "C", "D", "E"]
+            duration: [2, 3, 2, 4, 3]
+          strategy:
+            max_parallel: 3
+            fail_fast: false
+            continue_on_error: false
+            order: "random"
+
+  # Fail-fast test
+  fail-fast-test:
+    steps:
+      - action: failing-test
+        matrix:
+          values:
+            test_case: ["pass", "fail", "pass", "pass"]
+          strategy:
+            max_parallel: 2
+            fail_fast: true
+            continue_on_error: false
+            order: "fifo"
+
+  # Continue on error test
+  continue-on-error-test:
+    steps:
+      - action: failing-test
+        matrix:
+          values:
+            test_case: ["pass", "fail", "pass", "fail"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: true
+            order: "fifo"
+
+  # Platform-specific tests
+  platform-tests:
+    steps:
+      - action: platform-specific-test
+        matrix:
+          values:
+            platform: ["linux", "windows", "macos", "unknown"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Large matrix test
+  large-matrix:
+    steps:
+      - action: echo-matrix
+        matrix:
+          values:
+            test_id: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+          strategy:
+            max_parallel: 4
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Random order test
+  random-order-test:
+    steps:
+      - action: echo-matrix
+        matrix:
+          values:
+            task: ["task1", "task2", "task3", "task4", "task5"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "random"

@@ -12,6 +12,7 @@ buildfab provides a comprehensive automation framework with powerful features fo
 
 - **YAML-driven configuration** with intuitive syntax and modular organization
 - **DAG-based execution** with parallel processing and dependency management  
+- **Matrix feature** for parallel execution across multiple configurations
 - **Built-in actions** for common tasks (git checks, version validation)
 - **Action variants** for platform-specific execution
 - **Conditional execution** with powerful expression language

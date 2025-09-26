@@ -1,0 +1,140 @@
+project:
+  name: "matrix-error-tests"
+  modules: ["matrix-testing"]
+
+actions:
+  - name: always-fail
+    run: |
+      echo "This action always fails for ${{ matrix.test_case }}"
+      exit 1
+
+  - name: sometimes-fail
+    run: |
+      echo "Testing ${{ matrix.test_case }}"
+      if [ "${{ matrix.test_case }}" = "fail" ]; then
+        echo "This test case is designed to fail"
+        exit 1
+      else
+        echo "This test case should pass"
+      fi
+
+  - name: slow-fail
+    run: |
+      echo "Slow failing test: ${{ matrix.test_case }}"
+      sleep 2
+      if [ "${{ matrix.test_case }}" = "slow-fail" ]; then
+        echo "Slow test is failing after delay"
+        exit 1
+      else
+        echo "Slow test passed"
+      fi
+
+  - name: quick-pass
+    run: |
+      echo "Quick passing test: ${{ matrix.test_case }}"
+      sleep 0.5
+
+stages:
+  # Test fail_fast = true
+  fail-fast-test:
+    steps:
+      - action: sometimes-fail
+        matrix:
+          values:
+            test_case: ["pass", "fail", "pass", "pass"]
+          strategy:
+            max_parallel: 2
+            fail_fast: true
+            continue_on_error: false
+            order: "fifo"
+
+  # Test continue_on_error = true
+  continue-on-error-test:
+    steps:
+      - action: sometimes-fail
+        matrix:
+          values:
+            test_case: ["pass", "fail", "pass", "fail"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: true
+            order: "fifo"
+
+  # Test all jobs fail
+  all-fail-test:
+    steps:
+      - action: always-fail
+        matrix:
+          values:
+            test_case: ["fail1", "fail2", "fail3"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: true
+            order: "fifo"
+
+  # Test mixed timing with failures
+  mixed-timing-failures:
+    steps:
+      - action: slow-fail
+        matrix:
+          values:
+            test_case: ["slow-fail", "slow-pass", "slow-fail", "slow-pass"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: true
+            order: "fifo"
+
+  # Test fail_fast with slow failures
+  fail-fast-slow:
+    steps:
+      - action: slow-fail
+        matrix:
+          values:
+            test_case: ["slow-pass", "slow-fail", "slow-pass", "slow-pass"]
+          strategy:
+            max_parallel: 2
+            fail_fast: true
+            continue_on_error: false
+            order: "fifo"
+
+  # Test random order with failures
+  random-failures:
+    steps:
+      - action: sometimes-fail
+        matrix:
+          values:
+            test_case: ["pass", "fail", "pass", "fail", "pass", "fail"]
+          strategy:
+            max_parallel: 3
+            fail_fast: false
+            continue_on_error: true
+            order: "random"
+
+  # Test single job failure
+  single-failure:
+    steps:
+      - action: sometimes-fail
+        matrix:
+          values:
+            test_case: ["pass", "fail"]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Test all jobs pass
+  all-pass-test:
+    steps:
+      - action: quick-pass
+        matrix:
+          values:
+            test_case: ["pass1", "pass2", "pass3", "pass4"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
