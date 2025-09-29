@@ -193,13 +193,13 @@ func TestSimpleStepCallback(t *testing.T) {
 	callback.OnStepStart(ctx, "test-step")
 
 	// Test OnStepComplete with success
-	callback.OnStepComplete(ctx, "test-step", StepStatusOK, "success", time.Second)
-
+	callback.OnStepComplete(ctx, "test-step", StepStatusOK, "success", time.Second, "")
+	
 	// Test OnStepComplete with error (should enhance message)
-	callback.OnStepComplete(ctx, "failing-action", StepStatusError, "command failed: exit status 1", time.Second)
-
+	callback.OnStepComplete(ctx, "failing-action", StepStatusError, "command failed: exit status 1", time.Second, "")
+	
 	// Test OnStepComplete with skipped (should enhance message)
-	callback.OnStepComplete(ctx, "skipped-step", StepStatusSkipped, "skipped (dependency failed)", time.Second)
+	callback.OnStepComplete(ctx, "skipped-step", StepStatusSkipped, "skipped (dependency failed)", time.Second, "")
 
 	// Test OnStepOutput
 	callback.OnStepOutput(ctx, "test-step", "test output")

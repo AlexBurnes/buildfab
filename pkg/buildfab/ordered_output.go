@@ -20,7 +20,7 @@ type OrderedOutputManager struct {
 	stepData    map[string]*StepOutputData // Buffered data for each step
 	currentStep string                     // Currently active step for output
 	mu          *sync.Mutex
-	verbose     bool
+	verboseLevel int
 	debug       bool
 	errorOutput io.Writer
 	config      *Config                    // Configuration for command extraction
@@ -28,23 +28,24 @@ type OrderedOutputManager struct {
 
 // StepOutputData contains all output data for a step
 type StepOutputData struct {
-	Started   bool
-	Completed bool
-	Shown     bool  // Track if step start message has been shown
-	Status    StepStatus
-	Message   string
-	Duration  time.Duration
-	Output    []string
-	Error     error
+	Started        bool
+	Completed      bool
+	Shown          bool  // Track if step start message has been shown
+	Status         StepStatus
+	Message        string
+	Duration       time.Duration
+	Output         []string
+	Error          error
+	BufferedOutput string // Store buffered stdout/stderr for quiet mode
 }
 
 // NewOrderedOutputManager creates a new ordered output manager
-func NewOrderedOutputManager(steps []Step, verbose bool, debug bool, errorOutput io.Writer, config *Config) *OrderedOutputManager {
+func NewOrderedOutputManager(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config) *OrderedOutputManager {
 	return &OrderedOutputManager{
 		steps:       steps,
 		stepData:    make(map[string]*StepOutputData),
 		mu:          &sync.Mutex{},
-		verbose:     verbose,
+		verboseLevel: verboseLevel,
 		debug:       debug,
 		errorOutput: errorOutput,
 		config:      config,
@@ -89,7 +90,7 @@ func (o *OrderedOutputManager) OnStepStart(ctx context.Context, stepName string)
 }
 
 // OnStepComplete handles step completion events from executor
-func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration) {
+func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	
@@ -103,6 +104,7 @@ func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName stri
 		data.Status = status
 		data.Message = message
 		data.Duration = duration
+		data.BufferedOutput = bufferedOutput
 	}
 	
 	// Show step completion message if this is the current step
@@ -126,12 +128,14 @@ func (o *OrderedOutputManager) OnStepOutput(ctx context.Context, stepName string
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	
+	
 	if data, exists := o.stepData[stepName]; exists {
 		data.Output = append(data.Output, output)
 	}
 	
-	// Stream output immediately if this is the current active step
-	if o.currentStep == stepName {
+	// Only stream output immediately in verbose mode (level > 0)
+	// In quiet mode (level 0), output is buffered and only shown on failure
+	if o.verboseLevel > 0 && o.currentStep == stepName {
 		o.showStepOutput(output)
 	}
 }
@@ -259,7 +263,7 @@ func (o *OrderedOutputManager) checkAndShowNextStep() {
 
 // showStepStart shows the start message for a step
 func (o *OrderedOutputManager) showStepStart(stepName string) {
-	if o.verbose {
+	if o.verboseLevel > 0 {
 		fmt.Fprintf(o.errorOutput, "  💻 %s\n", stepName)
 	} else {
 		// In silence mode, show running indicator
@@ -270,15 +274,34 @@ func (o *OrderedOutputManager) showStepStart(stepName string) {
 // showStepCompletion shows the completion message for a step
 func (o *OrderedOutputManager) showStepCompletion(stepName string) {
 	if data, exists := o.stepData[stepName]; exists {
-		// Output is now streamed immediately, so no need to show buffered output here
-		// Just show the completion message
-		o.showStepResult(stepName, data.Status, data.Message, data.Duration)
+		// In quiet mode (level 0), show buffered output on failure before the result message
+		if o.verboseLevel == 0 && data.Status == StepStatusError && data.BufferedOutput != "" {
+			// Show step name and "execute failure" message first
+			fmt.Fprintf(o.errorOutput, "\r  %s%s%s %s execute failure\n", colorRed, "✗", colorReset, stepName)
+			
+			// Display the buffered output (which contains stdout/stderr)
+			lines := strings.Split(strings.TrimRight(data.BufferedOutput, "\n"), "\n")
+			for _, line := range lines {
+				fmt.Fprintf(o.errorOutput, "    %s\n", line)
+			}
+			
+			// Show "to check run:" and command lines only for level 3 (vvv)
+			if o.verboseLevel == 3 {
+				fmt.Fprintf(o.errorOutput, "    🔧 to check run:\n")
+				// Use extractCommand to properly format the command with correct indentation
+				command := o.extractCommand(stepName, data.Message)
+				fmt.Fprintf(o.errorOutput, "%s\n", command)
+			}
+		} else {
+			// For other cases (success, verbose mode), show the normal result message
+			o.showStepResult(stepName, data.Status, data.Message, data.Duration)
+		}
 	}
 }
 
 // showStepOutput shows step output
 func (o *OrderedOutputManager) showStepOutput(output string) {
-	if o.verbose {
+	if o.verboseLevel > 0 {
 		fmt.Fprintf(o.errorOutput, "    %s\n", output)
 	}
 }
@@ -322,7 +345,7 @@ func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus
 		color = colorGray
 	}
 	
-	if o.verbose {
+	if o.verboseLevel > 0 {
 		// In verbose mode, just print the result
 		fmt.Fprintf(o.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
 	} else {
@@ -339,8 +362,8 @@ type OrderedStepCallback struct {
 }
 
 // NewOrderedStepCallback creates a new ordered step callback
-func NewOrderedStepCallback(steps []Step, verbose bool, debug bool, errorOutput io.Writer, config *Config) *OrderedStepCallback {
-	manager := NewOrderedOutputManager(steps, verbose, debug, errorOutput, config)
+func NewOrderedStepCallback(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config) *OrderedStepCallback {
+	manager := NewOrderedOutputManager(steps, verboseLevel, debug, errorOutput, config)
 	
 	// Register all steps
 	for _, step := range steps {
@@ -360,8 +383,8 @@ func (c *OrderedStepCallback) OnStepStart(ctx context.Context, stepName string) 
 }
 
 // OnStepComplete implements StepCallback interface
-func (c *OrderedStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration) {
-	c.manager.OnStepComplete(ctx, stepName, status, message, duration)
+func (c *OrderedStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
+	c.manager.OnStepComplete(ctx, stepName, status, message, duration, bufferedOutput)
 	
 	// Collect result for summary (thread-safe)
 	c.mu.Lock()
@@ -433,7 +456,11 @@ func (o *OrderedOutputManager) enhanceMessage(stepName string, status StepStatus
 			if len(reproductionLines) > 0 {
 				// Reformat the command with proper indentation
 				command := o.extractCommand(stepName, strings.Join(reproductionLines, "\n"))
-				return fmt.Sprintf("to check run:\n%s", command)
+				if o.verboseLevel == 3 {
+					return fmt.Sprintf("execute failure\n    🔧 to check run:\n%s", command)
+				} else {
+					return "execute failure"
+				}
 			}
 		}
 		// Check if message is wrapped by runStageInternal
@@ -448,14 +475,22 @@ func (o *OrderedOutputManager) enhanceMessage(stepName string, status StepStatus
 				}
 				// If original message doesn't have reproduction instructions, add them
 				command := o.extractCommand(stepName, message)
-				return fmt.Sprintf("to check run:\n%s", command)
+				if o.verboseLevel == 3 {
+					return fmt.Sprintf("execute failure\n    🔧 to check run:\n%s", command)
+				} else {
+					return "execute failure"
+				}
 			}
 		}
 		// Enhance error messages with reproduction instructions
 		if strings.Contains(message, "command failed: exit status") {
 			// Extract the command from the step name or message
 			command := o.extractCommand(stepName, message)
-			return fmt.Sprintf("to check run:\n%s", command)
+			if o.verboseLevel == 3 {
+				return fmt.Sprintf("execute failure\n    🔧 to check run:\n%s", command)
+			} else {
+				return "execute failure"
+			}
 		}
 		return message
 	case StepStatusSkipped:

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.7] - 2025-09-29
+
+### Added
+- **Verbosity levels system**: Implemented comprehensive verbosity levels with granular control over output detail and debug options
+  - Added `-v`, `-vv`, `-vvv` levels using CountVarP flag for CLI support
+  - **Level 0 (quiet, `-q`)**: `<output data>` only on errors, `'to check run'` never
+  - **Level 1 (verbose, `-v`)**: `<output data>` always, `'to check run'` never  
+  - **Level 2 (debug, `-vv`)**: `<output data>` always, `'to check run'` never, adds shell debug options (`-x`)
+  - **Level 3 (trace, `-vvv`)**: `<output data>` always, `'to check run'` on errors, adds shell debug options (`-x`)
+  - Updated all data structures from `Verbose bool` to `VerboseLevel int` for level-based control
+  - Enhanced OrderedOutputManager to support verbosity levels with proper output streaming and buffering
+  - Added shell debug options (`-x`) for sh and bash commands on levels 2 and 3
+  - Implemented level-based output logic across all components for consistent behavior
+  - Comprehensive testing verified all verbosity levels work correctly with proper output behavior
+  - Perfect user experience with granular control over output detail and clear level definitions
+
+### Added
+- **Quiet mode buffering**: Enhanced quiet mode (-q) to buffer command output and display it when commands fail
+  - In quiet mode, stdout and stderr from command execution are captured and stored
+  - When a command fails, the buffered output is displayed along with the error message
+  - Provides better debugging experience in quiet mode by showing what the command actually output
+  - Maintains clean output for successful commands while preserving failure details
+
 ## [0.16.6] - 2025-09-29
 
 ### Fixed

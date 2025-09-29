@@ -40,7 +40,7 @@ func (m *MockStepCallback) OnStepStart(ctx context.Context, stepName string) {
 	m.OnStepStartCalls = append(m.OnStepStartCalls, stepName)
 }
 
-func (m *MockStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration) {
+func (m *MockStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.OnStepCompleteCalls = append(m.OnStepCompleteCalls, StepCompleteCall{

@@ -279,7 +279,7 @@ func (c *TestStepCallback) OnStepStart(ctx context.Context, stepName string) {
 	// No-op for testing
 }
 
-func (c *TestStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration) {
+func (c *TestStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
 	*c.results = append(*c.results, OnErrorTestResult{
 		StepName:   stepName,
 		ActionName: stepName,

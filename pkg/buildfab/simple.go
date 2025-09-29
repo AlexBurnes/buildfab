@@ -45,7 +45,7 @@ type SimpleRunner struct {
 type SimpleRunOptions struct {
 	ConfigPath  string            // Path to project.yml (default: ".project.yml")
 	MaxParallel int               // Maximum parallel execution (default: CPU count)
-	Verbose     bool              // Enable verbose output
+	VerboseLevel int              // Verbosity level: 0=quiet, 1=-v, 2=-vv, 3=-vvv
 	Debug       bool              // Enable debug output
 	DryRun      bool              // Show what would be executed without running commands
 	Variables   map[string]string // Additional variables for interpolation
@@ -65,7 +65,7 @@ func DefaultSimpleRunOptions() *SimpleRunOptions {
 	return &SimpleRunOptions{
 		ConfigPath:  ".project.yml",
 		MaxParallel: runtime.NumCPU(),
-		Verbose:     false,
+		VerboseLevel: 0,
 		Debug:       false,
 		Variables:   variables,
 		WorkingDir:  ".",
@@ -107,13 +107,13 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	stageStart := time.Now()
 
 	// Create ordered step callback to collect results with proper ordering
-	stepCallback := NewOrderedStepCallback(stage.Steps, r.opts.Verbose, r.opts.Debug, r.opts.ErrorOutput, r.config)
+	stepCallback := NewOrderedStepCallback(stage.Steps, r.opts.VerboseLevel, r.opts.Debug, r.opts.ErrorOutput, r.config)
 
 	// Convert to complex options for internal executor
 	complexOpts := &RunOptions{
 		ConfigPath:   r.opts.ConfigPath,
 		MaxParallel:  r.opts.MaxParallel,
-		Verbose:      r.opts.Verbose,
+		VerboseLevel: r.opts.VerboseLevel,
 		Debug:        r.opts.Debug,
 		DryRun:       r.opts.DryRun,
 		Variables:    r.opts.Variables,
@@ -139,7 +139,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	for _, stepName := range skippedSteps {
 		// Call step callbacks for skipped steps
 		stepCallback.OnStepStart(ctx, stepName)
-		stepCallback.OnStepComplete(ctx, stepName, StepStatusSkipped, "skipped (dependency failed)", 0)
+		stepCallback.OnStepComplete(ctx, stepName, StepStatusSkipped, "skipped (dependency failed)", 0, "")
 	}
 	
 	// Get updated results after handling skipped steps
@@ -166,18 +166,19 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
 
 	// Create step callback to collect results
 	stepCallback := &SimpleStepCallback{
-		verbose: r.opts.Verbose,
+		verboseLevel: r.opts.VerboseLevel,
 		debug:   r.opts.Debug,
 		output:  r.opts.ErrorOutput,  // Use errorOutput for step results
 		errorOutput: r.opts.ErrorOutput,
 		config:  r.config,
+		bufferedOutput: make(map[string]*BufferedOutput),
 	}
 
 	// Convert to complex options and use internal runner
 	complexOpts := &RunOptions{
 		ConfigPath:   r.opts.ConfigPath,
 		MaxParallel:  r.opts.MaxParallel,
-		Verbose:      r.opts.Verbose,
+		VerboseLevel: r.opts.VerboseLevel,
 		Debug:        r.opts.Debug,
 		DryRun:       r.opts.DryRun,
 		Variables:    r.opts.Variables,
@@ -256,7 +257,7 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
 	complexOpts := &RunOptions{
 		ConfigPath:   r.opts.ConfigPath,
 		MaxParallel:  r.opts.MaxParallel,
-		Verbose:      r.opts.Verbose,
+		VerboseLevel: r.opts.VerboseLevel,
 		Debug:        r.opts.Debug,
 		DryRun:       r.opts.DryRun,
 		Variables:    r.opts.Variables,
@@ -266,11 +267,12 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
 		Only:         r.opts.Only,
 		WithRequires: r.opts.WithRequires,
 		StepCallback: &SimpleStepCallback{
-			verbose: r.opts.Verbose,
+			verboseLevel: r.opts.VerboseLevel,
 			debug:   r.opts.Debug,
 			output:  r.opts.ErrorOutput,  // Use errorOutput for step results
 			errorOutput: r.opts.ErrorOutput,
 			config:  r.config,
+			bufferedOutput: make(map[string]*BufferedOutput),
 		},
 	}
 
@@ -280,18 +282,36 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
 
 // SimpleStepCallback implements StepCallback for simple output
 type SimpleStepCallback struct {
-	verbose     bool
+	verboseLevel int
 	debug       bool
 	output      io.Writer
 	errorOutput io.Writer
 	results     []StepResult
 	displayed   map[string]bool
 	config      *Config // Store config to access action details
+	bufferedOutput map[string]*BufferedOutput // Store buffered output for quiet mode
+}
+
+// BufferedOutput stores captured stdout and stderr for a step
+type BufferedOutput struct {
+	Stdout string
+	Stderr string
 }
 
 
+// StoreBufferedOutput stores captured stdout and stderr for a step
+func (c *SimpleStepCallback) StoreBufferedOutput(stepName, stdout, stderr string) {
+	if c.bufferedOutput == nil {
+		c.bufferedOutput = make(map[string]*BufferedOutput)
+	}
+	c.bufferedOutput[stepName] = &BufferedOutput{
+		Stdout: stdout,
+		Stderr: stderr,
+	}
+}
+
 func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
-	if c.verbose {
+	if c.verboseLevel > 0 {
 		fmt.Fprintf(c.errorOutput, "  💻 %s\n", stepName)
 	} else {
 		// In silence mode, show running indicator
@@ -299,7 +319,7 @@ func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
 	}
 }
 
-func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration) {
+func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
 	// Initialize displayed map if not already done
 	if c.displayed == nil {
 		c.displayed = make(map[string]bool)
@@ -333,13 +353,20 @@ func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string
 		executionTime := formatExecutionTime(status, duration)
 		displayMessage += executionTime
 		
-		if c.verbose {
+		if c.verboseLevel > 0 {
 			// In verbose mode, just print the result
 			fmt.Fprintf(c.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
 		} else {
 			// In silence mode, replace the running indicator with the result
 			// Clear the running line and print the final result
 			fmt.Fprintf(c.errorOutput, "\r  %s%s%s %s %s\n", color, icon, colorReset, stepName, displayMessage)
+			
+			// In quiet mode, if the step failed, display buffered output
+			if status == StepStatusError && c.bufferedOutput != nil {
+				if buffered, exists := c.bufferedOutput[stepName]; exists {
+					c.displayBufferedOutput(stepName, buffered)
+				}
+			}
 		}
 		c.displayed[stepName] = true
 	}
@@ -367,7 +394,7 @@ func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string
 }
 
 func (c *SimpleStepCallback) OnStepOutput(ctx context.Context, stepName string, output string) {
-	if c.verbose && output != "" {
+	if output != "" {
 		lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
 		for _, line := range lines {
 			fmt.Fprintf(c.output, "    %s\n", line)
@@ -377,6 +404,25 @@ func (c *SimpleStepCallback) OnStepOutput(ctx context.Context, stepName string, 
 
 func (c *SimpleStepCallback) OnStepError(ctx context.Context, stepName string, err error) {
 	// Don't display here - OnStepComplete should handle all display
+}
+
+// displayBufferedOutput displays the buffered stdout and stderr for a failed step
+func (c *SimpleStepCallback) displayBufferedOutput(stepName string, buffered *BufferedOutput) {
+	if buffered.Stdout != "" || buffered.Stderr != "" {
+		fmt.Fprintf(c.errorOutput, "\n")
+		if buffered.Stdout != "" {
+			lines := strings.Split(strings.TrimRight(buffered.Stdout, "\n"), "\n")
+			for _, line := range lines {
+				fmt.Fprintf(c.errorOutput, "    %s\n", line)
+			}
+		}
+		if buffered.Stderr != "" {
+			lines := strings.Split(strings.TrimRight(buffered.Stderr, "\n"), "\n")
+			for _, line := range lines {
+				fmt.Fprintf(c.errorOutput, "    %s\n", line)
+			}
+		}
+	}
 }
 
 // GetResults returns the collected step results
@@ -781,7 +827,7 @@ func (r *SimpleRunner) executeStageDryRun(ctx context.Context, stageName string,
 		
 		if !shouldExecute {
 			skippedSteps++
-			if r.opts.Verbose {
+			if r.opts.VerboseLevel > 0 {
 				fmt.Fprintf(r.opts.Output, "→ %s: would skip (condition not met)\n", step.Action)
 			}
 			continue
@@ -800,7 +846,7 @@ func (r *SimpleRunner) executeStageDryRun(ctx context.Context, stageName string,
 			}
 			if !stepMatches {
 				skippedSteps++
-				if r.opts.Verbose {
+				if r.opts.VerboseLevel > 0 {
 					fmt.Fprintf(r.opts.Output, "→ %s: would skip (not in only filter)\n", step.Action)
 				}
 				continue
@@ -815,11 +861,11 @@ func (r *SimpleRunner) executeStageDryRun(ctx context.Context, stageName string,
 			// Check if it's a built-in action
 			if runner, exists := r.registry.GetRunner(step.Action); exists {
 				description := runner.Description()
-				if r.opts.Verbose {
+				if r.opts.VerboseLevel > 0 {
 					fmt.Fprintf(r.opts.Output, "  ✓ %s would execute built-in action: %s\n", step.Action, description)
 				}
 			} else {
-				if r.opts.Verbose {
+				if r.opts.VerboseLevel > 0 {
 					fmt.Fprintf(r.opts.Output, "  ✗ %s would fail (action not found)\n", step.Action)
 				}
 			}
@@ -827,7 +873,7 @@ func (r *SimpleRunner) executeStageDryRun(ctx context.Context, stageName string,
 			// Simulate custom action execution
 			err := r.runActionInternalDryRun(ctx, action)
 			if err != nil {
-				if r.opts.Verbose {
+				if r.opts.VerboseLevel > 0 {
 					fmt.Fprintf(r.opts.Output, "  ✗ %s would fail (%v)\n", step.Action, err)
 				}
 			}
@@ -908,7 +954,7 @@ func (r *SimpleRunner) runBuiltInActionDryRun(ctx context.Context, action Action
 	description := runner.Description()
 	
 	// Print what would be executed if verbose mode is enabled
-	if r.opts.Verbose {
+	if r.opts.VerboseLevel > 0 {
 		fmt.Fprintf(r.opts.Output, "  ✓ %s would execute built-in action: %s\n", action.Name, description)
 	}
 	
@@ -928,7 +974,7 @@ func (r *SimpleRunner) runCustomActionDryRun(ctx context.Context, action Action)
 	}
 	
 	// Get shell command info
-	shell, shellArgs, err := getShellCommand(action.Shell)
+	shell, shellArgs, err := getShellCommand(action.Shell, r.opts.VerboseLevel)
 	if err != nil {
 		return fmt.Errorf("shell configuration error for action %s: %w", action.Name, err)
 	}
@@ -938,7 +984,7 @@ func (r *SimpleRunner) runCustomActionDryRun(ctx context.Context, action Action)
 	commandStr := shell + " " + strings.Join(fullCommand, " ")
 	
 	// Print what would be executed if verbose mode is enabled
-	if r.opts.Verbose {
+	if r.opts.VerboseLevel > 0 {
 		fmt.Fprintf(r.opts.Output, "  💻 %s\n", action.Name)
 		fmt.Fprintf(r.opts.Output, "   ✓ %s, would execute command:\n", action.Name)
 		
@@ -961,7 +1007,7 @@ func (r *SimpleRunner) runCustomActionDryRun(ctx context.Context, action Action)
 // Simple convenience functions for even easier usage
 
 // RunStageSimple executes a stage with minimal configuration
-func RunStageSimple(ctx context.Context, configPath, stageName string, verbose bool) error {
+func RunStageSimple(ctx context.Context, configPath, stageName string, verboseLevel int) error {
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
@@ -969,7 +1015,7 @@ func RunStageSimple(ctx context.Context, configPath, stageName string, verbose b
 
 	opts := &SimpleRunOptions{
 		ConfigPath: configPath,
-		Verbose:    verbose,
+		VerboseLevel: verboseLevel,
 		Output:     os.Stdout,
 		ErrorOutput: os.Stderr,
 	}
@@ -979,7 +1025,7 @@ func RunStageSimple(ctx context.Context, configPath, stageName string, verbose b
 }
 
 // RunActionSimple executes an action with minimal configuration
-func RunActionSimple(ctx context.Context, configPath, actionName string, verbose bool) error {
+func RunActionSimple(ctx context.Context, configPath, actionName string, verboseLevel int) error {
 	cfg, err := LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
@@ -987,7 +1033,7 @@ func RunActionSimple(ctx context.Context, configPath, actionName string, verbose
 
 	opts := &SimpleRunOptions{
 		ConfigPath: configPath,
-		Verbose:    verbose,
+		VerboseLevel: verboseLevel,
 		Output:     os.Stdout,
 		ErrorOutput: os.Stderr,
 	}

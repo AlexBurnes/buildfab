@@ -62,7 +62,7 @@ type StepCallback interface {
 	OnStepStart(ctx context.Context, stepName string)
 	
 	// OnStepComplete is called when a step completes (success, warning, or error)
-	OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration)
+	OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string)
 	
 	// OnStepOutput is called for step output (when verbose mode is enabled)
 	OnStepOutput(ctx context.Context, stepName string, output string)
