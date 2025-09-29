@@ -11,8 +11,12 @@
   - Updated Features-and-examples.md and README.md to include matrix feature documentation
   - Created comprehensive user test examples for different matrix scenarios including basic matrix, parallel execution, error handling, and long-running tests
   - Perfect integration with existing buildfab architecture and execution engine
-  - Feature branch created (feature/matrix) with feature version v0.16.5_feat.1 for matrix feature development
-  - VERSION 0.16.6 RELEASED with comprehensive matrix feature implementation
+  - Feature branch created (feature/matrix) with feature version v0.16.5_feat.1_fix.1 for matrix feature development
+  - **Matrix Output Suppression Fix**: Fixed race condition in matrix execution where some step output was being lost due to timing issues between step completion and output buffering
+  - Added double-flush mechanism in OrderedOutputManager to ensure all buffered output is displayed consistently
+  - Matrix steps now consistently show complete output regardless of execution timing
+  - Resolved intermittent missing output lines in verbose mode
+  - VERSION 0.16.5_feat.1_fix.1 RELEASED with comprehensive matrix feature implementation and output suppression fix
 - **Comprehensive Documentation Review and Release**: Successfully reviewed buildfab project features and YAML configuration syntax, creating comprehensive documentation for users and released version 0.16.5
   - Created Features-and-examples.md - comprehensive documentation with detailed examples covering all buildfab features including action variants, conditional execution, include system, variable interpolation, and advanced usage patterns
   - Created YAML-syntax-reference.md - complete YAML configuration syntax reference with all fields, types, validation rules, and practical examples
