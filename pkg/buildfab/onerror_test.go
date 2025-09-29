@@ -215,7 +215,7 @@ func TestOnErrorPolicyWithTestActions(t *testing.T) {
 
 			opts := &RunOptions{
 				StepCallback: stepCallback,
-				Verbose:      true,
+				VerboseLevel: 1,
 			}
 
 			runner := NewRunner(tt.config, opts)

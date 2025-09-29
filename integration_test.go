@@ -107,7 +107,7 @@ stages:
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configFile,
 		MaxParallel: 2,
-		Verbose:     false,
+		VerboseLevel: 0,
 		Debug:       false,
 		Variables:   variables,
 		WorkingDir:  tempDir,
@@ -180,7 +180,7 @@ stages:
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configFile,
 		MaxParallel: 2,
-		Verbose:     false,
+		VerboseLevel: 0,
 		Debug:       false,
 		Variables:   make(map[string]string),
 		WorkingDir:  tempDir,

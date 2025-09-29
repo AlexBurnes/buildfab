@@ -22,7 +22,7 @@ func main() {
 	// Create simple run options
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath: ".project.yml",
-		Verbose:    true,
+		VerboseLevel: 1,
 		Output:     os.Stdout,
 		ErrorOutput: os.Stderr,
 	}
@@ -40,7 +40,7 @@ func main() {
 	fmt.Println("\n=== Example 2: Using convenience functions ===")
 	
 	// Example 2: Using convenience functions for minimal setup
-	err = buildfab.RunStageSimple(ctx, ".project.yml", "pre-push", true)
+	err = buildfab.RunStageSimple(ctx, ".project.yml", "pre-push", 1)
 	if err != nil {
 		fmt.Printf("Stage failed: %v\n", err)
 	}

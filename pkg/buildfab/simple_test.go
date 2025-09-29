@@ -32,7 +32,7 @@ func TestSimpleRunner_RunStage(t *testing.T) {
 
 	// Create simple runner
 	opts := &SimpleRunOptions{
-		Verbose:     true,
+		VerboseLevel: 1,
 		Output:      os.Stdout,
 		ErrorOutput: os.Stderr,
 	}
@@ -64,7 +64,7 @@ func TestSimpleRunner_RunAction(t *testing.T) {
 
 	// Create simple runner
 	opts := &SimpleRunOptions{
-		Verbose:     true,
+		VerboseLevel: 1,
 		Output:      os.Stdout,
 		ErrorOutput: os.Stderr,
 	}
@@ -102,7 +102,7 @@ func TestSimpleRunner_RunStageStep(t *testing.T) {
 
 	// Create simple runner
 	opts := &SimpleRunOptions{
-		Verbose:     true,
+		VerboseLevel: 1,
 		Output:      os.Stdout,
 		ErrorOutput: os.Stderr,
 	}
@@ -132,7 +132,7 @@ func TestSimpleRunner_ErrorHandling(t *testing.T) {
 
 	// Create simple runner
 	opts := &SimpleRunOptions{
-		Verbose:     true,
+		VerboseLevel: 1,
 		Output:      os.Stdout,
 		ErrorOutput: os.Stderr,
 	}
@@ -180,7 +180,7 @@ func TestSimpleStepCallback(t *testing.T) {
 	}
 
 	callback := &SimpleStepCallback{
-		verbose: true,
+		verboseLevel: 1,
 		debug:   false,
 		output:  os.Stdout,
 		errorOutput: os.Stderr,

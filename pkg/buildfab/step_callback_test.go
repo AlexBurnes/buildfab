@@ -119,7 +119,7 @@ func TestStepCallbackIntegration(t *testing.T) {
 	// Create run options with callback
 	opts := DefaultRunOptions()
 	opts.StepCallback = mockCallback
-	opts.Verbose = true
+	opts.VerboseLevel = 1
 
 	// Create runner
 	runner := NewRunner(config, opts)
@@ -207,7 +207,7 @@ func TestRunActionWithCallbacks(t *testing.T) {
 	mockCallback := &MockStepCallback{}
 	opts := DefaultRunOptions()
 	opts.StepCallback = mockCallback
-	opts.Verbose = true
+	opts.VerboseLevel = 1
 
 	runner := NewRunner(config, opts)
 
@@ -278,7 +278,7 @@ func TestRunStageStepWithCallbacks(t *testing.T) {
 	mockCallback := &MockStepCallback{}
 	opts := DefaultRunOptions()
 	opts.StepCallback = mockCallback
-	opts.Verbose = true
+	opts.VerboseLevel = 1
 
 	runner := NewRunner(config, opts)
 
@@ -340,7 +340,7 @@ func TestStepCallbackWithoutVerbose(t *testing.T) {
 	mockCallback := &MockStepCallback{}
 	opts := DefaultRunOptions()
 	opts.StepCallback = mockCallback
-	opts.Verbose = false // Not verbose
+	opts.VerboseLevel = 0 // Not verbose
 
 	runner := NewRunner(config, opts)
 
@@ -447,7 +447,7 @@ func TestStepCallbackWithBuiltInActions(t *testing.T) {
 	mockCallback := &MockStepCallback{}
 	opts := DefaultRunOptions()
 	opts.StepCallback = mockCallback
-	opts.Verbose = true
+	opts.VerboseLevel = 1
 
 	runner := NewRunner(config, opts)
 
@@ -513,7 +513,7 @@ func TestStepCallbackOutput(t *testing.T) {
 	mockCallback := &MockStepCallback{}
 	opts := DefaultRunOptions()
 	opts.StepCallback = mockCallback
-	opts.Verbose = true
+	opts.VerboseLevel = 1
 
 	runner := NewRunner(config, opts)
 

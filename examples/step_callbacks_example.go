@@ -20,7 +20,7 @@ func (c *ExampleStepCallback) OnStepStart(ctx context.Context, stepName string) 
 }
 
 // OnStepComplete is called when a step completes (success, warning, or error)
-func (c *ExampleStepCallback) OnStepComplete(ctx context.Context, stepName string, status buildfab.StepStatus, message string, duration time.Duration) {
+func (c *ExampleStepCallback) OnStepComplete(ctx context.Context, stepName string, status buildfab.StepStatus, message string, duration time.Duration, bufferedOutput string) {
 	var icon string
 	switch status {
 	case buildfab.StepStatusOK:
@@ -62,7 +62,7 @@ func (c *VerboseStepCallback) OnStepStart(ctx context.Context, stepName string) 
 }
 
 // OnStepComplete is called when a step completes
-func (c *VerboseStepCallback) OnStepComplete(ctx context.Context, stepName string, status buildfab.StepStatus, message string, duration time.Duration) {
+func (c *VerboseStepCallback) OnStepComplete(ctx context.Context, stepName string, status buildfab.StepStatus, message string, duration time.Duration, bufferedOutput string) {
 	timestamp := time.Now().Format("15:04:05")
 	var icon string
 	var color string
@@ -110,7 +110,7 @@ func (c *SilentStepCallback) OnStepStart(ctx context.Context, stepName string) {
 }
 
 // OnStepComplete is called when a step completes
-func (c *SilentStepCallback) OnStepComplete(ctx context.Context, stepName string, status buildfab.StepStatus, message string, duration time.Duration) {
+func (c *SilentStepCallback) OnStepComplete(ctx context.Context, stepName string, status buildfab.StepStatus, message string, duration time.Duration, bufferedOutput string) {
 	// Only show errors
 	if status == buildfab.StepStatusError {
 		fmt.Printf("Error in %s: %s\n", stepName, message)
@@ -141,7 +141,7 @@ func mainStepCallbacks() {
 	// Create run options with step callback
 	opts := buildfab.DefaultRunOptions()
 	opts.StepCallback = &ExampleStepCallback{verbose: true}
-	opts.Verbose = true
+	opts.VerboseLevel = 1
 	
 	// Create runner
 	runner := buildfab.NewRunner(config, opts)
@@ -158,7 +158,7 @@ func mainStepCallbacks() {
 	// Example 2: Verbose callbacks with timestamps
 	opts2 := buildfab.DefaultRunOptions()
 	opts2.StepCallback = &VerboseStepCallback{}
-	opts2.Verbose = true
+	opts2.VerboseLevel = 1
 	
 	runner2 := buildfab.NewRunner(config, opts2)
 	err = runner2.RunStage(ctx, "pre-push")
@@ -182,7 +182,7 @@ func mainStepCallbacks() {
 	
 	// Example 4: No callbacks - default behavior
 	opts4 := buildfab.DefaultRunOptions()
-	opts4.Verbose = true
+	opts4.VerboseLevel = 1
 	
 	runner4 := buildfab.NewRunner(config, opts4)
 	err = runner4.RunStage(ctx, "pre-push")
@@ -195,7 +195,7 @@ func mainStepCallbacks() {
 	// Example 5: Running individual actions with callbacks
 	opts5 := buildfab.DefaultRunOptions()
 	opts5.StepCallback = &ExampleStepCallback{verbose: true}
-	opts5.Verbose = true
+	opts5.VerboseLevel = 1
 	
 	runner5 := buildfab.NewRunner(config, opts5)
 	

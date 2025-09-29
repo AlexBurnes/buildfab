@@ -41,8 +41,8 @@ func TestDefaultRunOptions(t *testing.T) {
 	if opts.MaxParallel != runtime.NumCPU() {
 		t.Errorf("MaxParallel = %v, want %v", opts.MaxParallel, runtime.NumCPU())
 	}
-	if opts.Verbose != true {
-		t.Errorf("Verbose = %v, want %v", opts.Verbose, true)
+	if opts.VerboseLevel > 0 != true {
+		t.Errorf("Verbose = %v, want %v", opts.VerboseLevel > 0, true)
 	}
 	if opts.Debug != false {
 		t.Errorf("Debug = %v, want %v", opts.Debug, false)
@@ -90,7 +90,7 @@ func TestNewRunner(t *testing.T) {
 	// Test with custom options
 	opts := &RunOptions{
 		ConfigPath: "custom.yml",
-		Verbose:    true,
+		VerboseLevel: 1,
 	}
 	runner2 := NewRunner(config, opts)
 	if runner2.config != config {

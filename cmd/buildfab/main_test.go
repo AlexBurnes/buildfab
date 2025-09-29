@@ -134,9 +134,9 @@ stages:
 	workingDir = filepath.Dir(configFile)
 	defer func() { workingDir = oldWorkingDir }()
 	
-	oldVerbose := verbose
-	verbose = false
-	defer func() { verbose = oldVerbose }()
+	oldVerbose := verboseLevel
+	verboseLevel = 0
+	defer func() { verboseLevel = oldVerbose }()
 	
 	oldDebug := debug
 	debug = false
@@ -213,9 +213,9 @@ actions:
 		t.Fatalf("Failed to change to working directory: %v", err)
 	}
 	
-	oldVerbose := verbose
-	verbose = false
-	defer func() { verbose = oldVerbose }()
+	oldVerbose := verboseLevel
+	verboseLevel = 0
+	defer func() { verboseLevel = oldVerbose }()
 	
 	oldDebug := debug
 	debug = false
@@ -532,8 +532,8 @@ func TestCommandStructure(t *testing.T) {
 
 func TestGlobalFlags(t *testing.T) {
 	// Initialize flags by calling main() setup
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", true, "enable verbose output (default)")
-	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "disable verbose output (silence mode)")
+	rootCmd.PersistentFlags().CountVarP(&verboseLevel, "verboseLevel", "v", "enable verboseLevel output (default)")
+	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "disable verboseLevel output (silence mode)")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug output")
 	rootCmd.PersistentFlags().StringVarP(&configPath, "config", "c", ".project.yml", "path to configuration file")
 	rootCmd.PersistentFlags().IntVar(&maxParallel, "max-parallel", 0, "maximum parallel execution (default: CPU count)")
@@ -544,7 +544,7 @@ func TestGlobalFlags(t *testing.T) {
 	
 	// Test that global flags are properly defined
 	flags := []string{
-		"verbose",
+		"verboseLevel",
 		"debug", 
 		"config",
 		"max-parallel",
