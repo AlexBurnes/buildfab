@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.9] - 2025-09-30
+
+### Changed
+- **Warning output enhancement**: Enhanced warning output behavior for steps with `onerror: warn` to display the same as errors but with warning icons
+  - Modified `showStepCompletion` function to include `StepStatusWarn` alongside `StepStatusError` for buffered output display in quiet mode
+  - Updated `enhanceMessage` function to handle both `StepStatusError` and `StepStatusWarn` together for consistent message enhancement
+  - Warnings now show buffered output, "execute failure" message, and command reproduction instructions just like errors
+  - Warnings use warning icon (`!`) and yellow color instead of error icon (`✗`) and red color
+  - Users get comprehensive warning output with all debugging information while maintaining visual distinction from errors
+
 ## [0.16.8] - 2025-09-30
 
 ### Fixed

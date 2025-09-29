@@ -274,10 +274,18 @@ func (o *OrderedOutputManager) showStepStart(stepName string) {
 // showStepCompletion shows the completion message for a step
 func (o *OrderedOutputManager) showStepCompletion(stepName string) {
 	if data, exists := o.stepData[stepName]; exists {
-		// In quiet mode (level 0), show buffered output on failure before the result message
-		if o.verboseLevel == 0 && data.Status == StepStatusError && data.BufferedOutput != "" {
+		// In quiet mode (level 0), show buffered output on failure/warning before the result message
+		if o.verboseLevel == 0 && (data.Status == StepStatusError || data.Status == StepStatusWarn) && data.BufferedOutput != "" {
 			// Show step name and "execute failure" message first
-			fmt.Fprintf(o.errorOutput, "\r  %s%s%s %s execute failure\n", colorRed, "✗", colorReset, stepName)
+			var icon, color string
+			if data.Status == StepStatusError {
+				icon = "✗"
+				color = colorRed
+			} else { // StepStatusWarn
+				icon = "!"
+				color = colorYellow
+			}
+			fmt.Fprintf(o.errorOutput, "\r  %s%s%s %s execute failure\n", color, icon, colorReset, stepName)
 			
 			// Display the buffered output (which contains stdout/stderr)
 			lines := strings.Split(strings.TrimRight(data.BufferedOutput, "\n"), "\n")
@@ -438,7 +446,7 @@ func (o *OrderedOutputManager) debugPrintState() {
 // enhanceMessage improves error messages to match v0.5.0 style
 func (o *OrderedOutputManager) enhanceMessage(stepName string, status StepStatus, message string) string {
 	switch status {
-	case StepStatusError:
+	case StepStatusError, StepStatusWarn:
 		// Check if message already contains reproduction instructions
 		if strings.Contains(message, "to check run:") {
 			// Extract just the reproduction part and reformat with proper indentation

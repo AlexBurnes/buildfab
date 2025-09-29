@@ -1,6 +1,14 @@
 # Progress: buildfab
 
 ## What Works
+- **Warning Output Enhancement**: Successfully implemented enhanced warning output behavior for steps with `onerror: warn` to display the same as errors but with warning icons
+  - Modified showStepCompletion function - extended condition to include StepStatusWarn alongside StepStatusError for buffered output display in quiet mode
+  - Updated enhanceMessage function - changed switch case to handle both StepStatusError and StepStatusWarn together for consistent message enhancement
+  - Enhanced warning display - warnings now show buffered output, "execute failure" message, and command reproduction instructions just like errors
+  - Proper icon and color usage - warnings use warning icon (!) and yellow color instead of error icon (✗) and red color
+  - Perfect user experience - users get comprehensive warning output with all debugging information while maintaining visual distinction from errors
+  - Comprehensive testing - verified enhanced warning behavior works correctly in both verbose and quiet modes with proper output formatting
+  - VERSION 0.16.9 RELEASED - completed warning output enhancement with comprehensive testing and automated version bump
 - **Default Verbose Mode Fix**: Successfully fixed CLI and library to default to verbose level 1 (-v) instead of 0 for better user experience
   - Updated DefaultSimpleRunOptions() - changed VerboseLevel: 0 to VerboseLevel: 1 to match DefaultRunOptions() behavior
   - Fixed CLI logic - updated both runStageDirect() and runActionDirect() functions to default to verbose level 1 when no -v flags are provided
