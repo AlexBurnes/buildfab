@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.6] - 2025-09-29
+
+### Fixed
+- **Static build configuration**: Fixed GoReleaser configuration to build static binaries for Linux and Darwin platforms
+  - Added `CGO_ENABLED=0` environment variable to disable CGO for static builds
+  - Added `-extldflags "-static"` to ldflags to force static linking for Linux and Darwin
+  - Verified Linux binaries are now static using ldd command showing "not a dynamic executable"
+  - Enhanced cross-platform compatibility with static binaries that don't require external dependencies
+  - Fixed build system integration where GoReleaser builds static binaries independently from CMake
+
 ## [0.16.5] - 2025-09-25
 
 ### Documentation
