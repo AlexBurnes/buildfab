@@ -65,7 +65,7 @@ func DefaultSimpleRunOptions() *SimpleRunOptions {
 	return &SimpleRunOptions{
 		ConfigPath:  ".project.yml",
 		MaxParallel: runtime.NumCPU(),
-		VerboseLevel: 0,
+		VerboseLevel: 1,
 		Debug:       false,
 		Variables:   variables,
 		WorkingDir:  ".",

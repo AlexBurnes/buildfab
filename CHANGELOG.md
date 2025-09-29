@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.8] - 2025-09-30
+
+### Fixed
+- **Default verbose mode**: Fixed CLI and library to default to verbose level 1 (-v) instead of 0
+  - Updated `DefaultSimpleRunOptions()` to set `VerboseLevel: 1` by default
+  - Updated CLI logic to default to verbose level 1 when no `-v` flags are provided
+  - Maintains backward compatibility with `-q` flag for quiet mode (level 0)
+  - Ensures consistent default behavior between CLI and library API
+  - Users now get detailed output by default without needing to specify `-v` flag
+
 ## [0.16.7] - 2025-09-29
 
 ### Added

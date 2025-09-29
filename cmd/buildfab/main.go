@@ -280,9 +280,13 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	variables = buildfab.AddPlatformVariables(variables)
 	
 	// If quiet is set, override verbose level to 0
+	// Otherwise, default to verbose level 1 if no verbose flags were provided
 	effectiveVerboseLevel := verboseLevel
 	if quiet {
 		effectiveVerboseLevel = 0
+	} else if verboseLevel == 0 {
+		// Default to verbose level 1 if no -v flags were provided
+		effectiveVerboseLevel = 1
 	}
 	
 	// Create simple run options
@@ -386,9 +390,13 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 	
 	// Create simple run options
 	// If quiet is set, override verbose level to 0
+	// Otherwise, default to verbose level 1 if no verbose flags were provided
 	effectiveVerboseLevel := verboseLevel
 	if quiet {
 		effectiveVerboseLevel = 0
+	} else if verboseLevel == 0 {
+		// Default to verbose level 1 if no -v flags were provided
+		effectiveVerboseLevel = 1
 	}
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configPath,
