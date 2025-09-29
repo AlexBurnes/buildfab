@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.5_feat.1_fix.1] - 2025-09-29
+
+### Fixed
+- **Matrix Output Suppression**: Fixed race condition in matrix execution where some step output was being lost due to timing issues between step completion and output buffering
+  - Added double-flush mechanism in OrderedOutputManager to ensure all buffered output is displayed
+  - Matrix steps now consistently show complete output regardless of execution timing
+  - Resolved intermittent missing output lines in verbose mode
+
 ## [Unreleased]
 
 ## [v0.16.5_feat.1] - 2025-09-26

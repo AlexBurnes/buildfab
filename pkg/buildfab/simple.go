@@ -90,7 +90,9 @@ func NewSimpleRunner(config *Config, opts *SimpleRunOptions) *SimpleRunner {
 
 // RunStage executes a specific stage with automatic output handling
 func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
-	fmt.Fprintf(os.Stderr, "[DEBUG] SimpleRunner.RunStage called with stageName=%s\n", stageName)
+	if r.opts.Debug {
+		fmt.Fprintf(os.Stderr, "[DEBUG] SimpleRunner.RunStage called with stageName=%s\n", stageName)
+	}
 	stage, exists := r.config.GetStage(stageName)
 	if !exists {
 		return fmt.Errorf("stage not found: %s", stageName)
@@ -119,8 +121,14 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	// Start timing the stage execution
 	stageStart := time.Now()
 
+	// Expand matrix steps into individual steps before creating output manager
+	expandedSteps, err := r.expandMatrixSteps(stage.Steps)
+	if err != nil {
+		return fmt.Errorf("failed to expand matrix steps: %w", err)
+	}
+
 	// Create ordered step callback to collect results with proper ordering
-	stepCallback := NewOrderedStepCallback(stage.Steps, r.opts.Verbose, r.opts.Debug, r.opts.ErrorOutput, r.config)
+	stepCallback := NewOrderedStepCallback(expandedSteps, r.opts.Verbose, r.opts.Debug, r.opts.ErrorOutput, r.config)
 
 	// Convert to complex options for internal executor
 	complexOpts := &RunOptions{
@@ -139,7 +147,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 	}
 
 	runner := NewRunner(r.config, complexOpts)
-	err := runner.RunStage(ctx, stageName)
+	err = runner.RunStageWithSteps(ctx, stageName, expandedSteps)
 	
 	// Calculate stage execution duration
 	stageDuration := time.Since(stageStart)
@@ -1007,4 +1015,60 @@ func RunActionSimple(ctx context.Context, configPath, actionName string, verbose
 
 	runner := NewSimpleRunner(cfg, opts)
 	return runner.RunAction(ctx, actionName)
+}
+
+// expandMatrixSteps expands matrix steps into individual steps for DAG execution
+func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
+	var expandedSteps []Step
+	
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: processing %d steps\n", len(steps))
+	}
+	
+	for i, step := range steps {
+		if r.opts.Debug {
+			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step %d: Action=%s, Matrix=%v\n", i, step.Action, step.Matrix != nil)
+		}
+		
+		// Check if this step has matrix configuration
+		if step.Matrix != nil {
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding matrix step: %s\n", step.Action)
+			}
+			
+			// Get the action for this step
+			action, exists := r.config.GetAction(step.Action)
+			if !exists {
+				return nil, fmt.Errorf("action not found: %s", step.Action)
+			}
+			
+			// Create matrix expander
+			expander := NewMatrixExpander(r.config)
+			
+			// Expand matrix into individual steps
+			matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
+			if err != nil {
+				return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+			}
+			
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanded into %d steps\n", len(matrixSteps))
+				for j, matrixStep := range matrixSteps {
+					fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix step %d: Action=%s, Description=%s\n", j, matrixStep.Action, matrixStep.Description)
+				}
+			}
+			
+			// Add expanded steps
+			expandedSteps = append(expandedSteps, matrixSteps...)
+		} else {
+			// Regular step - add as is
+			expandedSteps = append(expandedSteps, step)
+		}
+	}
+	
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: returning %d expanded steps\n", len(expandedSteps))
+	}
+	
+	return expandedSteps, nil
 }

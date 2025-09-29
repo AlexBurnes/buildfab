@@ -110,8 +110,14 @@ func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName stri
 		if o.debug {
 			fmt.Fprintf(o.errorOutput, "[DEBUG] Showing step completion for: %s\n", stepName)
 		}
+		// Flush any buffered output for this step before showing completion
+		o.flushBufferedOutput(stepName)
 		o.showStepCompletion(stepName)
 		o.currentStep = ""
+		// Mark this step as shown so it doesn't get processed again in checkAndShowCompletedSteps
+		if data, exists := o.stepData[stepName]; exists {
+			data.Shown = true
+		}
 	}
 	
 	// Check if any completed steps can now be shown in order
@@ -128,12 +134,13 @@ func (o *OrderedOutputManager) OnStepOutput(ctx context.Context, stepName string
 	
 	if data, exists := o.stepData[stepName]; exists {
 		data.Output = append(data.Output, output)
+		if o.debug {
+			fmt.Fprintf(o.errorOutput, "[DEBUG] Buffered output for %s: %s\n", stepName, output)
+		}
 	}
 	
-	// Stream output immediately if this is the current active step
-	if o.currentStep == stepName {
-		o.showStepOutput(output)
-	}
+	// Always buffer output - don't stream immediately
+	// Output will be shown when the step is ready to be displayed in order
 }
 
 // OnStepError handles step error events from executor
@@ -196,36 +203,47 @@ func (o *OrderedOutputManager) checkAndShowCompletedSteps() {
 		fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowCompletedSteps: checking for completed steps to show\n")
 	}
 	
-	// Find completed steps that can be shown in order
-	for _, step := range o.steps {
-		stepName := step.Action
-		if data, exists := o.stepData[stepName]; exists && data.Completed && !data.Shown {
-			// Check if all previous steps have been completed AND shown
-			canShow := true
-			for _, s := range o.steps {
-				if s.Action == stepName {
-					break
+	// Show all steps that can be shown in order
+	shownAny := true
+	for shownAny {
+		shownAny = false
+		for _, step := range o.steps {
+			stepName := step.Action
+			if data, exists := o.stepData[stepName]; exists && data.Completed && !data.Shown {
+				// Check if all previous steps have been completed AND shown
+				canShow := true
+				for _, s := range o.steps {
+					if s.Action == stepName {
+						break
+					}
+					prevData, prevExists := o.stepData[s.Action]
+					if !prevExists || !prevData.Completed || !prevData.Shown {
+						canShow = false
+						break
+					}
 				}
-				prevData, prevExists := o.stepData[s.Action]
-				if !prevExists || !prevData.Completed || !prevData.Shown {
-					canShow = false
-					break
-				}
-			}
-			
-			if canShow {
-				if o.debug {
-					fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowCompletedSteps: showing completed step: %s\n", stepName)
-				}
-				o.showStepStart(stepName)
-				o.stepData[stepName].Shown = true
-				o.currentStep = stepName
 				
-				// Flush any buffered output for this step
-				o.flushBufferedOutput(stepName)
-				
-				o.showStepCompletion(stepName)
-				o.currentStep = ""
+				if canShow {
+					if o.debug {
+						fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowCompletedSteps: showing completed step: %s\n", stepName)
+					}
+					o.showStepStart(stepName)
+					o.stepData[stepName].Shown = true
+					o.currentStep = stepName
+					
+					// Flush any buffered output for this step
+					o.flushBufferedOutput(stepName)
+					
+					o.showStepCompletion(stepName)
+					
+					// Flush any remaining buffered output after step completion
+					o.flushBufferedOutput(stepName)
+					
+					o.currentStep = ""
+					
+					shownAny = true
+					break // Start over to check for more steps that can now be shown
+				}
 			}
 		}
 	}
@@ -262,8 +280,8 @@ func (o *OrderedOutputManager) showStepStart(stepName string) {
 	if o.verbose {
 		fmt.Fprintf(o.errorOutput, "  💻 %s\n", stepName)
 	} else {
-		// In silence mode, show running indicator
-		fmt.Fprintf(o.errorOutput, "  %s%s%s %s running...\r", colorCyan, "○", colorReset, stepName)
+		// In quiet mode, don't show individual step indicators
+		// The summary will show the overall results
 	}
 }
 
@@ -286,6 +304,9 @@ func (o *OrderedOutputManager) showStepOutput(output string) {
 // flushBufferedOutput flushes all buffered output for a step
 func (o *OrderedOutputManager) flushBufferedOutput(stepName string) {
 	if data, exists := o.stepData[stepName]; exists {
+		if o.debug {
+			fmt.Fprintf(o.errorOutput, "[DEBUG] Flushing %d buffered outputs for %s\n", len(data.Output), stepName)
+		}
 		for _, output := range data.Output {
 			o.showStepOutput(output)
 		}
@@ -326,8 +347,8 @@ func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus
 		// In verbose mode, just print the result
 		fmt.Fprintf(o.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
 	} else {
-		// In silence mode, replace the running indicator with the result
-		fmt.Fprintf(o.errorOutput, "\r  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
+		// In quiet mode, show step completion results but not step start messages
+		fmt.Fprintf(o.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
 	}
 }
 

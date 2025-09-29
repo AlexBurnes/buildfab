@@ -45,19 +45,122 @@ func (me *MatrixExpander) ExpandMatrix(step *Step, action *Action) ([]*MatrixJob
 	return jobs, nil
 }
 
+// ExpandMatrixToSteps expands a matrix configuration into individual steps for DAG execution
+func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Step, error) {
+	if step.Matrix == nil {
+		return nil, fmt.Errorf("step has no matrix configuration")
+	}
+
+	// Generate Cartesian product of all matrix values
+	combinations := me.generateCombinations(step.Matrix.Values)
+	
+	steps := make([]Step, 0, len(combinations))
+	totalJobs := len(combinations)
+	
+	for i, combination := range combinations {
+		// Create step description
+		description := me.generateStepDescription(action.Name, i+1, totalJobs)
+		
+		// Create matrix variables for this step
+		matrixVars := make(map[string]string)
+		for key, value := range combination {
+			matrixVars[fmt.Sprintf("matrix.%s", key)] = fmt.Sprintf("%v", value)
+		}
+		
+		// DEBUG: Add delay for testing parallel execution and output ordering
+		// Uncomment the following lines to enable delays for debugging:
+		// delay := i + 1  // Ascending order: 1, 2, 3, 4
+		// delay := totalJobs - i  // Countdown order: 4, 3, 2, 1
+		
+		// Create a new action with matrix variables interpolated
+		matrixAction := *action // Copy the original action
+		matrixAction.Name = me.generateStepName(action.Name, combination, step.Matrix.Values) // Generate name with matrix values
+		
+		// Interpolate variables in the action
+		if matrixAction.Run != "" {
+			// Interpolate variables in the run command
+			matrixAction.Run = me.interpolateVariables(matrixAction.Run, matrixVars)
+		}
+		
+		// DEBUG: Add delay option to the action (uncomment for debugging)
+		// if matrixAction.Options == nil {
+		// 	matrixAction.Options = make(map[string]interface{})
+		// }
+		// matrixAction.Options["delay"] = delay
+		
+		// Add the interpolated action to the config
+		me.config.Actions = append(me.config.Actions, matrixAction)
+		
+		// Create new step that references the interpolated action
+		newStep := Step{
+			Action:      matrixAction.Name, // Use the interpolated action name
+			Description: description,
+			Require:     step.Require, // Keep original dependencies
+			OnError:     step.OnError,
+			If:          step.If,
+		}
+		
+		steps = append(steps, newStep)
+	}
+
+	return steps, nil
+}
+
+// interpolateVariables interpolates variables in a string
+func (me *MatrixExpander) interpolateVariables(text string, variables map[string]string) string {
+	result := text
+	for key, value := range variables {
+		placeholder := fmt.Sprintf("${{ %s }}", key)
+		result = strings.ReplaceAll(result, placeholder, value)
+	}
+	return result
+}
+
+// generateStepName creates a step name with matrix values concatenated
+func (me *MatrixExpander) generateStepName(actionName string, combination map[string]interface{}, originalValues map[string][]interface{}) string {
+	var parts []string
+	parts = append(parts, actionName)
+	
+	// Use the same sorted order as the Cartesian product generation
+	keys := make([]string, 0, len(originalValues))
+	for key := range originalValues {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	
+	for _, key := range keys {
+		if value, exists := combination[key]; exists {
+			parts = append(parts, fmt.Sprintf("%v", value))
+		}
+	}
+	
+	return strings.Join(parts, ".")
+}
+
+// generateStepDescription creates a step description with job index
+func (me *MatrixExpander) generateStepDescription(actionName string, jobIndex, totalJobs int) string {
+	return fmt.Sprintf("%s matrix (%d/%d)", actionName, jobIndex, totalJobs)
+}
+
 // generateCombinations creates a Cartesian product of all matrix values
 func (me *MatrixExpander) generateCombinations(values map[string][]interface{}) []map[string]interface{} {
 	if len(values) == 0 {
 		return []map[string]interface{}{}
 	}
 
-	// Get all keys and their values
+	// Get all keys and their values in a deterministic order
 	keys := make([]string, 0, len(values))
 	valueLists := make([][]interface{}, 0, len(values))
 	
-	for key, vals := range values {
+	// Sort keys to ensure consistent, deterministic order
+	for key := range values {
 		keys = append(keys, key)
-		valueLists = append(valueLists, vals)
+	}
+	sort.Strings(keys)
+	
+	// Add values in sorted key order
+	for _, key := range keys {
+		valueLists = append(valueLists, values[key])
 	}
 
 	// Generate Cartesian product
