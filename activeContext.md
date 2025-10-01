@@ -1,6 +1,22 @@
 # Active Context: buildfab
 
 ## Current Work Focus
+**VERSION DISPLAY FEATURE COMPLETED!** Successfully implemented version display functionality for buildfab CLI and library to show version information when running stages or actions.
+- **Added version display functionality** - CLI now shows buildfab version and project version before executing stages or actions
+- **Enhanced user experience** - displays version information similar to pre-push utility format: "buildfab v0.16.9" and "Project buildfab (v0.16.9) before push"
+- **Integrated version library** - uses existing version library to detect project version from VERSION file or git tags
+- **Consistent version display** - provides version information across all execution contexts (stages and actions)
+- **Added displayVersionInfo() function** - created reusable function for consistent version display in CLI
+- **Updated CLI execution paths** - integrated version display into both runStageDirect() and runActionDirect() functions
+- **Comprehensive testing** - verified version display works correctly for both stages (pre-push) and actions (version@check)
+- **Perfect user experience** - users now get clear version identification before execution, matching pre-push utility behavior
+- **VERSION 0.16.10 RELEASED** - successfully completed version display feature with comprehensive testing and documentation
+- **VERSION DISPLAY FORMAT REFINEMENT** - removed "before push" text from version display for cleaner output format
+  - Updated displayVersionInfo() function to show "Project buildfab (v0.16.10)" instead of "Project buildfab (v0.16.10) before push"
+  - Enhanced user experience with cleaner, more concise version display
+  - Maintained consistency across all execution contexts (stages and actions)
+  - Comprehensive testing verified updated format works correctly
+
 **WARNING OUTPUT ENHANCEMENT COMPLETED!** Successfully implemented enhanced warning output behavior for steps with `onerror: warn` to display the same as errors but with warning icons. **Modified showStepCompletion function** - extended condition to include `StepStatusWarn` alongside `StepStatusError` for buffered output display in quiet mode. **Updated enhanceMessage function** - changed switch case to handle both `StepStatusError` and `StepStatusWarn` together for consistent message enhancement. **Enhanced warning display** - warnings now show buffered output, "execute failure" message, and command reproduction instructions just like errors. **Proper icon and color usage** - warnings use warning icon (`!`) and yellow color instead of error icon (`✗`) and red color. **Perfect user experience** - users get comprehensive warning output with all debugging information while maintaining visual distinction from errors. **Comprehensive testing** - verified enhanced warning behavior works correctly in both verbose and quiet modes with proper output formatting. **VERSION 0.16.9 RELEASED!** Successfully completed warning output enhancement with comprehensive testing and automated version bump to v0.16.9.
 
 **VERBOSITY LEVELS FEATURE COMPLETED!** Successfully implemented comprehensive verbosity levels system with granular control over output detail and debug options. **Added verbosity levels support** - implemented `-v`, `-vv`, `-vvv` levels with CountVarP flag for CLI support. **Updated data structures** - replaced `Verbose bool` with `VerboseLevel int` in all RunOptions and SimpleRunOptions structures. **Implemented level-based output logic** - updated all output components to work with verbosity levels (0=quiet, 1=-v, 2=-vv, 3=-vvv). **Added shell debug options** - implemented `-x` option for shell commands (sh and bash) on levels 2 and 3. **Enhanced output control** - "to check run" messages now show only on level 3 when errors occur. **Updated OrderedOutputManager** - modified to support verbosity levels with proper output streaming and buffering logic. **Fixed all compilation errors** - resolved all type mismatches and function signature updates across the codebase. **Comprehensive testing** - verified all verbosity levels work correctly with proper output behavior. **Perfect user experience** - users now have granular control over output detail with clear level definitions. **VERSION 0.16.7 RELEASED!** Successfully completed verbosity levels implementation with comprehensive testing and documentation.

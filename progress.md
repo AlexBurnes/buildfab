@@ -1,6 +1,21 @@
 # Progress: buildfab
 
 ## What Works
+- **Version Display Feature**: Successfully implemented version display functionality for buildfab CLI and library to show version information when running stages or actions
+  - Added version display functionality - CLI now shows buildfab version and project version before executing stages or actions
+  - Enhanced user experience - displays version information similar to pre-push utility format: "buildfab v0.16.9" and "Project buildfab (v0.16.9) before push"
+  - Integrated version library - uses existing version library to detect project version from VERSION file or git tags
+  - Consistent version display - provides version information across all execution contexts (stages and actions)
+  - Added displayVersionInfo() function - created reusable function for consistent version display in CLI
+  - Updated CLI execution paths - integrated version display into both runStageDirect() and runActionDirect() functions
+  - Comprehensive testing - verified version display works correctly for both stages (pre-push) and actions (version@check)
+  - Perfect user experience - users now get clear version identification before execution, matching pre-push utility behavior
+  - VERSION 0.16.10 RELEASED - successfully completed version display feature with comprehensive testing and documentation
+  - **Version Display Format Refinement** - removed "before push" text from version display for cleaner output format
+    - Updated displayVersionInfo() function to show "Project buildfab (v0.16.10)" instead of "Project buildfab (v0.16.10) before push"
+    - Enhanced user experience with cleaner, more concise version display
+    - Maintained consistency across all execution contexts (stages and actions)
+    - Comprehensive testing verified updated format works correctly
 - **Warning Output Enhancement**: Successfully implemented enhanced warning output behavior for steps with `onerror: warn` to display the same as errors but with warning icons
   - Modified showStepCompletion function - extended condition to include StepStatusWarn alongside StepStatusError for buffered output display in quiet mode
   - Updated enhanceMessage function - changed switch case to handle both StepStatusError and StepStatusWarn together for consistent message enhancement

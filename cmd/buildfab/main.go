@@ -55,6 +55,18 @@ func getProjectVersion() string {
 	return "unknown"
 }
 
+// displayVersionInfo displays buildfab version and project version information
+func displayVersionInfo(cfg *buildfab.Config) {
+	buildfabVersion := getVersion()
+	projectVersion := getProjectVersion()
+	
+	// Display version information
+	fmt.Printf("%s %s\n", appName, buildfabVersion)
+	if cfg != nil {
+		fmt.Printf("Project %s (%s)\n", cfg.Project.Name, projectVersion)
+	}
+}
+
 // Global flags
 var (
 	verboseLevel  int
@@ -267,6 +279,9 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	
 	stageName := args[0]
 	
+	// Display version information before running stage
+	displayVersionInfo(cfg)
+	
 	// Create variables map from environment variables
 	variables := make(map[string]string)
 	for _, envVar := range envVars {
@@ -415,6 +430,9 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 	runner := buildfab.NewSimpleRunner(cfg, opts)
 	
 	actionName := args[0]
+	
+	// Display version information before running action
+	displayVersionInfo(cfg)
 	
 	// Run action using simple API
 	err = runner.RunAction(ctx, actionName)

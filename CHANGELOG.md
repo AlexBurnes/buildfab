@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.10] - 2025-10-01
+
+### Added
+- **Version Display Feature**: Added version display functionality to buildfab CLI and library
+  - Shows buildfab version and project version when running stages or actions
+  - Displays version information in clean format: "buildfab v0.16.10" and "Project buildfab (v0.16.10)"
+  - Uses version library to detect project version from VERSION file or git tags
+  - Provides consistent version information across all execution contexts (stages and actions)
+  - Enhanced user experience with clear version identification before execution
+  - Added displayVersionInfo() function to CLI for consistent version display
+  - Integrated version display into both runStageDirect() and runActionDirect() functions
+  - Refined display format by removing "before push" text for cleaner output
+
 ## [0.16.9] - 2025-09-30
 
 ### Changed
