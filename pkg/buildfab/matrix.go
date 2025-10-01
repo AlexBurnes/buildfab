@@ -270,7 +270,7 @@ func (ms *MatrixScheduler) ScheduleJobs(runner *Runner, options *RunOptions) err
 			status = StepStatusError
 			message = err.Error()
 		}
-		ms.stepCallback.OnStepComplete(ms.ctx, ms.stepName, status, message, 0)
+		ms.stepCallback.OnStepComplete(ms.ctx, ms.stepName, status, message, 0, "")
 	}
 	
 	return err

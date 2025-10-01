@@ -972,7 +972,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 		if r.opts.DryRun {
 			description := runner.Description()
 			if r.opts.StepCallback != nil {
-				r.opts.StepCallback.OnStepComplete(ctx, step.Action, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0)
+				r.opts.StepCallback.OnStepComplete(ctx, step.Action, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
 			}
 			return nil
 		}
@@ -1005,7 +1005,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 				r.opts.StepCallback.OnStepError(ctx, step.Action, err)
 			}
 			
-			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration)
+			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration, "")
 		}
 
 		return err
@@ -1032,7 +1032,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 				status = StepStatusError
 				message = err.Error()
 			}
-			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, 0)
+			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, 0, "")
 		}
 		return err
 	}
@@ -1052,7 +1052,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 			r.opts.StepCallback.OnStepError(ctx, step.Action, err)
 		}
 		
-		r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration)
+		r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration, "")
 	}
 
 	return err

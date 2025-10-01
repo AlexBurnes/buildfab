@@ -128,7 +128,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     }
 
     // Create ordered step callback to collect results with proper ordering
-    stepCallback := NewOrderedStepCallback(expandedSteps, r.opts.Verbose, r.opts.Debug, r.opts.ErrorOutput, r.config)
+    stepCallback := NewOrderedStepCallback(expandedSteps, r.opts.VerboseLevel, r.opts.Debug, r.opts.ErrorOutput, r.config)
 
     // Convert to complex options for internal executor
     complexOpts := &RunOptions{
@@ -1074,6 +1074,9 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
     for i, step := range steps {
         if r.opts.Debug {
             fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step %d: Action=%s, Matrix=%v\n", i, step.Action, step.Matrix != nil)
+            if step.Matrix != nil {
+                fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix values: %+v\n", step.Matrix.Values)
+            }
         }
 
         // Check if this step has matrix configuration
