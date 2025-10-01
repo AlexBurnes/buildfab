@@ -421,7 +421,7 @@ func TestMatrixExecution_Integration(t *testing.T) {
 	opts := &RunOptions{
 		ConfigPath:  ".project.yml",
 		MaxParallel: 2,
-		Verbose:     false,
+		VerboseLevel: 0,
 		Debug:       false,
 		Variables:   make(map[string]string),
 		WorkingDir:  ".",
