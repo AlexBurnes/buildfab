@@ -1,0 +1,33 @@
+project: 
+  name: "test_shell"
+
+stages:
+  test_shell:
+    steps:
+      - action: test_shell
+      - action: test_bash
+
+
+actions:
+  - name: test_shell
+    run: |
+      rm -fr ./tests/test_shell/
+      mkdir -p ./tests/test_shell/{one,two}
+      if [ ! -d ./tests/test_shell/one ]; then
+        echo "failed makedir 'one', it is ok for sh"
+        exit 0
+      fi
+      echo "dir 'one' is created, it is not ok for sh"
+      exit 1
+
+  - name: test_bash
+    shell: sh
+    run: |
+      rm -fr ./tests/test_shell/
+      mkdir -p ./tests/test_shell/{one,two}
+      if [ ! -d ./tests/test_shell/one ]; then
+        echo "failed makedir 'one', it is not ok for bash"
+        exit 1
+      fi
+      echo "dir 'one' is created, it is ok for bash"
+      exit 0

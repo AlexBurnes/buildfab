@@ -22,9 +22,12 @@ builds:
     binary: buildfab
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
+    env:
+      - CGO_ENABLED=0
     ldflags:
       - -s -w
       - -X main.appVersion={{ .Version }}
+      - -extldflags "-static"
 
 archives:
   - id: default

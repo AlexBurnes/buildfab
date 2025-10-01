@@ -1,6 +1,7 @@
 # Progress: buildfab
 
 ## What Works
+
 - **Matrix Feature Implementation**: Successfully implemented comprehensive matrix feature for buildfab with full functionality and testing
   - Created MatrixConfig, MatrixStrategy, MatrixJob data structures with comprehensive matrix expansion logic using Cartesian product generation
   - Implemented MatrixScheduler with parallelism control, status tracking, fail-fast and continue-on-error policies, and FIFO/random job ordering
@@ -17,6 +18,58 @@
   - Matrix steps now consistently show complete output regardless of execution timing
   - Resolved intermittent missing output lines in verbose mode
   - VERSION 0.16.5_feat.1_fix.1 RELEASED with comprehensive matrix feature implementation and output suppression fix
+
+- **Version Display Feature**: Successfully implemented version display functionality for buildfab CLI and library to show version information when running stages or actions
+  - Added version display functionality - CLI now shows buildfab version and project version before executing stages or actions
+  - Enhanced user experience - displays version information similar to pre-push utility format: "buildfab v0.16.9" and "Project buildfab (v0.16.9) before push"
+  - Integrated version library - uses existing version library to detect project version from VERSION file or git tags
+  - Consistent version display - provides version information across all execution contexts (stages and actions)
+  - Added displayVersionInfo() function - created reusable function for consistent version display in CLI
+  - Updated CLI execution paths - integrated version display into both runStageDirect() and runActionDirect() functions
+  - Comprehensive testing - verified version display works correctly for both stages (pre-push) and actions (version@check)
+  - Perfect user experience - users now get clear version identification before execution, matching pre-push utility behavior
+  - VERSION 0.16.10 RELEASED - successfully completed version display feature with comprehensive testing and documentation
+  - **Version Display Format Refinement** - removed "before push" text from version display for cleaner output format
+    - Updated displayVersionInfo() function to show "Project buildfab (v0.16.10)" instead of "Project buildfab (v0.16.10) before push"
+    - Enhanced user experience with cleaner, more concise version display
+    - Maintained consistency across all execution contexts (stages and actions)
+    - Comprehensive testing verified updated format works correctly
+- **Warning Output Enhancement**: Successfully implemented enhanced warning output behavior for steps with `onerror: warn` to display the same as errors but with warning icons
+  - Modified showStepCompletion function - extended condition to include StepStatusWarn alongside StepStatusError for buffered output display in quiet mode
+  - Updated enhanceMessage function - changed switch case to handle both StepStatusError and StepStatusWarn together for consistent message enhancement
+  - Enhanced warning display - warnings now show buffered output, "execute failure" message, and command reproduction instructions just like errors
+  - Proper icon and color usage - warnings use warning icon (!) and yellow color instead of error icon (✗) and red color
+  - Perfect user experience - users get comprehensive warning output with all debugging information while maintaining visual distinction from errors
+  - Comprehensive testing - verified enhanced warning behavior works correctly in both verbose and quiet modes with proper output formatting
+  - VERSION 0.16.9 RELEASED - completed warning output enhancement with comprehensive testing and automated version bump
+- **Default Verbose Mode Fix**: Successfully fixed CLI and library to default to verbose level 1 (-v) instead of 0 for better user experience
+  - Updated DefaultSimpleRunOptions() - changed VerboseLevel: 0 to VerboseLevel: 1 to match DefaultRunOptions() behavior
+  - Fixed CLI logic - updated both runStageDirect() and runActionDirect() functions to default to verbose level 1 when no -v flags are provided
+  - Maintained backward compatibility - -q flag still works correctly for quiet mode (level 0)
+  - Ensured consistency - both CLI and library API now have consistent default verbose behavior
+  - Comprehensive testing - verified default verbose mode works correctly for both actions and stages
+  - Perfect user experience - users now get detailed output by default without needing to specify -v flag
+  - VERSION 0.16.8 RELEASED - completed default verbose mode fix with comprehensive testing and automated version bump
+- **Verbosity Levels Feature**: Successfully implemented comprehensive verbosity levels system with granular control over output detail and debug options
+  - Added verbosity levels support - implemented `-v`, `-vv`, `-vvv` levels with CountVarP flag for CLI support
+  - Updated data structures - replaced `Verbose bool` with `VerboseLevel int` in all RunOptions and SimpleRunOptions structures
+  - Implemented level-based output logic - updated all output components to work with verbosity levels (0=quiet, 1=-v, 2=-vv, 3=-vvv)
+  - Added shell debug options - implemented `-x` option for shell commands (sh and bash) on levels 2 and 3
+  - Enhanced output control - "to check run" messages now show only on level 3 when errors occur
+  - Updated OrderedOutputManager - modified to support verbosity levels with proper output streaming and buffering logic
+  - Fixed all compilation errors - resolved all type mismatches and function signature updates across the codebase
+  - Comprehensive testing - verified all verbosity levels work correctly with proper output behavior
+  - Perfect user experience - users now have granular control over output detail with clear level definitions
+  - VERSION 0.16.7 RELEASED with verbosity levels implementation and comprehensive testing
+- **Static Build Configuration Fix**: Successfully fixed GoReleaser configuration to build static binaries for Linux and Darwin platforms
+  - Added CGO_ENABLED=0 to GoReleaser configuration - disables CGO for static builds across all platforms
+  - Added -extldflags "-static" to ldflags - forces static linking for Linux and Darwin binaries
+  - Verified Linux static builds - confirmed using ldd command showing "not a dynamic executable"
+  - Enhanced cross-platform compatibility - both Linux and Darwin binaries are now static executables
+  - Fixed build system integration - GoReleaser builds static binaries independently from CMake
+  - Perfect static binary support - users get static binaries without external dependencies
+  - VERSION 0.16.6 RELEASED with static build configuration fixes for Linux and Darwin platforms
+
 - **Comprehensive Documentation Review and Release**: Successfully reviewed buildfab project features and YAML configuration syntax, creating comprehensive documentation for users and released version 0.16.5
   - Created Features-and-examples.md - comprehensive documentation with detailed examples covering all buildfab features including action variants, conditional execution, include system, variable interpolation, and advanced usage patterns
   - Created YAML-syntax-reference.md - complete YAML configuration syntax reference with all fields, types, validation rules, and practical examples

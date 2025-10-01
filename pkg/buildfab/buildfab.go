@@ -127,11 +127,12 @@ func (s MatrixJobStatus) String() string {
 
 // Result represents the result of executing a step
 type Result struct {
-	Name    string
-	Status  Status
-	Message string
-	Error   error
-	Duration time.Duration
+	Name           string
+	Status         Status
+	Message        string
+	Error          error
+	Duration       time.Duration
+	BufferedOutput string // Store buffered stdout/stderr for quiet mode
 }
 
 // Status represents the execution status of a step
@@ -170,7 +171,7 @@ func (s Status) String() string {
 type RunOptions struct {
 	ConfigPath  string            // Path to project.yml (default: ".project.yml")
 	MaxParallel int               // Maximum parallel execution (default: CPU count)
-	Verbose     bool              // Enable verbose output
+	VerboseLevel int              // Verbosity level: 0=quiet, 1=-v, 2=-vv, 3=-vvv
 	Debug       bool              // Enable debug output
 	DryRun      bool              // Show what would be executed without running commands
 	Variables   map[string]string // Additional variables for interpolation
@@ -191,7 +192,7 @@ func DefaultRunOptions() *RunOptions {
 	return &RunOptions{
 		ConfigPath:  ".project.yml",
 		MaxParallel: runtime.NumCPU(),
-		Verbose:     true,
+		VerboseLevel: 1,
 		Debug:       false,
 		Variables:   variables,
 		WorkingDir:  ".",
@@ -264,7 +265,7 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 		if r.opts.DryRun {
 			description := runner.Description()
 			if r.opts.StepCallback != nil {
-				r.opts.StepCallback.OnStepComplete(ctx, actionName, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0)
+				r.opts.StepCallback.OnStepComplete(ctx, actionName, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
 			}
 			return nil
 		}
@@ -297,7 +298,7 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 				r.opts.StepCallback.OnStepError(ctx, actionName, err)
 			}
 			
-			r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, duration)
+			r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, duration, "")
 		}
 
 		return err
@@ -324,7 +325,7 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 					status = StepStatusError
 					message = err.Error()
 				}
-				r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, 0)
+				r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, 0, "")
 			}
 			return err
 		}
@@ -344,7 +345,7 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 			r.opts.StepCallback.OnStepError(ctx, actionName, err)
 		}
 		
-		r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, duration)
+		r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, duration, "")
 	}
 
 	return err
@@ -402,7 +403,7 @@ func (r *Runner) RunStageStep(ctx context.Context, stageName, stepName string) e
 			r.opts.StepCallback.OnStepError(ctx, stepName, err)
 		}
 		
-		r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, duration)
+		r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, duration, "")
 	}
 
 	return err
@@ -736,7 +737,7 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 				if step.Action == result.Name {
 					if step.OnError == "warn" {
 						// Log warning but continue
-						if r.opts.Verbose {
+						if r.opts.VerboseLevel > 0 {
 							fmt.Fprintf(r.opts.ErrorOutput, "Warning: step %s failed: %v\n", step.Action, result.Error)
 						}
 						continue
@@ -785,7 +786,7 @@ func (r *Runner) executeStageDryRun(ctx context.Context, stageName string, steps
 		
 		if !shouldExecute {
 			skippedSteps++
-			if r.opts.Verbose {
+			if r.opts.VerboseLevel > 0 {
 				fmt.Fprintf(r.opts.Output, "→ %s: would skip (condition not met)\n", step.Action)
 			}
 			continue
@@ -804,7 +805,7 @@ func (r *Runner) executeStageDryRun(ctx context.Context, stageName string, steps
 			}
 			if !stepMatches {
 				skippedSteps++
-				if r.opts.Verbose {
+				if r.opts.VerboseLevel > 0 {
 					fmt.Fprintf(r.opts.Output, "→ %s: would skip (not in only filter)\n", step.Action)
 				}
 				continue
@@ -819,11 +820,11 @@ func (r *Runner) executeStageDryRun(ctx context.Context, stageName string, steps
 			// Check if it's a built-in action
 			if runner, exists := r.registry.GetRunner(step.Action); exists {
 				description := runner.Description()
-				if r.opts.Verbose {
+				if r.opts.VerboseLevel > 0 {
 					fmt.Fprintf(r.opts.Output, "✓ %s: would execute built-in action: %s\n", step.Action, description)
 				}
 			} else {
-				if r.opts.Verbose {
+				if r.opts.VerboseLevel > 0 {
 					fmt.Fprintf(r.opts.Output, "✗ %s: would fail (action not found)\n", step.Action)
 				}
 			}
@@ -831,7 +832,7 @@ func (r *Runner) executeStageDryRun(ctx context.Context, stageName string, steps
 			// Simulate custom action execution
 			err := r.runActionInternalDryRun(ctx, action)
 			if err != nil {
-				if r.opts.Verbose {
+				if r.opts.VerboseLevel > 0 {
 					fmt.Fprintf(r.opts.Output, "✗ %s: would fail (%v)\n", step.Action, err)
 				}
 			}
@@ -879,7 +880,7 @@ func (r *Runner) executeStageWithCallback(ctx context.Context, steps []Step) err
 				if step.Action == result.Name {
 					if step.OnError == "warn" {
 						// Log warning but continue
-						if r.opts.Verbose {
+						if r.opts.VerboseLevel > 0 {
 							fmt.Fprintf(r.opts.ErrorOutput, "Warning: step %s failed: %v\n", step.Action, result.Error)
 						}
 						continue
@@ -1204,7 +1205,7 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 					
 					// Call step callback for skipped step
 					if r.opts.StepCallback != nil {
-						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0)
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0, "")
 					}
 					
 					resultChan <- result
@@ -1279,7 +1280,7 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 		
 		// Call step complete callback if provided
 		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusError, variantErr.Error(), duration)
+			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusError, variantErr.Error(), duration, "")
 		}
 		
 		return result, variantErr
@@ -1296,7 +1297,7 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 		
 		// Call step complete callback if provided
 		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", duration)
+			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", duration, "")
 		}
 		
 		return result, nil // Not an error, just skipped
@@ -1354,7 +1355,7 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
 		}
 		
-		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, duration)
+		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, duration, result.BufferedOutput)
 	}
 
 	return result, err
@@ -1366,7 +1367,7 @@ func (r *Runner) shouldExecuteStep(ctx context.Context, node *DAGNode) bool {
 	shouldExecute, err := r.shouldExecuteStepByCondition(ctx, node.Step)
 	if err != nil {
 		// If there's an error evaluating the condition, log it and skip the step
-		if r.opts.Verbose {
+		if r.opts.VerboseLevel > 0 {
 			fmt.Fprintf(r.opts.ErrorOutput, "Warning: failed to evaluate if condition for step %s: %v\n", node.Step.Action, err)
 		}
 		return false
@@ -1704,7 +1705,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 					
 					// Call step callback for skipped step
 					if r.opts.StepCallback != nil {
-						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0)
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0, "")
 					}
 					
 					select {
@@ -1780,8 +1781,13 @@ func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps 
 				// Only show completion message if the step is actually completed
 				if result, exists := resultMap[stepName]; exists && completed[stepName] {
 					// Display any buffered output for this step
-					if r.opts.StepCallback != nil && r.opts.Verbose && result.Message != "" {
-						r.opts.StepCallback.OnStepOutput(ctx, stepName, result.Message)
+					if r.opts.StepCallback != nil {
+						// In verbose mode, display output during execution
+						// In quiet mode, output is buffered and only shown on failure in showStepCompletion
+						if r.opts.VerboseLevel > 0 && result.Message != "" {
+							r.opts.StepCallback.OnStepOutput(ctx, stepName, result.Message)
+						}
+						// Note: In quiet mode, buffered output is displayed in showStepCompletion, not here
 					}
 					
 					if r.opts.StepCallback != nil {
@@ -1799,7 +1805,7 @@ func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps 
 							message = result.Message
 						}
 						
-						r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, result.Duration)
+						r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, result.Duration, result.BufferedOutput)
 					}
 					displayed[stepName] = true
 				}
@@ -1854,7 +1860,7 @@ func (r *Runner) displayRemainingSteps(ctx context.Context, steps []Step, result
 						message = result.Message
 					}
 					
-					r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, result.Duration)
+					r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, result.Duration, result.BufferedOutput)
 				}
 				displayed[step.Action] = true
 			}
@@ -2009,7 +2015,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 					
 					// Call step callback for skipped step
 					if r.opts.StepCallback != nil {
-						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0)
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0, "")
 					}
 					
 					select {
@@ -2091,7 +2097,7 @@ func (r *Runner) getFailedDependencyNames(node *DAGNode, failed map[string]bool)
 
 // getShellCommand returns the appropriate shell command and arguments
 // If userShell is specified, use that; otherwise use platform defaults
-func getShellCommand(userShell string) (string, []string, error) {
+func getShellCommand(userShell string, verboseLevel int) (string, []string, error) {
 	// If user specified a shell, use it
 	if userShell != "" {
 		// For Windows, automatically add .exe if not present
@@ -2107,16 +2113,28 @@ func getShellCommand(userShell string) (string, []string, error) {
 		// Return appropriate arguments based on shell type
 		switch {
 		case strings.Contains(userShell, "bash"):
-			return userShell, []string{"-euc"}, nil
+			args := []string{"-euc"}
+			if verboseLevel >= 2 {
+				args = []string{"-xeuc"}
+			}
+			return userShell, args, nil
 		case strings.Contains(userShell, "powershell") || strings.Contains(userShell, "pwsh"):
 			return userShell, []string{"-NoProfile", "-Command"}, nil
 		case strings.Contains(userShell, "cmd"):
 			return userShell, []string{"/C"}, nil
 		case strings.Contains(userShell, "sh") || strings.Contains(userShell, "zsh") || strings.Contains(userShell, "fish"):
-			return userShell, []string{"-euc"}, nil
+			args := []string{"-euc"}
+			if verboseLevel >= 2 {
+				args = []string{"-xeuc"}
+			}
+			return userShell, args, nil
 		default:
 			// For unknown shells, try bash-style arguments first
-			return userShell, []string{"-euc"}, nil
+			args := []string{"-euc"}
+			if verboseLevel >= 2 {
+				args = []string{"-xeuc"}
+			}
+			return userShell, args, nil
 		}
 	}
 	
@@ -2124,14 +2142,22 @@ func getShellCommand(userShell string) (string, []string, error) {
 	if runtime.GOOS == "windows" {
 		// Default Windows shell: bash (Git Bash)
 		if _, err := exec.LookPath("bash.exe"); err == nil {
-			return "bash.exe", []string{"-euc"}, nil
+			args := []string{"-euc"}
+			if verboseLevel >= 2 {
+				args = []string{"-xeuc"}
+			}
+			return "bash.exe", args, nil
 		}
 		// Fallback to cmd
 		return "cmd.exe", []string{"/C"}, nil
 	}
 	
 	// Default Unix shell: sh
-	return "sh", []string{"-euc"}, nil
+	args := []string{"-euc"}
+	if verboseLevel >= 2 {
+		args = []string{"-xeuc"}
+	}
+	return "sh", args, nil
 }
 
 // executeActionForDAGWithStreamingControl executes a single action for DAG execution with streaming control
@@ -2232,7 +2258,7 @@ func (r *Runner) runBuiltInActionForDAG(ctx context.Context, action Action) (Res
 	result, err := runner.Run(ctx)
 	
 	// Call step output callback if provided and verbose mode is enabled
-	if r.opts.StepCallback != nil && r.opts.Verbose && result.Message != "" {
+	if r.opts.StepCallback != nil && r.opts.VerboseLevel > 0 && result.Message != "" {
 		r.opts.StepCallback.OnStepOutput(ctx, action.Name, result.Message)
 	}
 	
@@ -2271,7 +2297,7 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 	}
 	
 	// Create command with error handling flags
-	shell, shellArgs, err := getShellCommand(action.Shell)
+	shell, shellArgs, err := getShellCommand(action.Shell, r.opts.VerboseLevel)
 	if err != nil {
 		return Result{
 			Name:    action.Name,
@@ -2289,7 +2315,7 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 	}
 	
 	var bufferedOutput string
-	if r.opts.Verbose && streamingManager.ShouldStreamOutput(action.Name) {
+	if r.opts.VerboseLevel > 0 && streamingManager.ShouldStreamOutput(action.Name) {
 		// Use streaming output for verbose mode and if this step should stream
 		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
 	} else {
@@ -2315,15 +2341,20 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 		
 		if err != nil {
 		// Provide better error message with reproduction instructions
+		errorMessage := fmt.Sprintf("failed, to check run:\n  %s", action.Run)
+		// Debug output
+		fmt.Fprintf(os.Stderr, "[DEBUG] runCustomActionForDAGWithStreamingControl: bufferedOutput=%q\n", bufferedOutput)
 		return Result{
-			Status:  StatusError,
-			Message: fmt.Sprintf("failed, to check run:\n  %s", action.Run),
+			Status:         StatusError,
+			Message:        errorMessage,
+			BufferedOutput: bufferedOutput,
 		}, fmt.Errorf("command failed: %w", err)
 	}
 	
 	return Result{
-		Status:  StatusOK,
-		Message: bufferedOutput, // Store buffered output in the result message
+		Status:         StatusOK,
+		Message:        "executed successfully",
+		BufferedOutput: bufferedOutput, // Store buffered output separately
 	}, nil
 }
 
@@ -2354,7 +2385,7 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 	}
 	
 	// Create command with error handling flags
-	shell, shellArgs, err := getShellCommand(action.Shell)
+	shell, shellArgs, err := getShellCommand(action.Shell, r.opts.VerboseLevel)
 	if err != nil {
 		return Result{
 			Name:    action.Name,
@@ -2371,42 +2402,51 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	
-	if r.opts.Verbose {
+	// Declare stdout and stderr variables for buffered output
+	var stdout, stderr strings.Builder
+	
+	if r.opts.VerboseLevel > 0 {
 		// Use streaming output for verbose mode
 		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
 	} else {
-		// Use buffered output for non-verbose mode
-		var stdout, stderr strings.Builder
+		// Use buffered output for quiet mode
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		
 		// Execute command
 		err = cmd.Run()
 		
-		// Call step output callback if provided and verbose mode is enabled
-		if r.opts.StepCallback != nil && r.opts.Verbose {
-			if stdout.Len() > 0 {
-				r.opts.StepCallback.OnStepOutput(ctx, action.Name, stdout.String())
-			}
-			if stderr.Len() > 0 {
-				r.opts.StepCallback.OnStepOutput(ctx, action.Name, stderr.String())
-			}
+		// Don't call step output callback in quiet mode - output is buffered
+	}
+	
+	// Capture buffered output for quiet mode
+	var bufferedOutput string
+	if r.opts.VerboseLevel == 0 {
+		if stdout.Len() > 0 {
+			bufferedOutput += stdout.String()
 		}
-		
-		// Don't print output here - it's already handled by the step callback
+		if stderr.Len() > 0 {
+			if bufferedOutput != "" {
+				bufferedOutput += "\n"
+			}
+			bufferedOutput += stderr.String()
+		}
 	}
 	
 	if err != nil {
 		// Provide better error message with reproduction instructions
+		errorMessage := fmt.Sprintf("failed, to check run:\n  %s", action.Run)
 		return Result{
-			Status:  StatusError,
-			Message: fmt.Sprintf("failed, to check run:\n  %s", action.Run),
+			Status:         StatusError,
+			Message:        errorMessage,
+			BufferedOutput: bufferedOutput,
 		}, fmt.Errorf("command failed: %w", err)
 	}
 	
 	return Result{
-		Status:  StatusOK,
-		Message: "command executed successfully",
+		Status:         StatusOK,
+		Message:        "command executed successfully",
+		BufferedOutput: bufferedOutput,
 	}, nil
 }
 
@@ -2422,11 +2462,11 @@ func (r *Runner) runActionInternal(ctx context.Context, action Action) error {
 	if variant == nil && len(action.Variants) > 0 {
 		// Call step complete callback with skipped status if provided
 		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", 0)
+			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", 0, "")
 		}
 		
 		// Print skip message if verbose mode is enabled
-		if r.opts.Verbose {
+		if r.opts.VerboseLevel > 0 {
 			fmt.Fprintf(r.opts.Output, "→ %s: skipped (no matching variant)\n", action.Name)
 		}
 		
@@ -2462,7 +2502,7 @@ func (r *Runner) runActionInternalDryRun(ctx context.Context, action Action) err
 	// If variant is nil and action has variants, it means no variant matched - skip
 	if variant == nil && len(action.Variants) > 0 {
 		// Print skip message if verbose mode is enabled
-		if r.opts.Verbose {
+		if r.opts.VerboseLevel > 0 {
 			fmt.Fprintf(r.opts.Output, "→ %s: would skip (no matching variant)\n", action.Name)
 		}
 		return nil // Not an error, just skipped
@@ -2500,7 +2540,7 @@ func (r *Runner) runBuiltInActionDryRun(ctx context.Context, action Action) erro
 	description := runner.Description()
 	
 	// Print what would be executed if verbose mode is enabled
-	if r.opts.Verbose {
+	if r.opts.VerboseLevel > 0 {
 		fmt.Fprintf(r.opts.Output, "✓ %s: would execute built-in action: %s\n", action.Name, description)
 	}
 	
@@ -2520,7 +2560,7 @@ func (r *Runner) runCustomActionDryRun(ctx context.Context, action Action) error
 	}
 	
 	// Get shell command info
-	shell, shellArgs, err := getShellCommand(action.Shell)
+	shell, shellArgs, err := getShellCommand(action.Shell, r.opts.VerboseLevel)
 	if err != nil {
 		return fmt.Errorf("shell configuration error for action %s: %w", action.Name, err)
 	}
@@ -2530,7 +2570,7 @@ func (r *Runner) runCustomActionDryRun(ctx context.Context, action Action) error
 	commandStr := shell + " " + strings.Join(fullCommand, " ")
 	
 	// Print what would be executed if verbose mode is enabled
-	if r.opts.Verbose {
+	if r.opts.VerboseLevel > 0 {
 		fmt.Fprintf(r.opts.Output, "✓ %s: would execute command: %s\n", action.Name, commandStr)
 	}
 	
@@ -2554,12 +2594,12 @@ func (r *Runner) runBuiltInAction(ctx context.Context, action Action) error {
 	}
 	
 	// Call step output callback if provided and verbose mode is enabled
-	if r.opts.StepCallback != nil && r.opts.Verbose && result.Message != "" {
+	if r.opts.StepCallback != nil && r.opts.VerboseLevel > 0 && result.Message != "" {
 		r.opts.StepCallback.OnStepOutput(ctx, action.Name, result.Message)
 	}
 	
 	// Print result if verbose mode is enabled
-	if r.opts.Verbose {
+	if r.opts.VerboseLevel > 0 {
 		if result.Status == StatusOK {
 			fmt.Fprintf(r.opts.Output, "✓ %s: %s\n", action.Name, result.Message)
 		} else if result.Status == StatusWarn {
@@ -2590,7 +2630,7 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 	}
 	
 	// Create command with error handling flags
-	shell, shellArgs, err := getShellCommand(action.Shell)
+	shell, shellArgs, err := getShellCommand(action.Shell, r.opts.VerboseLevel)
 	if err != nil {
 		return fmt.Errorf("shell configuration error for action %s: %w", action.Name, err)
 	}
@@ -2603,29 +2643,25 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	
-	if r.opts.Verbose {
+	if r.opts.VerboseLevel > 0 {
 		// Use streaming output for verbose mode
 		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
 	} else {
-		// Use buffered output for non-verbose mode
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	
-	// Execute command
+		// Use buffered output for quiet mode - capture stdout/stderr
+		var stdout, stderr strings.Builder
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		
+		// Execute command
 		err = cmd.Run()
-	
-	// Call step output callback if provided and verbose mode is enabled
-	if r.opts.StepCallback != nil && r.opts.Verbose {
-		if stdout.Len() > 0 {
-			r.opts.StepCallback.OnStepOutput(ctx, action.Name, stdout.String())
+		
+		// Store buffered output for potential error display
+		if r.opts.StepCallback != nil {
+			// Store the buffered output in the callback for potential error display
+			if callback, ok := r.opts.StepCallback.(*SimpleStepCallback); ok {
+				callback.StoreBufferedOutput(action.Name, stdout.String(), stderr.String())
+			}
 		}
-		if stderr.Len() > 0 {
-			r.opts.StepCallback.OnStepOutput(ctx, action.Name, stderr.String())
-		}
-	}
-	
-		// Don't print output here - it's already handled by the step callback
 	}
 	
 	if err != nil {

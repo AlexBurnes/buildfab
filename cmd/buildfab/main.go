@@ -55,9 +55,21 @@ func getProjectVersion() string {
 	return "unknown"
 }
 
+// displayVersionInfo displays buildfab version and project version information
+func displayVersionInfo(cfg *buildfab.Config) {
+	buildfabVersion := getVersion()
+	projectVersion := getProjectVersion()
+	
+	// Display version information
+	fmt.Printf("%s %s\n", appName, buildfabVersion)
+	if cfg != nil {
+		fmt.Printf("Project %s (%s)\n", cfg.Project.Name, projectVersion)
+	}
+}
+
 // Global flags
 var (
-	verbose       bool
+	verboseLevel  int
 	quiet         bool
 	debug         bool
 	dryRun        bool
@@ -145,7 +157,7 @@ func init() {
 
 func main() {
 	// Add global flags
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", true, "enable verbose output (default)")
+	rootCmd.PersistentFlags().CountVarP(&verboseLevel, "verbose", "v", "increase verbosity level (-v, -vv, -vvv)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "disable verbose output (silence mode)")
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debug output")
 	rootCmd.PersistentFlags().BoolVar(&dryRun, "dry-run", false, "show what would be executed without running commands")
@@ -267,6 +279,9 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	
 	stageName := args[0]
 	
+	// Display version information before running stage
+	displayVersionInfo(cfg)
+	
 	// Create variables map from environment variables
 	variables := make(map[string]string)
 	for _, envVar := range envVars {
@@ -279,14 +294,21 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	// Add platform variables
 	variables = buildfab.AddPlatformVariables(variables)
 	
-	// If quiet is set, override verbose to false
-	effectiveVerbose := verbose && !quiet
+	// If quiet is set, override verbose level to 0
+	// Otherwise, default to verbose level 1 if no verbose flags were provided
+	effectiveVerboseLevel := verboseLevel
+	if quiet {
+		effectiveVerboseLevel = 0
+	} else if verboseLevel == 0 {
+		// Default to verbose level 1 if no -v flags were provided
+		effectiveVerboseLevel = 1
+	}
 	
 	// Create simple run options
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configPath,
 		MaxParallel: maxParallel,
-		Verbose:     effectiveVerbose,
+		VerboseLevel: effectiveVerboseLevel,
 		Debug:       debug,
 		DryRun:      dryRun,
 		Variables:   variables,
@@ -382,12 +404,19 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 	variables = buildfab.AddPlatformVariables(variables)
 	
 	// Create simple run options
-	// If quiet is set, override verbose to false
-	effectiveVerbose := verbose && !quiet
+	// If quiet is set, override verbose level to 0
+	// Otherwise, default to verbose level 1 if no verbose flags were provided
+	effectiveVerboseLevel := verboseLevel
+	if quiet {
+		effectiveVerboseLevel = 0
+	} else if verboseLevel == 0 {
+		// Default to verbose level 1 if no -v flags were provided
+		effectiveVerboseLevel = 1
+	}
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configPath,
 		MaxParallel: maxParallel,
-		Verbose:     effectiveVerbose,
+		VerboseLevel: effectiveVerboseLevel,
 		Debug:       debug,
 		DryRun:      dryRun,
 		Variables:   variables,
@@ -401,6 +430,9 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 	runner := buildfab.NewSimpleRunner(cfg, opts)
 	
 	actionName := args[0]
+	
+	// Display version information before running action
+	displayVersionInfo(cfg)
 	
 	// Run action using simple API
 	err = runner.RunAction(ctx, actionName)

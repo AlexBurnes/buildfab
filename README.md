@@ -11,7 +11,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 buildfab provides a comprehensive automation framework with powerful features for project automation:
 
 - **YAML-driven configuration** with intuitive syntax and modular organization
-- **DAG-based execution** with parallel processing and dependency management  
+- **DAG-based execution** with parallel processing and dependency management
 - **Matrix feature** for parallel execution across multiple configurations
 - **Built-in actions** for common tasks (git checks, version validation)
 - **Action variants** for platform-specific execution
@@ -40,7 +40,7 @@ actions:
   - name: test
     run: |
       go test ./...
-  
+
   - name: lint
     run: |
       golangci-lint run
@@ -184,7 +184,7 @@ actions:
   - name: test
     run: |
       go test ./...
-  
+
   - name: lint
     run: |
       golangci-lint run
@@ -283,7 +283,7 @@ import (
 func main() {
     config, _ := buildfab.LoadConfig(".project.yml")
     runner := buildfab.NewRunner(config, nil)
-    
+
     // Built-in actions work automatically
     err := runner.RunAction(context.Background(), "git-untracked")
     if err != nil {
@@ -385,23 +385,23 @@ import (
 
 func main() {
     ctx := context.Background()
-    
+
     // Load configuration
     cfg, err := buildfab.LoadConfig(".project.yml")
     if err != nil {
         // Handle error
         return
     }
-    
+
     // Create simple run options
     opts := &buildfab.SimpleRunOptions{
         ConfigPath: ".project.yml",
         Verbose:    true,
     }
-    
+
     // Create simple runner
     runner := buildfab.NewSimpleRunner(cfg, opts)
-    
+
     // Run a stage - all output is handled automatically!
     err = runner.RunStage(ctx, "pre-push")
     if err != nil {
@@ -422,7 +422,7 @@ import (
 
 func main() {
     ctx := context.Background()
-    
+
     // Simple one-liner
     err := buildfab.RunStageSimple(ctx, ".project.yml", "pre-push", true)
     if err != nil {

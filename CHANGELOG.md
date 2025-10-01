@@ -32,6 +32,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Feature branch created (feature/matrix) with feature version v0.16.5_feat.1 for matrix feature development
   - VERSION 0.16.6 RELEASED with comprehensive matrix feature implementation
 
+## [0.16.10] - 2025-10-01
+
+### Added
+- **Version Display Feature**: Added version display functionality to buildfab CLI and library
+  - Shows buildfab version and project version when running stages or actions
+  - Displays version information in clean format: "buildfab v0.16.10" and "Project buildfab (v0.16.10)"
+  - Uses version library to detect project version from VERSION file or git tags
+  - Provides consistent version information across all execution contexts (stages and actions)
+  - Enhanced user experience with clear version identification before execution
+  - Added displayVersionInfo() function to CLI for consistent version display
+  - Integrated version display into both runStageDirect() and runActionDirect() functions
+  - Refined display format by removing "before push" text for cleaner output
+
+## [0.16.9] - 2025-09-30
+
+### Changed
+- **Warning output enhancement**: Enhanced warning output behavior for steps with `onerror: warn` to display the same as errors but with warning icons
+  - Modified `showStepCompletion` function to include `StepStatusWarn` alongside `StepStatusError` for buffered output display in quiet mode
+  - Updated `enhanceMessage` function to handle both `StepStatusError` and `StepStatusWarn` together for consistent message enhancement
+  - Warnings now show buffered output, "execute failure" message, and command reproduction instructions just like errors
+  - Warnings use warning icon (`!`) and yellow color instead of error icon (`✗`) and red color
+  - Users get comprehensive warning output with all debugging information while maintaining visual distinction from errors
+
+## [0.16.8] - 2025-09-30
+
+### Fixed
+- **Default verbose mode**: Fixed CLI and library to default to verbose level 1 (-v) instead of 0
+  - Updated `DefaultSimpleRunOptions()` to set `VerboseLevel: 1` by default
+  - Updated CLI logic to default to verbose level 1 when no `-v` flags are provided
+  - Maintains backward compatibility with `-q` flag for quiet mode (level 0)
+  - Ensures consistent default behavior between CLI and library API
+  - Users now get detailed output by default without needing to specify `-v` flag
+
+## [0.16.7] - 2025-09-29
+
+### Added
+- **Verbosity levels system**: Implemented comprehensive verbosity levels with granular control over output detail and debug options
+  - Added `-v`, `-vv`, `-vvv` levels using CountVarP flag for CLI support
+  - **Level 0 (quiet, `-q`)**: `<output data>` only on errors, `'to check run'` never
+  - **Level 1 (verbose, `-v`)**: `<output data>` always, `'to check run'` never
+  - **Level 2 (debug, `-vv`)**: `<output data>` always, `'to check run'` never, adds shell debug options (`-x`)
+  - **Level 3 (trace, `-vvv`)**: `<output data>` always, `'to check run'` on errors, adds shell debug options (`-x`)
+  - Updated all data structures from `Verbose bool` to `VerboseLevel int` for level-based control
+  - Enhanced OrderedOutputManager to support verbosity levels with proper output streaming and buffering
+  - Added shell debug options (`-x`) for sh and bash commands on levels 2 and 3
+  - Implemented level-based output logic across all components for consistent behavior
+  - Comprehensive testing verified all verbosity levels work correctly with proper output behavior
+  - Perfect user experience with granular control over output detail and clear level definitions
+
+### Added
+- **Quiet mode buffering**: Enhanced quiet mode (-q) to buffer command output and display it when commands fail
+  - In quiet mode, stdout and stderr from command execution are captured and stored
+  - When a command fails, the buffered output is displayed along with the error message
+  - Provides better debugging experience in quiet mode by showing what the command actually output
+  - Maintains clean output for successful commands while preserving failure details
+
+## [0.16.6] - 2025-09-29
+
+### Fixed
+- **Static build configuration**: Fixed GoReleaser configuration to build static binaries for Linux and Darwin platforms
+  - Added `CGO_ENABLED=0` environment variable to disable CGO for static builds
+  - Added `-extldflags "-static"` to ldflags to force static linking for Linux and Darwin
+  - Verified Linux binaries are now static using ldd command showing "not a dynamic executable"
+  - Enhanced cross-platform compatibility with static binaries that don't require external dependencies
+  - Fixed build system integration where GoReleaser builds static binaries independently from CMake
+
 ## [0.16.5] - 2025-09-25
 
 ### Documentation
@@ -448,12 +514,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Note: Full interactive input handling has limitations due to subprocess execution constraints
 
 ### Technical Details
-- **OrderedOutputManager Enhancements**: 
+- **OrderedOutputManager Enhancements**:
   - Modified OnStepOutput to stream output immediately if it's the current active step
   - Added flushBufferedOutput method to flush all buffered output when a step becomes active
   - Updated checkAndShowNextStep to flush buffered output when a step becomes the current step
   - Updated checkAndShowCompletedSteps to flush buffered output when showing completed steps
-- **Executor Integration**: 
+- **Executor Integration**:
   - Added OnStepOutput calls in executeCommandWithStreaming for both stdout and stderr
   - Added OnStepOutput calls in executeCustomAction for buffered output mode
   - Connected cmd.Stdin = os.Stdin for interactive command support
@@ -557,7 +623,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Git Actions Message Format**: Standardized all git action messages to use consistent formatting
   - All three git actions now use the same message format ending with "to check run:\n    git status"
   - git@untracked: "Untracked files found, to check run:\n    git status"
-  - git@uncommitted: "Uncommitted changes found, to check run:\n    git status"  
+  - git@uncommitted: "Uncommitted changes found, to check run:\n    git status"
   - git@modified: "There are modified files, to check run:\n    git status"
   - Consistent indentation and formatting across all git actions
   - Users get clear, actionable instructions for checking git status
@@ -805,7 +871,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Legacy Build Scripts**: Removed old bash scripts that are no longer needed
   - Removed `buildtools/build-conan.sh` (448 lines)
-  - Removed `buildtools/build-and-package.sh` (350 lines)  
+  - Removed `buildtools/build-and-package.sh` (350 lines)
   - Removed `buildtools/build-goreleaser.sh` (232 lines)
   - Removed legacy build actions from project configuration
   - Verified CI/CD pipelines don't use removed scripts to prevent breakage
@@ -1005,7 +1071,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive Test Suite**: Implemented complete test coverage with 75.3% overall coverage across all packages
 - **Test Infrastructure**: Created 9 test files covering unit tests, integration tests, and end-to-end scenarios
   - `pkg/buildfab/types_test.go` - Tests for core types and status enums
-  - `pkg/buildfab/errors_test.go` - Tests for custom error types  
+  - `pkg/buildfab/errors_test.go` - Tests for custom error types
   - `pkg/buildfab/buildfab_test.go` - Comprehensive tests for main API
   - `internal/config/config_test.go` - YAML parsing and validation tests
   - `internal/actions/registry_test.go` - Built-in action tests

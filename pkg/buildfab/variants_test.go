@@ -603,7 +603,7 @@ func TestRunActionWithVariants(t *testing.T) {
 	t.Run("linux variant", func(t *testing.T) {
 		opts := &RunOptions{
 			Variables: map[string]string{"os": "linux"},
-			Verbose:   false,
+			VerboseLevel: 0,
 		}
 		
 		runner := NewRunner(config, opts)
@@ -625,7 +625,7 @@ func TestRunActionWithVariants(t *testing.T) {
 	t.Run("windows variant", func(t *testing.T) {
 		opts := &RunOptions{
 			Variables: map[string]string{"os": "windows"},
-			Verbose:   false,
+			VerboseLevel: 0,
 		}
 		
 		runner := NewRunner(config, opts)
@@ -641,7 +641,7 @@ func TestRunActionWithVariants(t *testing.T) {
 	t.Run("no matching variant", func(t *testing.T) {
 		opts := &RunOptions{
 			Variables: map[string]string{"os": "darwin"},
-			Verbose:   false,
+			VerboseLevel: 0,
 		}
 		
 		runner := NewRunner(config, opts)
