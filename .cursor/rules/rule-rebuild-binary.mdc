@@ -1,0 +1,99 @@
+---
+description: Always rebuild binary after making code changes before testing with examples
+globs: 
+alwaysApply: true
+---
+# Rebuild Binary After Code Changes Rule
+
+## Rule Description
+Always rebuild the binary after making any code changes before testing with examples or running tests.
+
+## When to Apply
+- After making ANY Go code changes
+- Before running examples or tests
+- Before demonstrating functionality to user
+- After any modification to source code
+
+## Required Steps
+1. **Build the binary with proper version**:
+   ```bash
+   # Method 1: Using VERSION file (recommended)
+   VERSION=$(cat VERSION) && go build -ldflags "-X main.appVersion=${VERSION} -s -w" -o bin/buildfab ./cmd/buildfab
+   
+   # Method 2: Using buildfab action (best practice)
+   ./bin/buildfab action install-binary
+   
+   # Method 3: Manual build without version (development only)
+   go build -o bin/buildfab ./cmd/buildfab
+   ```
+
+2. **Verify build success**:
+   - Check exit code is 0
+   - Ensure no compilation errors
+   - Verify version is correct: `./bin/buildfab --version`
+
+3. **Test the changes**:
+   - Run examples: `./bin/buildfab run test-container --config examples/container-working-test.yml --verbose`
+   - Run tests: `./bin/buildfab run-tests`
+
+## Version Handling Best Practices
+- **Always use VERSION file**: The VERSION file is the single source of truth for version numbers
+- **Include version in builds**: Use ldflags to embed version at build time for proper version display
+- **Verify version after build**: Always check `./bin/buildfab --version` to ensure correct version
+- **Use buildfab actions**: The `install-binary` action handles version correctly automatically
+
+## Common Mistakes to Avoid
+- Forgetting to rebuild after code changes
+- Testing with old binary that doesn't reflect changes
+- Assuming changes are active without rebuilding
+- Not verifying build success before testing
+- Building without version ldflags (results in "unknown" version)
+- Not checking version after build to verify correctness
+
+## Integration with Workflow
+This rule should be applied:
+- After every code modification
+- Before any testing or demonstration
+- As part of the development cycle
+- When user reports issues with functionality
+
+## Examples
+
+### Correct Workflow
+```bash
+# 1. Make code changes
+# 2. Build binary with version
+VERSION=$(cat VERSION) && go build -ldflags "-X main.appVersion=${VERSION} -s -w" -o bin/buildfab ./cmd/buildfab
+
+# 3. Verify version
+./bin/buildfab --version
+
+# 4. Test changes
+./bin/buildfab run test-container --config examples/container-working-test.yml --verbose
+```
+
+### Best Practice Workflow
+```bash
+# 1. Make code changes
+# 2. Use buildfab action (handles version automatically)
+./bin/buildfab action install-binary
+
+# 3. Test changes
+./bin/buildfab run test-container --config examples/container-working-test.yml --verbose
+```
+
+### Incorrect Workflow
+```bash
+# 1. Make code changes
+# 2. Test with old binary (WRONG!)
+./bin/buildfab run test-container --config examples/container-working-test.yml --verbose
+
+# OR building without version (results in "unknown" version)
+go build -o bin/buildfab ./cmd/buildfab
+```
+
+## Enforcement
+- Always apply this rule when making code changes
+- Verify binary is rebuilt before any testing
+- Include rebuild step in all development workflows
+- Document rebuild requirement in commit messages when applicable
