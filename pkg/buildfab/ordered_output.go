@@ -134,7 +134,6 @@ func (o *OrderedOutputManager) OnStepOutput(ctx context.Context, stepName string
     o.mu.Lock()
     defer o.mu.Unlock()
 
-
     if data, exists := o.stepData[stepName]; exists {
         data.Output = append(data.Output, output)
         if o.debug {
@@ -142,11 +141,8 @@ func (o *OrderedOutputManager) OnStepOutput(ctx context.Context, stepName string
         }
     }
 
-    // Only stream output immediately in verbose mode (level > 0)
-    // In quiet mode (level 0), output is buffered and only shown on failure
-    if o.verboseLevel > 0 && o.currentStep == stepName {
-        o.showStepOutput(output)
-    }
+    // Don't show output immediately - it will be shown when the step completes
+    // This prevents duplication between real-time streaming and buffered output flushing
 }
 
 // OnStepError handles step error events from executor

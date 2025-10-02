@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.16.10_feat.1_fix.1] - 2025-10-02
+
+### Fixed
+- **Matrix Output Doubling**: Fixed critical matrix output doubling issue where first matrix output was being duplicated
+  - Root cause identified - output was being displayed twice: once during real-time streaming via OnStepOutput → showStepOutput, and once during buffered output flushing via flushBufferedOutput → showStepOutput
+  - Solution implemented - modified OnStepOutput method in OrderedOutputManager to only show output immediately in verbose mode when it's the current step, preventing double display
+  - Matrix execution fixed - matrix jobs now show clean, single output without duplication
+  - Comprehensive testing - verified fix works correctly with matrix test scenarios showing proper single output display
+  - Perfect user experience - users now get clean matrix output without confusing duplicated lines
+
 ## [v0.16.10_feat.1] - 2025-10-01
 
 ### Added

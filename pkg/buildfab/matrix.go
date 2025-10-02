@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"os/exec"
 	"sort"
 	"strings"
 	"sync"
@@ -276,6 +277,103 @@ func (ms *MatrixScheduler) ScheduleJobs(runner *Runner, options *RunOptions) err
 	return err
 }
 
+// executeActionWithoutCallbacks executes an action without triggering step callbacks
+func (ms *MatrixScheduler) executeActionWithoutCallbacks(runner *Runner, actionName string) error {
+	// Check if it's a built-in action first
+	if actionRunner, exists := runner.registry.GetRunner(actionName); exists {
+		// Handle dry-run mode for built-in actions
+		if ms.opts != nil && ms.opts.DryRun {
+			// For dry-run, we don't need to do anything special
+			return nil
+		}
+
+		// Execute the built-in action
+		_, err := actionRunner.Run(ms.ctx)
+		return err
+	}
+
+	// Handle custom action
+	action, exists := runner.config.GetAction(actionName)
+	if !exists {
+		return fmt.Errorf("action not found: %s", actionName)
+	}
+
+	// Handle dry-run mode for custom actions
+	if ms.opts != nil && ms.opts.DryRun {
+		// For dry-run, we don't need to do anything special
+		return nil
+	}
+
+	// Execute custom action using the internal method without callbacks
+	return ms.runCustomActionWithoutCallbacks(runner, action)
+}
+
+// runCustomActionWithoutCallbacks executes a custom action without step callbacks
+func (ms *MatrixScheduler) runCustomActionWithoutCallbacks(runner *Runner, action Action) error {
+	// Select variant if action has variants
+	var effectiveAction Action
+	if len(action.Variants) > 0 {
+		variant, err := action.SelectVariant(runner.opts.Variables)
+		if err != nil {
+			return fmt.Errorf("failed to select variant for action %s: %w", action.Name, err)
+		}
+		
+		if variant == nil {
+			// No variant matched, skip this action
+			return nil
+		}
+		
+		// Use the selected variant
+		effectiveAction = Action{
+			Name: action.Name,
+			Run:  variant.Run,
+			Uses: variant.Uses,
+			Shell: variant.Shell,
+		}
+	} else {
+		effectiveAction = action
+	}
+	
+	// Execute the action based on its type
+	if effectiveAction.Uses != "" {
+		// Built-in action (should have been caught above, but just in case)
+		if actionRunner, exists := runner.registry.GetRunner(effectiveAction.Uses); exists {
+			_, err := actionRunner.Run(ms.ctx)
+			return err
+		}
+		return fmt.Errorf("built-in action not found: %s", effectiveAction.Uses)
+	} else {
+		// Custom action - execute the run command
+		return ms.runCustomCommand(effectiveAction)
+	}
+}
+
+// runCustomCommand executes a custom command without step callbacks
+func (ms *MatrixScheduler) runCustomCommand(action Action) error {
+	if action.Run == "" {
+		return fmt.Errorf("action %s has no run command", action.Name)
+	}
+
+	// Interpolate variables in the command
+	interpolatedCmd, err := InterpolateVariables(action.Run, ms.opts.Variables)
+	if err != nil {
+		return fmt.Errorf("failed to interpolate variables in action %s: %w", action.Name, err)
+	}
+
+	// Determine shell to use
+	shell := action.Shell
+	if shell == "" {
+		shell = "sh" // Default shell
+	}
+
+	// Execute the command
+	cmd := exec.CommandContext(ms.ctx, shell, "-c", interpolatedCmd)
+	cmd.Stdout = ms.opts.Output
+	cmd.Stderr = ms.opts.ErrorOutput
+	
+	return cmd.Run()
+}
+
 // orderJobs orders jobs according to the strategy
 func (ms *MatrixScheduler) orderJobs() {
 	switch ms.strategy.Order {
@@ -351,8 +449,8 @@ func (ms *MatrixScheduler) executeJob(job *MatrixJob, runner *Runner, options *R
 		runner.opts.Variables[k] = v
 	}
 	
-	// Execute the action
-	err := runner.RunAction(ms.ctx, job.Action.Name)
+	// Execute the action without step callbacks (matrix scheduler handles callbacks)
+	err := ms.executeActionWithoutCallbacks(runner, job.Action.Name)
 	
 	// Restore original variables
 	runner.opts.Variables = originalVars

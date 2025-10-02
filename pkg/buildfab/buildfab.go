@@ -854,11 +854,8 @@ func (r *Runner) executeStageDryRun(ctx context.Context, stageName string, steps
 
 // executeStageWithCallback executes a stage using the step callback for output management
 func (r *Runner) executeStageWithCallback(ctx context.Context, steps []Step) error {
-	// Expand matrix steps into individual steps
-	expandedSteps, err := r.expandMatrixSteps(steps)
-	if err != nil {
-		return fmt.Errorf("failed to expand matrix steps: %w", err)
-	}
+	// Steps are already expanded (matrix steps have been expanded by the caller)
+	expandedSteps := steps
 	
 	// Build execution DAG
 	dag, err := r.buildDAG(expandedSteps)
