@@ -238,7 +238,7 @@ func TestConfig_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "action action1 must have either 'run' or 'uses'",
+			errMsg:  "action action1 must have either 'run', 'uses', or 'container'",
 		},
 		{
 			name: "action with both run and uses",
