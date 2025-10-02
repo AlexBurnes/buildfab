@@ -19,15 +19,15 @@ stages:
 actions:
   - name: platform-view
     description: Display platform information
-    run:
-      - echo "=== Platform Detection Test ==="
-      - echo "Container Image: ${{ matrix.image }}"
-      - echo "Platform: ${{platform}}"
-      - echo "Architecture: '${{arch}}'"
-      - echo "OS: '${{os}}'"
-      - echo "OS Version: '${{os_version}}'"
-      - echo "CPU Count: ${{cpu}}"
-      - echo "================================"
+    run: |
+      echo "=== Platform Detection Test ==="
+      echo "Container Image: ${{ matrix.image }}"
+      echo "Platform: ${{platform}}"
+      echo "Architecture: '${{arch}}'"
+      echo "OS: '${{os}}'"
+      echo "OS Version: '${{os_version}}'"
+      echo "CPU Count: ${{cpu}}"
+      echo "================================"
 
   - name: platform-test
     description: Test platform detection in ${{ matrix.image }}

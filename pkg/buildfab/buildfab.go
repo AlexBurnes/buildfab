@@ -2747,16 +2747,95 @@ func (r *Runner) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd,
 
 // runContainerAction executes an action inside a container
 func (r *Runner) runContainerAction(ctx context.Context, action Action) error {
-	// Create container runner
-	runner, err := containerRunner.NewContainerRunner()
+	// Create container runner with specified engine or default
+	var runner *containerRunner.ContainerRunner
+	var err error
+	
+	if action.Container.Engine != "" {
+		// Use specified engine
+		runner, err = containerRunner.NewContainerRunnerWithEngine(action.Container.Engine)
+	} else {
+		// Use default engine (Podman)
+		runner, err = containerRunner.NewContainerRunner()
+	}
+	
 	if err != nil {
 		return fmt.Errorf("failed to create container runner: %w", err)
 	}
 	
+	// Show container command if verbosity level is 2 or higher
+	if r.opts.VerboseLevel >= 2 {
+		containerCmd := r.buildContainerCommand(action.Container)
+		if r.opts.Output != nil {
+			fmt.Fprintf(r.opts.Output, "  🐳 Running container: %s\n", containerCmd)
+		}
+	}
+	
 	// Execute container action
-	if err := runner.RunAction(ctx, *action.Container); err != nil {
+	result, err := runner.RunAction(ctx, *action.Container)
+	if err != nil {
 		return fmt.Errorf("container action failed: %w", err)
 	}
 	
+	// Display container output based on verbosity level
+	if result != nil && result.Output != "" {
+		// Only show output if not in quiet mode (VerboseLevel > 0)
+		if r.opts.VerboseLevel > 0 && r.opts.Output != nil {
+			// Properly align container output
+			lines := strings.Split(strings.TrimSpace(result.Output), "\n")
+			for _, line := range lines {
+				if line != "" {
+					fmt.Fprintf(r.opts.Output, "  %s\n", line)
+				}
+			}
+		}
+	}
+	
+	// Display container error if available (always show errors)
+	if result != nil && result.Error != "" {
+		if r.opts.ErrorOutput != nil {
+			fmt.Fprintf(r.opts.ErrorOutput, "  Container error: %s\n", result.Error)
+		}
+	}
+	
+	// Check container exit code
+	if result != nil && result.ExitCode != 0 {
+		return fmt.Errorf("container exited with code %d", result.ExitCode)
+	}
+	
 	return nil
+}
+
+// buildContainerCommand builds a human-readable representation of the container command
+func (r *Runner) buildContainerCommand(config *container.ContainerConfig) string {
+	var parts []string
+	
+	// Use specified engine or default to podman
+	engineName := "podman" // Default to podman
+	if config.Engine != "" {
+		engineName = config.Engine
+	}
+	
+	// Add engine (Docker/Podman)
+	parts = append(parts, engineName)
+	
+	// Add image
+	parts = append(parts, "run", "--rm")
+	parts = append(parts, config.Image.From)
+	
+	// Add commands
+	if len(config.Commands) > 0 {
+		if len(config.Commands) > 1 {
+			shellCmd := strings.Join(config.Commands, " && ")
+			parts = append(parts, "sh", "-c", fmt.Sprintf("'%s'", shellCmd))
+		} else {
+			parts = append(parts, config.Commands...)
+		}
+	} else if config.RunAction != "" {
+		parts = append(parts, "buildfab", "action", config.RunAction)
+	} else if config.RunStage != "" {
+		parts = append(parts, "buildfab", "run", config.RunStage)
+	}
+	
+	return strings.Join(parts, " ")
 }

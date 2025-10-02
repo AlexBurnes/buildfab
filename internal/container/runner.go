@@ -20,25 +20,34 @@ func NewContainerRunner() (*ContainerRunner, error) {
 	return &ContainerRunner{manager: manager}, nil
 }
 
+// NewContainerRunnerWithEngine creates a new container runner with a specific engine
+func NewContainerRunnerWithEngine(engineName string) (*ContainerRunner, error) {
+	manager, err := container.NewManagerWithEngine(engineName)
+	if err != nil {
+		return nil, err
+	}
+	return &ContainerRunner{manager: manager}, nil
+}
+
 // RunAction executes a container action
-func (r *ContainerRunner) RunAction(ctx context.Context, config container.ContainerConfig) error {
+func (r *ContainerRunner) RunAction(ctx context.Context, config container.ContainerConfig) (*container.ContainerResult, error) {
 	// Copy buildfab binary and config to container
 	if err := r.prepareContainer(ctx, config); err != nil {
-		return err
+		return nil, err
 	}
 	
 	// Execute container
 	result, err := r.manager.ExecuteAction(ctx, config)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	
 	// Collect artifacts
 	if err := r.collectArtifacts(result, config); err != nil {
-		return err
+		return nil, err
 	}
 	
-	return nil
+	return result, nil
 }
 
 // prepareContainer prepares the container for execution

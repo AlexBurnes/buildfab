@@ -11,16 +11,34 @@ type Manager struct {
 	engine Engine
 }
 
-// NewManager creates a new container manager, automatically detecting available engines
+// NewManager creates a new container manager with Podman as default
 func NewManager() (*Manager, error) {
-	// Try Docker first, then Podman
-	if docker := NewDockerEngine(); docker.DetectEngine() {
-		return &Manager{engine: docker}, nil
-	}
+	// Default to Podman, fallback to Docker if Podman is not available
 	if podman := NewPodmanEngine(); podman.DetectEngine() {
 		return &Manager{engine: podman}, nil
 	}
-	return nil, fmt.Errorf("no container engine available")
+	if docker := NewDockerEngine(); docker.DetectEngine() {
+		return &Manager{engine: docker}, nil
+	}
+	return nil, fmt.Errorf("no container engine available (tried podman and docker)")
+}
+
+// NewManagerWithEngine creates a new container manager with a specific engine
+func NewManagerWithEngine(engineName string) (*Manager, error) {
+	switch engineName {
+	case "docker":
+		if docker := NewDockerEngine(); docker.DetectEngine() {
+			return &Manager{engine: docker}, nil
+		}
+		return nil, fmt.Errorf("docker engine not available")
+	case "podman":
+		if podman := NewPodmanEngine(); podman.DetectEngine() {
+			return &Manager{engine: podman}, nil
+		}
+		return nil, fmt.Errorf("podman engine not available")
+	default:
+		return nil, fmt.Errorf("unsupported engine: %s (supported: docker, podman)", engineName)
+	}
 }
 
 // ExecuteAction executes a container action
