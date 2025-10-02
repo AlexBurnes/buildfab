@@ -5,7 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.5_feat.1_fix.1] - 2025-09-29
+
+### Fixed
+- **Matrix Output Suppression**: Fixed race condition in matrix execution where some step output was being lost due to timing issues between step completion and output buffering
+  - Added double-flush mechanism in OrderedOutputManager to ensure all buffered output is displayed
+  - Matrix steps now consistently show complete output regardless of execution timing
+  - Resolved intermittent missing output lines in verbose mode
+
 ## [Unreleased]
+
+## [v0.16.10_feat.1_fix.1] - 2025-10-02
+
+### Fixed
+- **Matrix Output Doubling**: Fixed critical matrix output doubling issue where first matrix output was being duplicated
+  - Root cause identified - output was being displayed twice: once during real-time streaming via OnStepOutput → showStepOutput, and once during buffered output flushing via flushBufferedOutput → showStepOutput
+  - Solution implemented - modified OnStepOutput method in OrderedOutputManager to only show output immediately in verbose mode when it's the current step, preventing double display
+  - Matrix execution fixed - matrix jobs now show clean, single output without duplication
+  - Comprehensive testing - verified fix works correctly with matrix test scenarios showing proper single output display
+  - Perfect user experience - users now get clean matrix output without confusing duplicated lines
+
+## [v0.16.10_feat.1] - 2025-10-01
+
+### Added
+- **Feature/Matrix Branch Merge**: Successfully merged feature/matrix branch with master branch changes
+  - Matrix feature now works perfectly with all master branch changes including verbosity levels, version display, and warning output enhancements
+  - Comprehensive testing confirmed matrix expansion, variable interpolation, and parallel execution all work correctly
+  - Matrix feature seamlessly integrates with existing buildfab architecture including OrderedOutputManager, step callbacks, and debug logging
+
+### Fixed
+- **Compilation Errors**: Fixed OnStepComplete method signature calls to include bufferedOutput parameter across all files (buildfab.go, matrix.go)
+- **SimpleRunOptions Compatibility**: Updated SimpleRunOptions.Verbose references to use VerboseLevel field for compatibility with verbosity levels feature
+- **Version Format**: Updated VERSION file to v0.16.10_feat.1 for feature branch development
+
+## [v0.16.5_feat.1] - 2025-09-26
+### Added
+- **Matrix Feature Implementation**: Comprehensive matrix builds for parallel execution across multiple configurations
+  - Matrix configuration support with configurable parallelism, fail-fast policies, and job management
+  - Matrix expansion logic to create multiple jobs from matrix definitions with Cartesian product generation
+  - Matrix strategy configuration (max_parallel, fail_fast, continue_on_error, order) for flexible job scheduling
+  - Matrix job scheduler with proper queue management, status reporting, and error handling
+  - Matrix variable interpolation (${{ matrix.* }}) integration with existing variable system
+  - CLI support for matrix-specific commands and overrides with real-time job status reporting
+  - Comprehensive test suite for matrix functionality with long-running test scenarios and performance validation
+  - Matrix execution patterns integrated with existing DAG execution engine
+  - Step callback integration for proper output management and status reporting
+  - Matrix job lifecycle management with proper error handling and cleanup
+  - Created comprehensive user test examples for different matrix scenarios including basic matrix, parallel execution, error handling, and long-running tests
+  - Feature branch created (feature/matrix) with feature version v0.16.5_feat.1 for matrix feature development
+  - VERSION 0.16.6 RELEASED with comprehensive matrix feature implementation
 
 ## [0.16.10] - 2025-10-01
 
@@ -46,7 +94,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Verbosity levels system**: Implemented comprehensive verbosity levels with granular control over output detail and debug options
   - Added `-v`, `-vv`, `-vvv` levels using CountVarP flag for CLI support
   - **Level 0 (quiet, `-q`)**: `<output data>` only on errors, `'to check run'` never
-  - **Level 1 (verbose, `-v`)**: `<output data>` always, `'to check run'` never  
+  - **Level 1 (verbose, `-v`)**: `<output data>` always, `'to check run'` never
   - **Level 2 (debug, `-vv`)**: `<output data>` always, `'to check run'` never, adds shell debug options (`-x`)
   - **Level 3 (trace, `-vvv`)**: `<output data>` always, `'to check run'` on errors, adds shell debug options (`-x`)
   - Updated all data structures from `Verbose bool` to `VerboseLevel int` for level-based control
@@ -489,12 +537,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Note: Full interactive input handling has limitations due to subprocess execution constraints
 
 ### Technical Details
-- **OrderedOutputManager Enhancements**: 
+- **OrderedOutputManager Enhancements**:
   - Modified OnStepOutput to stream output immediately if it's the current active step
   - Added flushBufferedOutput method to flush all buffered output when a step becomes active
   - Updated checkAndShowNextStep to flush buffered output when a step becomes the current step
   - Updated checkAndShowCompletedSteps to flush buffered output when showing completed steps
-- **Executor Integration**: 
+- **Executor Integration**:
   - Added OnStepOutput calls in executeCommandWithStreaming for both stdout and stderr
   - Added OnStepOutput calls in executeCustomAction for buffered output mode
   - Connected cmd.Stdin = os.Stdin for interactive command support
@@ -598,7 +646,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Git Actions Message Format**: Standardized all git action messages to use consistent formatting
   - All three git actions now use the same message format ending with "to check run:\n    git status"
   - git@untracked: "Untracked files found, to check run:\n    git status"
-  - git@uncommitted: "Uncommitted changes found, to check run:\n    git status"  
+  - git@uncommitted: "Uncommitted changes found, to check run:\n    git status"
   - git@modified: "There are modified files, to check run:\n    git status"
   - Consistent indentation and formatting across all git actions
   - Users get clear, actionable instructions for checking git status
@@ -846,7 +894,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - **Legacy Build Scripts**: Removed old bash scripts that are no longer needed
   - Removed `buildtools/build-conan.sh` (448 lines)
-  - Removed `buildtools/build-and-package.sh` (350 lines)  
+  - Removed `buildtools/build-and-package.sh` (350 lines)
   - Removed `buildtools/build-goreleaser.sh` (232 lines)
   - Removed legacy build actions from project configuration
   - Verified CI/CD pipelines don't use removed scripts to prevent breakage
@@ -1046,7 +1094,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive Test Suite**: Implemented complete test coverage with 75.3% overall coverage across all packages
 - **Test Infrastructure**: Created 9 test files covering unit tests, integration tests, and end-to-end scenarios
   - `pkg/buildfab/types_test.go` - Tests for core types and status enums
-  - `pkg/buildfab/errors_test.go` - Tests for custom error types  
+  - `pkg/buildfab/errors_test.go` - Tests for custom error types
   - `pkg/buildfab/buildfab_test.go` - Comprehensive tests for main API
   - `internal/config/config_test.go` - YAML parsing and validation tests
   - `internal/actions/registry_test.go` - Built-in action tests

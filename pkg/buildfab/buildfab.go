@@ -38,11 +38,12 @@ type Config struct {
 
 // Action represents a single action that can be executed
 type Action struct {
-	Name     string          `yaml:"name"`
-	Run      string          `yaml:"run,omitempty"`
-	Uses     string          `yaml:"uses,omitempty"`
-	Shell    string          `yaml:"shell,omitempty"` // Optional shell specification
-	Variants []ActionVariant `yaml:"variants,omitempty"` // Optional variants for conditional execution
+	Name     string                 `yaml:"name"`
+	Run      string                 `yaml:"run,omitempty"`
+	Uses     string                 `yaml:"uses,omitempty"`
+	Shell    string                 `yaml:"shell,omitempty"` // Optional shell specification
+	Variants []ActionVariant        `yaml:"variants,omitempty"` // Optional variants for conditional execution
+	Options  map[string]interface{} `yaml:"options,omitempty"` // Optional action options (e.g., delay)
 }
 
 // ActionVariant represents a conditional variant of an action
@@ -60,11 +61,68 @@ type Stage struct {
 
 // Step represents a single step in a stage
 type Step struct {
-	Action  string   `yaml:"action"`
-	Require []string `yaml:"require,omitempty"`
-	OnError string   `yaml:"onerror,omitempty"`
-	If      string   `yaml:"if,omitempty"`
-	Only    []string `yaml:"only,omitempty"`
+	Action      string   `yaml:"action"`
+	Description string   `yaml:"description,omitempty"` // Step description for display
+	Require     []string `yaml:"require,omitempty"`
+	DependsOn   []string `yaml:"depends_on,omitempty"` // Alternative to require
+	OnError     string   `yaml:"onerror,omitempty"`
+	If          string   `yaml:"if,omitempty"`
+	Only        []string `yaml:"only,omitempty"`
+	Matrix      *MatrixConfig `yaml:"matrix,omitempty"` // Matrix configuration for this step
+}
+
+// MatrixConfig represents matrix configuration for parallel execution
+type MatrixConfig struct {
+	Values   map[string][]interface{} `yaml:"values"`   // Matrix values (e.g., {"os": ["linux", "windows"]})
+	Strategy MatrixStrategy           `yaml:"strategy"` // Matrix execution strategy
+}
+
+// MatrixStrategy defines how matrix jobs should be executed
+type MatrixStrategy struct {
+	MaxParallel     int    `yaml:"max_parallel"`     // Maximum concurrent jobs (default: all)
+	FailFast        bool   `yaml:"fail_fast"`        // Stop all jobs on first failure (default: false)
+	ContinueOnError bool   `yaml:"continue_on_error"` // Stage succeeds even if some jobs fail (default: false)
+	Order          string `yaml:"order"`             // Job scheduling order: "fifo" or "random" (default: "fifo")
+}
+
+// MatrixJob represents a single matrix job
+type MatrixJob struct {
+	ID       string                 // Unique job identifier
+	Matrix   map[string]interface{} // Matrix values for this job
+	Action   *Action                // Action to execute
+	Status   Status                 // Job execution status
+	Result   *Result                // Job execution result
+	StartTime time.Time             // Job start time
+	EndTime   time.Time             // Job end time
+}
+
+// MatrixJobStatus represents the status of a matrix job
+type MatrixJobStatus int
+
+const (
+	MatrixJobPending MatrixJobStatus = iota
+	MatrixJobRunning
+	MatrixJobCompleted
+	MatrixJobFailed
+	MatrixJobSkipped
+)
+
+// String returns the string representation of the matrix job status
+func (s MatrixJobStatus) String() string {
+	switch s {
+	case MatrixJobPending:
+		return "PENDING"
+	case MatrixJobRunning:
+		return "RUNNING"
+	case MatrixJobCompleted:
+		return "COMPLETED"
+	case MatrixJobFailed:
+		return "FAILED"
+	case MatrixJobSkipped:
+		return "SKIPPED"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // Result represents the result of executing a step
@@ -291,6 +349,12 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 	}
 
 	return err
+}
+
+// RunStageWithSteps runs a stage with specific steps (for matrix expansion)
+func (r *Runner) RunStageWithSteps(ctx context.Context, stageName string, steps []Step) error {
+	// Execute the steps directly
+	return r.executeStageWithCallback(ctx, steps)
 }
 
 // RunStageStep executes a specific step within a stage
@@ -571,9 +635,71 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// expandMatrixSteps expands matrix steps into individual steps for DAG execution
+func (r *Runner) expandMatrixSteps(steps []Step) ([]Step, error) {
+	var expandedSteps []Step
+	
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: processing %d steps\n", len(steps))
+	}
+	
+	for i, step := range steps {
+		if r.opts.Debug {
+			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step %d: Action=%s, Matrix=%v\n", i, step.Action, step.Matrix != nil)
+		}
+		
+		// Check if this step has matrix configuration
+		if step.Matrix != nil {
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding matrix step: %s\n", step.Action)
+			}
+			
+			// Get the action for this step
+			action, exists := r.config.GetAction(step.Action)
+			if !exists {
+				return nil, fmt.Errorf("action not found: %s", step.Action)
+			}
+			
+			// Create matrix expander
+			expander := NewMatrixExpander(r.config)
+			
+			// Expand matrix into individual steps
+			matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
+			if err != nil {
+				return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+			}
+			
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanded into %d steps\n", len(matrixSteps))
+				for j, matrixStep := range matrixSteps {
+					fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix step %d: Action=%s, Description=%s\n", j, matrixStep.Action, matrixStep.Description)
+				}
+			}
+			
+			// Add expanded steps
+			expandedSteps = append(expandedSteps, matrixSteps...)
+		} else {
+			// Regular step - add as is
+			expandedSteps = append(expandedSteps, step)
+		}
+	}
+	
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: returning %d expanded steps\n", len(expandedSteps))
+	}
+	
+	return expandedSteps, nil
+}
+
 // runStageInternal executes a stage using parallel execution with ordered streaming output
 func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	stage, _ := r.config.GetStage(stageName)
+	
+	// Debug output
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] runStageInternal: stageName=%s, DryRun=%v\n", stageName, r.opts.DryRun)
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Steps: %+v\n", stage.Steps)
+	}
 	
 	// Handle dry-run mode for stages
 	if r.opts.DryRun {
@@ -585,14 +711,20 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 		return r.executeStageWithCallback(ctx, stage.Steps)
 	}
 	
+	// Expand matrix steps into individual steps
+	expandedSteps, err := r.expandMatrixSteps(stage.Steps)
+	if err != nil {
+		return fmt.Errorf("failed to expand matrix steps: %w", err)
+	}
+	
 	// Build execution DAG
-	dag, err := r.buildDAG(stage.Steps)
+	dag, err := r.buildDAG(expandedSteps)
 	if err != nil {
 		return fmt.Errorf("failed to build execution DAG: %w", err)
 	}
 	
 	// Execute DAG with parallel execution but ordered streaming output
-	results, err := r.executeDAGWithOrderedStreaming(ctx, dag, stage.Steps)
+	results, err := r.executeDAGWithOrderedStreaming(ctx, dag, expandedSteps)
 	
 	// Check if execution was terminated due to context cancellation
 	terminated := ctx.Err() != nil
@@ -641,6 +773,11 @@ func (r *Runner) executeStageDryRun(ctx context.Context, stageName string, steps
 	
 	// Process each step
 	for _, step := range steps {
+		// Debug output for step configuration
+		if r.opts.Debug {
+			fmt.Fprintf(r.opts.Output, "[DEBUG] Dry run step: %+v\n", step)
+			fmt.Fprintf(r.opts.Output, "[DEBUG] Matrix config: %+v\n", step.Matrix)
+		}
 		// Check if step should be executed based on conditions
 		shouldExecute, err := r.shouldExecuteStepByCondition(ctx, step)
 		if err != nil {
@@ -717,14 +854,17 @@ func (r *Runner) executeStageDryRun(ctx context.Context, stageName string, steps
 
 // executeStageWithCallback executes a stage using the step callback for output management
 func (r *Runner) executeStageWithCallback(ctx context.Context, steps []Step) error {
+	// Steps are already expanded (matrix steps have been expanded by the caller)
+	expandedSteps := steps
+	
 	// Build execution DAG
-	dag, err := r.buildDAG(steps)
+	dag, err := r.buildDAG(expandedSteps)
 	if err != nil {
 		return fmt.Errorf("failed to build execution DAG: %w", err)
 	}
 	
 	// Execute DAG with step callback
-	results, err := r.executeDAGWithCallback(ctx, dag, steps)
+	results, err := r.executeDAGWithCallback(ctx, dag, expandedSteps)
 	
 	// Check if execution was terminated due to context cancellation
 	terminated := ctx.Err() != nil
@@ -758,6 +898,160 @@ func (r *Runner) executeStageWithCallback(ctx context.Context, steps []Step) err
 		return ctx.Err()
 	}
 	
+	return err
+}
+
+// executeStepWithMatrix handles step execution with matrix support
+func (r *Runner) executeStepWithMatrix(ctx context.Context, step Step) error {
+	// Debug output
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] executeStepWithMatrix called for step: %s\n", step.Action)
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix config: %+v\n", step.Matrix)
+	}
+	
+	// Check if step has matrix configuration
+	if step.Matrix == nil {
+		// Regular step execution - delegate to existing logic
+		return r.executeStepRegular(ctx, step)
+	}
+	
+	// Get the action for this step
+	action, exists := r.config.GetAction(step.Action)
+	if !exists {
+		return fmt.Errorf("action not found: %s", step.Action)
+	}
+	
+	// Create matrix expander
+	expander := NewMatrixExpander(r.config)
+	
+	// Expand matrix into jobs
+	jobs, err := expander.ExpandMatrix(&step, &action)
+	if err != nil {
+		return fmt.Errorf("failed to expand matrix: %w", err)
+	}
+	
+	if len(jobs) == 0 {
+		// No matrix jobs to execute
+		return nil
+	}
+	
+	// Set default strategy values if not specified
+	strategy := step.Matrix.Strategy
+	if strategy.MaxParallel <= 0 {
+		strategy.MaxParallel = r.opts.MaxParallel
+	}
+	if strategy.Order == "" {
+		strategy.Order = "fifo"
+	}
+	
+	// Create matrix scheduler
+	scheduler := NewMatrixScheduler(jobs, strategy, strategy.MaxParallel, r.opts)
+	
+	// Set step callback if available
+	if r.opts.StepCallback != nil {
+		scheduler.SetStepCallback(r.opts.StepCallback, step.Action)
+	}
+	
+	// Execute matrix jobs
+	return scheduler.ScheduleJobs(r, r.opts)
+}
+
+// executeStepRegular handles regular step execution without matrix
+func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
+	// Check if it's a built-in action
+	if runner, exists := r.registry.GetRunner(step.Action); exists {
+		// Call step start callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepStart(ctx, step.Action)
+		}
+
+		// Handle dry-run mode for built-in actions
+		if r.opts.DryRun {
+			description := runner.Description()
+			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepComplete(ctx, step.Action, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
+			}
+			return nil
+		}
+
+		start := time.Now()
+		result, err := runner.Run(ctx)
+		duration := time.Since(start)
+
+		// Call step complete callback if provided
+		if r.opts.StepCallback != nil {
+			status := StepStatusOK
+			message := "executed successfully"
+			
+			// Prioritize result status and message over error when available
+			if result.Status == StatusError {
+				status = StepStatusError
+				message = result.Message
+				if err != nil {
+					r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+				}
+			} else if result.Status == StatusWarn {
+				status = StepStatusWarn
+				message = result.Message
+			} else if result.Status == StatusSkipped {
+				status = StepStatusSkipped
+				message = result.Message
+			} else if err != nil {
+				status = StepStatusError
+				message = err.Error()
+				r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+			}
+			
+			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration, "")
+		}
+
+		return err
+	}
+
+	// Check if it's a custom action
+	action, exists := r.config.GetAction(step.Action)
+	if !exists {
+		return fmt.Errorf("action not found: %s", step.Action)
+	}
+
+	// Call step start callback if provided
+	if r.opts.StepCallback != nil {
+		r.opts.StepCallback.OnStepStart(ctx, step.Action)
+	}
+
+	// Handle dry-run mode for custom actions
+	if r.opts.DryRun {
+		err := r.runActionInternalDryRun(ctx, action)
+		if r.opts.StepCallback != nil {
+			status := StepStatusOK
+			message := "would execute action"
+			if err != nil {
+				status = StepStatusError
+				message = err.Error()
+			}
+			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, 0, "")
+		}
+		return err
+	}
+
+	start := time.Now()
+	err := r.runActionInternal(ctx, action)
+	duration := time.Since(start)
+
+	// Call step complete callback if provided
+	if r.opts.StepCallback != nil {
+		status := StepStatusOK
+		message := "executed successfully"
+		
+		if err != nil {
+			status = StepStatusError
+			message = err.Error()
+			r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+		}
+		
+		r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration, "")
+	}
+
 	return err
 }
 
@@ -948,6 +1242,17 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 
 // executeActionForDAGWithCallback executes a single action for DAG execution using step callbacks
 func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Action, stepConfig *Step) (Result, error) {
+	// Debug output for step configuration
+	if r.opts.Debug {
+		if stepConfig != nil {
+			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step config: %+v\n", stepConfig)
+			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix config: %+v\n", stepConfig.Matrix)
+		} else {
+			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step config is nil\n")
+		}
+	}
+	// Matrix steps are now expanded into individual steps, so this is just a regular step
+	
 	// Call step start callback if provided
 	if r.opts.StepCallback != nil {
 		r.opts.StepCallback.OnStepStart(ctx, action.Name)
@@ -1163,6 +1468,9 @@ func (r *Runner) buildDAG(steps []Step) (map[string]*DAGNode, error) {
 			return nil, fmt.Errorf("action not found: %s", step.Action)
 		}
 		
+		// Use the step action as the node name (matrix steps now have unique action names)
+		nodeName := step.Action
+		
 		node := &DAGNode{
 			Step:         step,
 			Action:       action,
@@ -1170,7 +1478,7 @@ func (r *Runner) buildDAG(steps []Step) (map[string]*DAGNode, error) {
 			Dependents:   []string{},
 		}
 		
-		dag[step.Action] = node
+		dag[nodeName] = node
 	}
 	
 	// Build dependency relationships
@@ -1717,7 +2025,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 				
 				// Execute the node in parallel
 				go func(nodeName string, node *DAGNode) {
-					result, _ := r.executeActionForDAG(ctx, node.Action)
+					result, _ := r.executeActionForDAGWithStep(ctx, node.Action, &node.Step)
 					result.Name = nodeName
 					
 					select {
@@ -1875,8 +2183,8 @@ func (r *Runner) executeActionForDAGWithStreamingControl(ctx context.Context, ac
 
 // executeActionForDAG executes a single action for DAG execution
 func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result, error) {
-		// Call step start callback if provided
-		if r.opts.StepCallback != nil {
+	// Call step start callback if provided
+	if r.opts.StepCallback != nil {
 		r.opts.StepCallback.OnStepStart(ctx, action.Name)
 	}
 
@@ -1885,6 +2193,35 @@ func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result
 
 	// Measure execution time from when the action actually starts to when it finishes
 	start := time.Now()
+	if action.Uses != "" {
+		result, err = r.runBuiltInActionForDAG(ctx, action)
+	} else {
+		result, err = r.runCustomActionForDAG(ctx, action)
+	}
+	duration := time.Since(start)
+	
+	// Set the duration in the result
+	result.Duration = duration
+
+	return result, err
+}
+
+// executeActionForDAGWithStep executes a single action for DAG execution with step information
+func (r *Runner) executeActionForDAGWithStep(ctx context.Context, action Action, step *Step) (Result, error) {
+	// Call step start callback if provided
+	stepName := action.Name
+	if step != nil && step.Description != "" {
+		stepName = step.Description // Use description for matrix steps
+	}
+	if r.opts.StepCallback != nil {
+		r.opts.StepCallback.OnStepStart(ctx, stepName)
+	}
+
+	// Execute the action (matrix steps now have interpolated actions)
+	start := time.Now()
+	var result Result
+	var err error
+	
 	if action.Uses != "" {
 		result, err = r.runBuiltInActionForDAG(ctx, action)
 	} else {
@@ -1946,6 +2283,14 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 			Status:  StatusError,
 			Message: fmt.Sprintf("failed to interpolate variables: %v", err),
 		}, fmt.Errorf("failed to interpolate variables in action %s: %w", action.Name, err)
+	}
+	
+	// Apply delay if specified in action options
+	if delay, exists := action.Options["delay"]; exists {
+		if delaySeconds, ok := delay.(int); ok && delaySeconds > 0 {
+			// Wait for the specified delay before executing the command
+			time.Sleep(time.Duration(delaySeconds) * time.Second)
+		}
 	}
 	
 	// Create command with error handling flags
@@ -2026,6 +2371,14 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 			Status:  StatusError,
 			Message: fmt.Sprintf("failed to interpolate variables: %v", err),
 		}, fmt.Errorf("failed to interpolate variables in action %s: %w", action.Name, err)
+	}
+	
+	// Apply delay if specified in action options
+	if delay, exists := action.Options["delay"]; exists {
+		if delaySeconds, ok := delay.(int); ok && delaySeconds > 0 {
+			// Wait for the specified delay before executing the command
+			time.Sleep(time.Duration(delaySeconds) * time.Second)
+		}
 	}
 	
 	// Create command with error handling flags

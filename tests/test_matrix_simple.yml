@@ -1,0 +1,56 @@
+project:
+  name: "matrix-simple-tests"
+  modules: ["matrix-testing"]
+
+actions:
+  - name: simple-test
+    run: |
+      echo "Testing ${{ matrix.test_name }} on ${{ matrix.platform }}"
+      echo "Matrix values: ${{ matrix.test_name }}, ${{ matrix.platform }}"
+      sleep 1
+
+  - name: quick-test
+    run: |
+      echo "Quick test: ${{ matrix.value }}"
+      sleep 0.5
+
+stages:
+  # Simple 2x2 matrix
+  simple-matrix:
+    steps:
+      - action: simple-test
+        matrix:
+          values:
+            test_name: ["unit", "integration"]
+            platform: ["linux", "windows"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Single dimension matrix
+  single-dimension:
+    steps:
+      - action: quick-test
+        matrix:
+          values:
+            value: ["test1", "test2", "test3"]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Random order test
+  random-test:
+    steps:
+      - action: quick-test
+        matrix:
+          values:
+            value: ["A", "B", "C", "D"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "random"

@@ -3,6 +3,10 @@ project:
   modules: ["buildfab"]
   bin: "bin"
 
+include:
+  - "config/update-checking-stages.yml"
+  - "config/update-checking-actions.yml"
+
 stages:
   pre-push:
     steps:
@@ -11,24 +15,64 @@ stages:
 
       # Always run version module validation
       - action: version-module
-      
+
       # Run tests after version module validation
       - action: run-tests
+        only: [release]
         require: [version-module]
-      
-      # Run Git checks for all versions      
+
+      # Run Git checks for all versions
       - action: git-untracked
       - action: git-uncommitted
       - action: git-modified
         onerror: warn
 
+  distr:
+      - action: container-build
+        matrix:
+          image:
+            - "centos:7"
+            - "centos:8"
+            - "debian:12.7"
+          # image: ["centos:7", "rockylinux:8", "ubuntu:22.04"]
+        strategy:
+            max_parallel: 2     # <- run at most N matrix jobs at once (default: all)
+            fail_fast: true     # <- stop scheduling new jobs when any job fails (default: false)
+            continue_on_error: false  # <- if true, stage succeeds even if some jobs fail
+            # (optional) ordering policy; if omitted, natural order is used
+            order: "fifo"       # "fifo" | "random"
+
+# Semantics
+# max_parallel: scheduler starts up to N matrix jobs concurrently; remaining jobs queue and start as slots free up.
+# fail_fast:
+#   true: as soon as any job fails, no new jobs are started; in-flight jobs finish; stage then fails.
+#   false (default): run all jobs; stage fails if any job failed.
+# continue_on_error:
+#   true: stage succeeds even if some matrix jobs fail (useful for exploratory builds).
+# If both fail_fast: true and continue_on_error: true, continue_on_error wins for final status, but fail_fast still stops scheduling new jobs.
+# order: optional hint for the queue; usually keep fifo.
+
+# in quiet mode
+# [distr] scheduling 3 jobs, max_parallel=2, fail_fast=true
+# [distr] started (1/3): centos:7
+# [distr] started (2/3): centos:8
+# [distr] queued  (3/3): debian:12.7
+
+# in verbose mode
+# [distr] scheduling 3 jobs, max_parallel=2, fail_fast=true
+# [distr] started (1/3): centos:7
+#  output of centos:7
+# [distr] started (2/3): centos:8
+#  output of centos:8
+# [distr] queued  (3/3): debian:22.04
+#  output of ubuntu:22.04
+
+
   build:
     steps:
-      - action: check-conan
-      - action: check-cmake
-      - action: check-goreleaser
+      - action: pre-check
       - action: install-conan-deps
-        require: [check-conan, check-cmake]
+        require: [pre-check]
       - action: configure-cmake
         require: [install-conan-deps]
       - action: build-binaries
@@ -40,15 +84,27 @@ stages:
       - action: create-installers
         require: [install-binary]
       - action: goreleaser-dry-run
-        require: [create-installers, check-goreleaser]
+        require: [create-installers, pre-check]
+
+  test:
+    steps:
+      - action: build-cross-platform-binaries
+      - action: check-binaries
+        require: [build-cross-platform-binaries]
+      - action: test-linux-ubuntu
+        require: [check-binaries]
+      - action: test-linux-debian
+        require: [check-binaries]
+      - action: test-windows
+        require: [check-binaries]
+      - action: test-macos
+        require: [check-binaries]
 
   release:
     steps:
-      - action: check-conan
-      - action: check-cmake
-      - action: check-goreleaser
+      - action: pre-check
       - action: install-conan-deps
-        require: [check-conan, check-cmake]
+        require: [pre-check]
       - action: configure-cmake
         require: [install-conan-deps]
       - action: build-all-platforms
@@ -60,7 +116,7 @@ stages:
       - action: create-installers
         require: [install-binary]
       - action: goreleaser-release
-        require: [create-installers, check-goreleaser]
+        require: [create-installers, pre-check]
 
 actions:
   # Version and validation actions
@@ -104,41 +160,9 @@ actions:
   - name: git-modified
     uses: git@modified
 
-  # Tool check actions
-  - name: check-conan
-    run: |
-      if ! which conan >/dev/null 2>&1; then
-        echo "Conan is not installed. Install with: pip install conan"
-        exit 1
-      fi
-      conan --version
-
-  - name: check-cmake
-    run: |
-      if ! which cmake >/dev/null 2>&1; then
-        echo "CMake not found in PATH, will use Conan's CMake"
-      else
-        cmake --version
-      fi
-
-  - name: check-goreleaser
-    run: |
-      if ! which goreleaser >/dev/null 2>&1; then
-        echo "GoReleaser not found, checking Go environment..."
-        if ! which go >/dev/null 2>&1; then
-          echo "Go is not installed. Please install Go first"
-          exit 1
-        fi
-        echo "Installing GoReleaser..."
-        go install github.com/goreleaser/goreleaser@latest
-        # Add Go bin to PATH
-        export PATH="$(go env GOPATH)/bin:$PATH"
-        if ! which goreleaser >/dev/null 2>&1; then
-          echo "Failed to install GoReleaser"
-          exit 1
-        fi
-      fi
-      goreleaser --version
+  # Pre-check stage action
+  - name: pre-check
+    run: buildfab run pre-check
 
   # Dependency installation actions
   - name: install-conan-deps
@@ -185,7 +209,7 @@ actions:
         echo "Installing with manual configuration"
         cmake --build .build --target install-current
       fi
-      
+
       # Verify installation
       if [ -f "bin/buildfab" ]; then
         echo "✓ Binary installed successfully: bin/buildfab"
@@ -206,6 +230,92 @@ actions:
         cmake --build .build --target buildfab-all
       fi
 
+  - name: build-cross-platform-binaries
+    run: |
+      # Build cross-platform binaries for testing
+      echo "Building cross-platform binaries for testing..."
+
+      # Build Linux AMD64
+      echo "Building Linux AMD64..."
+      GOOS=linux GOARCH=amd64 go build -o bin/buildfab-linux-amd64 ./cmd/buildfab
+
+      # Build Windows AMD64
+      echo "Building Windows AMD64..."
+      GOOS=windows GOARCH=amd64 go build -o bin/buildfab-windows-amd64.exe ./cmd/buildfab
+
+      # Build macOS AMD64
+      echo "Building macOS AMD64..."
+      GOOS=darwin GOARCH=amd64 go build -o bin/buildfab-darwin-amd64 ./cmd/buildfab
+
+      echo "✓ Cross-platform binaries built successfully"
+
+  - name: check-binaries
+    run: |
+      # Check that cross-platform binaries were built successfully
+      echo "Checking cross-platform binaries..."
+
+      # Check Linux binary
+      if [ -f "bin/buildfab-linux-amd64" ]; then
+        echo "✓ Linux binary exists: bin/buildfab-linux-amd64"
+        bin/buildfab-linux-amd64 --version
+      else
+        echo "✗ Linux binary missing: bin/buildfab-linux-amd64"
+        exit 1
+      fi
+
+      # Check Windows binary
+      if [ -f "bin/buildfab-windows-amd64.exe" ]; then
+        echo "✓ Windows binary exists: bin/buildfab-windows-amd64.exe"
+        # Note: Can't run .exe on Linux, just check it exists
+      else
+        echo "✗ Windows binary missing: bin/buildfab-windows-amd64.exe"
+        exit 1
+      fi
+
+      # Check macOS binary
+      if [ -f "bin/buildfab-darwin-amd64" ]; then
+        echo "✓ macOS binary exists: bin/buildfab-darwin-amd64"
+        # Note: Can't run darwin binary on Linux, just check it exists
+      else
+        echo "✗ macOS binary missing: bin/buildfab-darwin-amd64"
+        exit 1
+      fi
+
+      echo "✓ All cross-platform binaries verified successfully"
+
+  # Test actions
+  - name: test-linux-ubuntu
+    run: |
+      echo "Testing Linux Ubuntu platform detection..."
+      ./bin/buildfab-linux-amd64 -c tests/cross-platform/unified-platform-validation.yml check-detection
+
+  - name: test-linux-debian
+    run: |
+      echo "Testing Linux Debian platform detection..."
+      ./bin/buildfab-linux-amd64 -c tests/cross-platform/unified-platform-validation.yml check-detection
+
+  - name: test-windows
+    run: |
+      echo "Testing Windows platform detection..."
+      # Note: Can't run Windows binary on Linux, just verify it exists
+      if [ -f "bin/buildfab-windows-amd64.exe" ]; then
+        echo "✓ Windows binary available for testing"
+      else
+        echo "✗ Windows binary not available"
+        exit 1
+      fi
+
+  - name: test-macos
+    run: |
+      echo "Testing macOS platform detection..."
+      # Note: Can't run Darwin binary on Linux, just verify it exists
+      if [ -f "bin/buildfab-darwin-amd64" ]; then
+        echo "✓ macOS binary available for testing"
+      else
+        echo "✗ macOS binary not available"
+        exit 1
+      fi
+
   # Installer creation actions
   - name: create-installers
     run: |
@@ -222,3 +332,16 @@ actions:
     run: |
       export PATH="$(go env GOPATH)/bin:$PATH"
       goreleaser release --clean
+
+  - name: container-build
+    engine: docker
+    image: { from: ${{ matrix.image }} }
+    workdir: /src
+    mounts:
+      - type: bind; source: .; target: /src; ro: false
+      - type: bind; source: ./dist; target: /out
+    run_stage: build
+    #run: |
+    #  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+    #  cmake --build build -j
+    #  cp -r build/* /out/

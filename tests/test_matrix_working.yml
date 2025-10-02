@@ -1,0 +1,23 @@
+project:
+  name: "matrix-working-test"
+  modules: ["matrix-testing"]
+
+actions:
+  - name: echo-test
+    run: |
+      echo "Matrix test: ${{ matrix.test_name }}"
+      echo "Platform: ${{ matrix.platform }}"
+
+stages:
+  working-matrix:
+    steps:
+      - action: echo-test
+        matrix:
+          values:
+            test_name: ["test1", "test2"]
+            platform: ["linux", "windows"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"

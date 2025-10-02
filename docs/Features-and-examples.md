@@ -8,6 +8,7 @@ This document provides comprehensive documentation of buildfab features with det
 - [YAML Configuration Syntax](#yaml-configuration-syntax)
 - [Action Variants](#action-variants)
 - [Conditional Execution](#conditional-execution)
+- [Matrix Feature](#matrix-feature)
 - [Include System](#include-system)
 - [Variable Interpolation](#variable-interpolation)
 - [Built-in Actions](#built-in-actions)
@@ -240,6 +241,66 @@ Run with labels:
 buildfab run release --only release
 buildfab run release --only release,production
 ```
+
+## Matrix Feature
+
+The Matrix feature enables parallel execution across multiple configurations, allowing you to run the same action with different parameter combinations.
+
+### Basic Matrix Configuration
+
+```yaml
+stages:
+  test-matrix:
+    - action: test-action
+      matrix:
+        values:
+          os: ["linux", "windows", "macos"]
+        strategy:
+          max_parallel: 2
+          fail_fast: true
+          continue_on_error: false
+          order: "fifo"
+```
+
+### Matrix Variable Interpolation
+
+Matrix values are available as variables in action commands:
+
+```yaml
+actions:
+  - name: test-action
+    run: echo "Testing on ${{ matrix.os }}"
+```
+
+### Cross-Platform Testing Example
+
+```yaml
+stages:
+  cross-platform-test:
+    - action: run-tests
+      matrix:
+        values:
+          os: ["linux", "windows", "macos"]
+        strategy:
+          max_parallel: 3
+          fail_fast: false
+          continue_on_error: false
+
+actions:
+  - name: run-tests
+    run: |
+      echo "Running tests on ${{ matrix.os }}"
+      # Your test commands here
+```
+
+### Matrix Strategy Options
+
+- **`max_parallel`**: Maximum concurrent jobs (default: all)
+- **`fail_fast`**: Stop all jobs on first failure (default: false)
+- **`continue_on_error`**: Stage succeeds even if some jobs fail (default: false)
+- **`order`**: Job scheduling order - "fifo" or "random" (default: "fifo")
+
+For detailed matrix feature documentation, see [Matrix Feature Documentation](Matrix-feature.md).
 
 ## Include System
 
