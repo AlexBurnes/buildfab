@@ -1,0 +1,18 @@
+# Container Debug Test Example
+# This example demonstrates container execution with debug output
+
+project:
+  name: container-debug-test
+  modules: [buildfab]
+
+actions:
+  - name: debug-container
+    description: Debug container execution
+    container:
+      image:
+        from: alpine:latest
+      commands:
+        - echo "=== Container Debug Test ==="
+        - echo "Container is running successfully!"
+        - echo "Platform: $(uname -a)"
+        - echo "=============================="

@@ -11,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+	
+	"github.com/AlexBurnes/buildfab/pkg/buildfab/container"
+	containerRunner "github.com/AlexBurnes/buildfab/internal/container"
 )
 
 // Color constants for output formatting
@@ -38,12 +41,13 @@ type Config struct {
 
 // Action represents a single action that can be executed
 type Action struct {
-	Name     string                 `yaml:"name"`
-	Run      string                 `yaml:"run,omitempty"`
-	Uses     string                 `yaml:"uses,omitempty"`
-	Shell    string                 `yaml:"shell,omitempty"` // Optional shell specification
-	Variants []ActionVariant        `yaml:"variants,omitempty"` // Optional variants for conditional execution
-	Options  map[string]interface{} `yaml:"options,omitempty"` // Optional action options (e.g., delay)
+	Name      string                 `yaml:"name"`
+	Run       string                 `yaml:"run,omitempty"`
+	Uses      string                 `yaml:"uses,omitempty"`
+	Shell     string                 `yaml:"shell,omitempty"` // Optional shell specification
+	Variants  []ActionVariant        `yaml:"variants,omitempty"` // Optional variants for conditional execution
+	Options   map[string]interface{} `yaml:"options,omitempty"` // Optional action options (e.g., delay)
+	Container *container.ContainerConfig `yaml:"container,omitempty"` // Optional container configuration
 }
 
 // ActionVariant represents a conditional variant of an action
@@ -588,13 +592,17 @@ func (c *Config) Validate() error {
 				}
 			}
 		} else {
-			// Action without variants: validate direct run/uses
-			if action.Run == "" && action.Uses == "" {
-				return fmt.Errorf("action %s must have either 'run' or 'uses'", action.Name)
+			// Action without variants: validate direct run/uses or container
+			if action.Run == "" && action.Uses == "" && action.Container == nil {
+				return fmt.Errorf("action %s must have either 'run', 'uses', or 'container'", action.Name)
 			}
 			
 			if action.Run != "" && action.Uses != "" {
 				return fmt.Errorf("action %s cannot have both 'run' and 'uses'", action.Name)
+			}
+			
+			if action.Container != nil && (action.Run != "" || action.Uses != "") {
+				return fmt.Errorf("action %s cannot have both 'container' and 'run'/'uses'", action.Name)
 			}
 		}
 		
@@ -2481,6 +2489,11 @@ func (r *Runner) runActionInternal(ctx context.Context, action Action) error {
 		}
 	}
 	
+	// Check if action has container configuration
+	if effectiveAction.Container != nil {
+		return r.runContainerAction(ctx, effectiveAction)
+	}
+	
 	if effectiveAction.Uses != "" {
 		return r.runBuiltInAction(ctx, effectiveAction)
 	}
@@ -2730,4 +2743,20 @@ func (r *Runner) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd,
 		cmd.Process.Kill()
 		return ctx.Err()
 	}
+}
+
+// runContainerAction executes an action inside a container
+func (r *Runner) runContainerAction(ctx context.Context, action Action) error {
+	// Create container runner
+	runner, err := containerRunner.NewContainerRunner()
+	if err != nil {
+		return fmt.Errorf("failed to create container runner: %w", err)
+	}
+	
+	// Execute container action
+	if err := runner.RunAction(ctx, *action.Container); err != nil {
+		return fmt.Errorf("container action failed: %w", err)
+	}
+	
+	return nil
 }

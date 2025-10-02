@@ -441,16 +441,24 @@
 - **Test coverage improvement**: Overall project coverage improved from 58.6% to 72.5%
 
 ## What's Left to Build
-- **Container Feature Implementation**: Add Docker and Podman support for isolated execution environments
-  - Implement container configuration in actions with engine selection (docker/podman)
-  - Add image management (from existing images or build from Dockerfile)
-  - Implement mount management (bind mounts, volume mounts, cache mounts)
-  - Add environment variable support for container execution
-  - Implement workdir, user, network, and other container runtime options
-  - Add buildfab integration inside containers (run_stage support)
-  - Create container execution engine with proper lifecycle management
-  - Add comprehensive error handling and cleanup for container operations
-  - Implement CLI support for container-specific commands and overrides
+- **Container Feature Implementation (REQUIREMENTS CLARIFIED)**: Add Docker and Podman support for isolated execution environments with comprehensive requirements clarification
+  - **Phase 1 (Weeks 1-2)**: Basic container execution with Alpine/Debian images and action/stage execution
+  - **Phase 2 (Weeks 3-4)**: Mount support for directories and files, CPU and memory limiting capabilities
+  - **Phase 3 (Weeks 5-6)**: Container image building from Dockerfiles, artifact collection and advanced configuration
+  - **Phase 4 (Weeks 7-8)**: Comprehensive testing, documentation, and user guides
+  - **Container Configuration Schema**: Enhanced YAML schema with CPU/memory limits, artifact collection, environment file support
+  - **Engine Support**: Docker (primary) and Podman (secondary) with automatic detection and fallback
+  - **Image Management**: Support for existing images and build-from-Dockerfile with automatic pulling and cleanup
+  - **Mount Management**: Bind mounts with host directory validation, read-only/read-write permissions
+  - **Resource Limits**: CPU limits (--cpus, --cpuset-cpus) and memory limits (human-readable format)
+  - **Artifact Collection**: Manual configuration with pattern support for files and directories
+  - **Environment Integration**: Explicit environment variable configuration, env_file support
+  - **Buildfab Integration**: Runtime installation of current buildfab binary only for run_stage/run_action options, configuration copying only when needed
+  - **Error Handling**: Standard action error reporting with verbosity levels, full Docker command display
+  - **Matrix Integration**: Independent features using variables for integration
+  - **Testing Strategy**: Container image building, resource limiting validation, mount testing, artifact collection, matrix integration testing, Podman as primary testing engine (no superuser access required)
+  - **Matrix Integration**: Matrix testing examples with Alpine, Ubuntu, and Debian containers for platform detection testing
+  - **Documentation**: User guides with examples, API reference, troubleshooting guides with manual container command reproduction, matrix container examples
 - **Caching Feature Implementation**: Implement comprehensive caching system for build optimization
   - Add cache configuration support for ccache, Conan, vcpkg, and other package managers
   - Implement cache mount management with proper isolation and cleanup

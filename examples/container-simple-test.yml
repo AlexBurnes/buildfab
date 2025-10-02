@@ -1,0 +1,22 @@
+# Simple Container Test Example
+# This example demonstrates basic container execution
+
+project:
+  name: container-simple-test
+  modules: [buildfab]
+
+actions:
+  - name: hello-container
+    description: Say hello from container
+    container:
+      image:
+        from: alpine:latest
+      commands:
+        - echo "Hello from container!"
+        - echo "Container is working correctly"
+
+  - name: test-container
+    description: Test container execution
+    run: |
+      echo "Testing container feature"
+      buildfab action hello-container
