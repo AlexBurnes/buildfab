@@ -25,8 +25,12 @@ func TestContainerActionExecution(t *testing.T) {
 		t.Skip("No container engine available")
 	}
 	
-	if err := runner.RunAction(context.Background(), config); err != nil {
+	result, err := runner.RunAction(context.Background(), config)
+	if err != nil {
 		t.Errorf("Container action failed: %v", err)
+	}
+	if result == nil {
+		t.Error("Expected container result, got nil")
 	}
 }
 
@@ -47,7 +51,11 @@ func TestContainerRunStageExecution(t *testing.T) {
 		t.Skip("No container engine available")
 	}
 	
-	if err := runner.RunAction(context.Background(), config); err != nil {
+	result, err := runner.RunAction(context.Background(), config)
+	if err != nil {
 		t.Errorf("Container run_stage failed: %v", err)
+	}
+	if result == nil {
+		t.Error("Expected container result, got nil")
 	}
 }

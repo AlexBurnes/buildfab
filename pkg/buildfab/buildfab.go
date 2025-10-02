@@ -871,6 +871,7 @@ func (r *Runner) executeStageWithCallback(ctx context.Context, steps []Step) err
 		return fmt.Errorf("failed to build execution DAG: %w", err)
 	}
 	
+	
 	// Execute DAG with step callback
 	results, err := r.executeDAGWithCallback(ctx, dag, expandedSteps)
 	
@@ -1250,15 +1251,6 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 
 // executeActionForDAGWithCallback executes a single action for DAG execution using step callbacks
 func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Action, stepConfig *Step) (Result, error) {
-	// Debug output for step configuration
-	if r.opts.Debug {
-		if stepConfig != nil {
-			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step config: %+v\n", stepConfig)
-			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix config: %+v\n", stepConfig.Matrix)
-		} else {
-			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step config is nil\n")
-		}
-	}
 	// Matrix steps are now expanded into individual steps, so this is just a regular step
 	
 	// Call step start callback if provided
@@ -1312,10 +1304,11 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	effectiveAction := action
 	if variant != nil {
 		effectiveAction = Action{
-			Name:  action.Name,
-			Run:   variant.Run,
-			Uses:  variant.Uses,
-			Shell: variant.Shell,
+			Name:      action.Name,
+			Run:       variant.Run,
+			Uses:      variant.Uses,
+			Shell:     variant.Shell,
+			Container: action.Container, // Preserve container configuration
 		}
 	}
 	
@@ -2365,6 +2358,11 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 
 // runCustomActionForDAG executes a custom action for DAG execution
 func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Result, error) {
+	// Check if action has container configuration
+	if action.Container != nil {
+		return r.runContainerAction(ctx, action)
+	}
+	
 	if action.Run == "" {
 		return Result{
 			Status:  StatusError,
@@ -2482,16 +2480,18 @@ func (r *Runner) runActionInternal(ctx context.Context, action Action) error {
 	effectiveAction := action
 	if variant != nil {
 		effectiveAction = Action{
-			Name:  action.Name,
-			Run:   variant.Run,
-			Uses:  variant.Uses,
-			Shell: variant.Shell,
+			Name:      action.Name,
+			Run:       variant.Run,
+			Uses:      variant.Uses,
+			Shell:     variant.Shell,
+			Container: action.Container, // Preserve container configuration
 		}
 	}
 	
 	// Check if action has container configuration
 	if effectiveAction.Container != nil {
-		return r.runContainerAction(ctx, effectiveAction)
+		_, err := r.runContainerAction(ctx, effectiveAction)
+		return err
 	}
 	
 	if effectiveAction.Uses != "" {
@@ -2522,10 +2522,11 @@ func (r *Runner) runActionInternalDryRun(ctx context.Context, action Action) err
 	effectiveAction := action
 	if variant != nil {
 		effectiveAction = Action{
-			Name:  action.Name,
-			Run:   variant.Run,
-			Uses:  variant.Uses,
-			Shell: variant.Shell,
+			Name:      action.Name,
+			Run:       variant.Run,
+			Uses:      variant.Uses,
+			Shell:     variant.Shell,
+			Container: action.Container, // Preserve container configuration
 		}
 	}
 	
@@ -2746,7 +2747,7 @@ func (r *Runner) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd,
 }
 
 // runContainerAction executes an action inside a container
-func (r *Runner) runContainerAction(ctx context.Context, action Action) error {
+func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result, error) {
 	// Create container runner with specified engine or default
 	var runner *containerRunner.ContainerRunner
 	var err error
@@ -2760,7 +2761,11 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) error {
 	}
 	
 	if err != nil {
-		return fmt.Errorf("failed to create container runner: %w", err)
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("failed to create container runner: %v", err),
+			Error:   err,
+		}, fmt.Errorf("failed to create container runner: %w", err)
 	}
 	
 	// Show container command if verbosity level is 2 or higher
@@ -2772,17 +2777,21 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) error {
 	}
 	
 	// Execute container action
-	result, err := runner.RunAction(ctx, *action.Container)
+	containerResult, err := runner.RunAction(ctx, *action.Container)
 	if err != nil {
-		return fmt.Errorf("container action failed: %w", err)
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("container action failed: %v", err),
+			Error:   err,
+		}, fmt.Errorf("container action failed: %w", err)
 	}
 	
 	// Display container output based on verbosity level
-	if result != nil && result.Output != "" {
+	if containerResult != nil && containerResult.Output != "" {
 		// Only show output if not in quiet mode (VerboseLevel > 0)
 		if r.opts.VerboseLevel > 0 && r.opts.Output != nil {
 			// Properly align container output
-			lines := strings.Split(strings.TrimSpace(result.Output), "\n")
+			lines := strings.Split(strings.TrimSpace(containerResult.Output), "\n")
 			for _, line := range lines {
 				if line != "" {
 					fmt.Fprintf(r.opts.Output, "  %s\n", line)
@@ -2792,18 +2801,27 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) error {
 	}
 	
 	// Display container error if available (always show errors)
-	if result != nil && result.Error != "" {
+	if containerResult != nil && containerResult.Error != "" {
 		if r.opts.ErrorOutput != nil {
-			fmt.Fprintf(r.opts.ErrorOutput, "  Container error: %s\n", result.Error)
+			fmt.Fprintf(r.opts.ErrorOutput, "  Container error: %s\n", containerResult.Error)
 		}
 	}
 	
 	// Check container exit code
-	if result != nil && result.ExitCode != 0 {
-		return fmt.Errorf("container exited with code %d", result.ExitCode)
+	if containerResult != nil && containerResult.ExitCode != 0 {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("container exited with code %d", containerResult.ExitCode),
+			Error:   fmt.Errorf("container exited with code %d", containerResult.ExitCode),
+		}, fmt.Errorf("container exited with code %d", containerResult.ExitCode)
 	}
 	
-	return nil
+	// Return successful result
+	return Result{
+		Status:         StatusOK,
+		Message:        "container action executed successfully",
+		BufferedOutput: containerResult.Output,
+	}, nil
 }
 
 // buildContainerCommand builds a human-readable representation of the container command

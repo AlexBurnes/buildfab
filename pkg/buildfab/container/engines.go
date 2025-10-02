@@ -105,14 +105,14 @@ func (d *dockerEngineImpl) RunContainer(ctx context.Context, config ContainerCon
 	
 	// Add command to run
 	if len(config.Commands) > 0 {
-		// If multiple commands, wrap them in a shell
+		// Always wrap commands in shell for proper execution
 		if len(config.Commands) > 1 {
-			// Join commands with && for shell execution
+			// Join multiple commands with && for shell execution
 			shellCmd := strings.Join(config.Commands, " && ")
 			args = append(args, "sh", "-c", shellCmd)
 		} else {
-			// Single command, execute directly
-			args = append(args, config.Commands...)
+			// Single command, execute through shell
+			args = append(args, "sh", "-c", config.Commands[0])
 		}
 	} else if config.RunAction != "" {
 		args = append(args, "buildfab", "action", config.RunAction)
@@ -237,14 +237,14 @@ func (p *podmanEngineImpl) RunContainer(ctx context.Context, config ContainerCon
 	
 	// Add command to run
 	if len(config.Commands) > 0 {
-		// If multiple commands, wrap them in a shell
+		// Always wrap commands in shell for proper execution
 		if len(config.Commands) > 1 {
-			// Join commands with && for shell execution
+			// Join multiple commands with && for shell execution
 			shellCmd := strings.Join(config.Commands, " && ")
 			args = append(args, "sh", "-c", shellCmd)
 		} else {
-			// Single command, execute directly
-			args = append(args, config.Commands...)
+			// Single command, execute through shell
+			args = append(args, "sh", "-c", config.Commands[0])
 		}
 	} else if config.RunAction != "" {
 		args = append(args, "buildfab", "action", config.RunAction)

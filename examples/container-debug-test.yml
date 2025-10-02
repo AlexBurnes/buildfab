@@ -14,5 +14,5 @@ actions:
       commands:
         - echo "=== Container Debug Test ==="
         - echo "Container is running successfully!"
-        - echo "Platform: $(uname -a)"
+        - "echo \"Platform: $(uname -a)\""
         - echo "=============================="
