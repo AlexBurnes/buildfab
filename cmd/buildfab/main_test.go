@@ -41,28 +41,24 @@ func TestRunRoot(t *testing.T) {
 	tests := []struct {
 		name     string
 		args     []string
-		flags    map[string]bool
 		wantErr  bool
 		contains string
 	}{
 		{
 			name:     "version flag",
-			args:     []string{},
-			flags:    map[string]bool{"version": true},
+			args:     []string{"--version"},
 			wantErr:  false,
 			contains: "buildfab version",
 		},
 		{
 			name:     "version-only flag",
-			args:     []string{},
-			flags:    map[string]bool{"version-only": true},
+			args:     []string{"--version-only"},
 			wantErr:  false,
 			contains: "unknown", // Will be "unknown" in test environment
 		},
 		{
 			name:     "no arguments",
 			args:     []string{},
-			flags:    map[string]bool{},
 			wantErr:  false, // Should show help, not error
 			contains: "",
 		},
@@ -72,13 +68,6 @@ func TestRunRoot(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a test command
 			cmd := &cobra.Command{}
-			cmd.Flags().Bool("version", false, "")
-			cmd.Flags().Bool("version-only", false, "")
-			
-			// Set flags
-			for flag := range tt.flags {
-				cmd.Flags().Set(flag, "true")
-			}
 			
 			// Capture output
 			oldStdout := os.Stdout
