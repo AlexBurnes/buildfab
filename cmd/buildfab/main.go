@@ -206,8 +206,14 @@ func handleRegularFlag(arg string, i *int, args []string) error {
 		versionFlag = true
 	case "--version-only", "-V":
 		versionOnlyFlag = true
-	case "--verbose", "-v":
+	case "--verbose":
 		verboseLevel++
+	case "-v":
+		verboseLevel++
+	case "-vv":
+		verboseLevel += 2
+	case "-vvv":
+		verboseLevel += 3
 	case "--quiet", "-q":
 		quiet = true
 	case "--debug", "-d":

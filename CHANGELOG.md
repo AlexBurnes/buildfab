@@ -15,6 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.16.13] - 2025-10-03
+
+### Fixed
+- **Verbosity Flags Parsing**: Fixed verbosity flags parsing issue where `-vv` and `-vvv` flags were not being recognized
+  - Updated `handleRegularFlag` function to properly handle multiple consecutive `-v` characters
+  - Added specific cases for `-vv` (adds 2 to verbose level) and `-vvv` (adds 3 to verbose level)
+  - Maintained backward compatibility with existing `-v`, `--verbose`, `-q`, and `--quiet` flags
+  - All verbosity levels now work correctly: `-q` (quiet), `-v` (level 1), `-vv` (level 2), `-vvv` (level 3)
+
 ## [v0.16.12] - 2025-10-03
 
 ### Added
