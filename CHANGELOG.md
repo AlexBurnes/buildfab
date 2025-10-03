@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.16.14] - 2025-10-03
+
+### Fixed
+- **Matrix Streaming Output**: Fixed matrix steps to stream output in real-time instead of buffering
+  - Matrix steps now stream output in real-time just like single actions, providing consistent user experience
+  - Root cause identified - matrix steps were using OrderedStepCallback buffering system instead of DAG streaming system
+  - Solution implemented - modified OrderedOutputManager.OnStepOutput to support streaming for matrix steps without duplication
+  - Key changes - added shouldStreamOutput() method to determine streaming eligibility, modified OnStepOutput() to stream immediately for eligible steps, prevented duplication by not buffering already-streamed output
+  - Perfect user experience - matrix steps now stream output in real-time with no duplicate output when steps complete
+  - Comprehensive testing - verified matrix execution and single action execution have identical streaming behavior
+
 ## [v0.16.13] - 2025-10-03
 
 ### Fixed

@@ -1,0 +1,25 @@
+project:
+  name: "test-matrix-stream"
+
+actions:
+  - name: "streaming-command"
+    run: |
+      echo "Starting streaming command for ${{ matrix.platform }}..."
+      for i in $(seq 1 5); do
+        echo "Step $i of 5 for ${{ matrix.platform }}"
+        sleep 1
+      done
+      echo "Streaming command completed for ${{ matrix.platform }}!"
+
+stages:
+  test-matrix-stream:
+    steps:
+      - action: "streaming-command"
+        matrix:
+          values:
+            platform: ["linux", "windows", "macos"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: true
+            order: "fifo"
