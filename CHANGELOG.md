@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v0.16.12] - 2025-10-03
+
+### Added
+- **Matrix CLI Flags Feature**: Implemented `--matrix.*` CLI flag functionality to override matrix values defined in YAML configuration
+  - Added dynamic matrix flag parsing that allows CLI flags like `--matrix.test_name="custom_test"` and `--matrix.platform="macos"`
+  - Extended existing `NewMatrixExpander` function with optional variadic parameter `cliMatrixVars ...map[string]string` for better design and backward compatibility
+  - Implemented custom flag parsing to handle `--matrix.*` flags by disabling automatic flag parsing and implementing custom `parseFlags` and `handleRegularFlag` functions
+  - Updated both regular Runner and SimpleRunner matrix expansion paths to extract CLI matrix variables and pass them to the matrix expander
+  - Matrix value override logic - CLI-provided matrix values now correctly override YAML configuration values, allowing matrix expansion to use CLI values instead of full Cartesian product
+  - Comprehensive testing verified functionality works correctly with matrix flags overriding YAML values and creating single matrix jobs instead of full Cartesian product
+  - Perfect user experience - users can now use CLI flags like `./bin/buildfab -c ./tests/test_matrix_working.yml working-matrix --matrix.test_name="custom_test" --matrix.platform="macos"` to override matrix values
+
 ## [v0.16.10_feat.1_fix.1] - 2025-10-02
 
 ### Fixed

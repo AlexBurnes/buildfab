@@ -24,6 +24,15 @@
   - Comprehensive testing - verified fix works correctly with matrix test scenarios showing proper single output display
   - Perfect user experience - users now get clean matrix output without confusing duplicated lines
   - VERSION 0.16.10_feat.1_fix.1 RELEASED with comprehensive matrix feature implementation and output doubling fix
+  - **Matrix CLI Flags Feature**: Successfully implemented `--matrix.*` CLI flag functionality to override matrix values defined in YAML configuration
+  - Problem solved - fixed "Error: unknown flag: --matrix.test_name" by implementing dynamic matrix flag parsing that allows CLI flags like `--matrix.test_name="custom_test"` and `--matrix.platform="macos"`
+  - Extended existing function - properly extended the existing `NewMatrixExpander` function with optional variadic parameter `cliMatrixVars ...map[string]string` for better design and backward compatibility
+  - Implemented dynamic flag parsing - added custom flag parsing to handle `--matrix.*` flags by disabling automatic flag parsing and implementing custom `parseFlags` and `handleRegularFlag` functions
+  - Updated both matrix expansion paths - modified both regular Runner (`expandMatrixSteps` in `buildfab.go`) and SimpleRunner (`expandMatrixSteps` in `simple.go`) to extract CLI matrix variables and pass them to the matrix expander
+  - Matrix value override logic - CLI-provided matrix values now correctly override YAML configuration values, allowing matrix expansion to use CLI values instead of full Cartesian product
+  - Comprehensive testing - verified functionality works correctly with matrix flags overriding YAML values and creating single matrix jobs instead of full Cartesian product
+  - Perfect user experience - users can now use CLI flags like `./bin/buildfab -c ./tests/test_matrix_working.yml working-matrix --matrix.test_name="custom_test" --matrix.platform="macos"` to override matrix values
+  - VERSION 0.16.12 RELEASED with matrix CLI flags feature implementation and comprehensive testing
 
 - **Version Display Feature**: Successfully implemented version display functionality for buildfab CLI and library to show version information when running stages or actions
   - Added version display functionality - CLI now shows buildfab version and project version before executing stages or actions

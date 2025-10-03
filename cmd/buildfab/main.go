@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -80,6 +81,9 @@ var (
 	withRequires  bool
 	envVars       []string
 	showGraph     bool
+	matrixVars    map[string]string // Dynamic matrix variables from CLI flags
+	versionFlag   bool              // Version flag
+	versionOnlyFlag bool            // Version-only flag
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -97,6 +101,8 @@ For example: buildfab pre-push is equivalent to buildfab run pre-push`,
 	DisableSuggestions: true,
 	// Allow unknown commands to be passed to RunE
 	Args: cobra.ArbitraryArgs,
+	// Disable flag parsing to allow custom matrix flag handling
+	DisableFlagParsing: true,
 }
 
 // runCmd represents the run command
@@ -155,7 +161,118 @@ func init() {
 	listStepsCmd.Flags().BoolVarP(&showGraph, "graph", "g", false, "show steps as a dependency graph")
 }
 
+// parseFlags parses both regular flags and matrix flags from command line arguments
+func parseFlags(args []string) ([]string, error) {
+	var remainingArgs []string
+	i := 0
+	
+	for i < len(args) {
+		arg := args[i]
+		
+		// Handle matrix flags
+		if strings.HasPrefix(arg, "--matrix.") {
+			// Extract matrix key and value
+			parts := strings.SplitN(arg, "=", 2)
+			if len(parts) == 2 {
+				matrixKey := strings.TrimPrefix(parts[0], "--matrix.")
+				matrixVars[matrixKey] = parts[1]
+			} else {
+				// Handle case where value might be in next argument
+				if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+					matrixKey := strings.TrimPrefix(arg, "--matrix.")
+					matrixVars[matrixKey] = args[i+1]
+					i++ // Skip the value argument
+				}
+			}
+		} else if strings.HasPrefix(arg, "--") || strings.HasPrefix(arg, "-") {
+			// Handle regular flags
+			if err := handleRegularFlag(arg, &i, args); err != nil {
+				return nil, err
+			}
+		} else {
+			// Non-flag argument
+			remainingArgs = append(remainingArgs, arg)
+		}
+		i++
+	}
+	
+	return remainingArgs, nil
+}
+
+// handleRegularFlag handles regular CLI flags
+func handleRegularFlag(arg string, i *int, args []string) error {
+	switch arg {
+	case "--version":
+		versionFlag = true
+	case "--version-only", "-V":
+		versionOnlyFlag = true
+	case "--verbose", "-v":
+		verboseLevel++
+	case "--quiet", "-q":
+		quiet = true
+	case "--debug", "-d":
+		debug = true
+	case "--dry-run":
+		dryRun = true
+	case "--config", "-c":
+		if *i+1 < len(args) {
+			*i++
+			configPath = args[*i]
+		} else {
+			return fmt.Errorf("flag --config requires a value")
+		}
+	case "--max-parallel":
+		if *i+1 < len(args) {
+			*i++
+			if val, err := strconv.Atoi(args[*i]); err == nil {
+				maxParallel = val
+			} else {
+				return fmt.Errorf("invalid value for --max-parallel: %s", args[*i])
+			}
+		} else {
+			return fmt.Errorf("flag --max-parallel requires a value")
+		}
+	case "--working-dir", "-w":
+		if *i+1 < len(args) {
+			*i++
+			workingDir = args[*i]
+		} else {
+			return fmt.Errorf("flag --working-dir requires a value")
+		}
+	case "--only":
+		if *i+1 < len(args) {
+			*i++
+			only = append(only, args[*i])
+		} else {
+			return fmt.Errorf("flag --only requires a value")
+		}
+	case "--with-requires":
+		withRequires = true
+	case "--env":
+		if *i+1 < len(args) {
+			*i++
+			envVars = append(envVars, args[*i])
+		} else {
+			return fmt.Errorf("flag --env requires a value")
+		}
+	default:
+		// Unknown flag - let Cobra handle it or ignore it
+		if !strings.HasPrefix(arg, "--matrix.") {
+			return fmt.Errorf("unknown flag: %s", arg)
+		}
+	}
+	return nil
+}
+
+// parseMatrixFlags parses matrix flags from command line arguments (legacy function)
+func parseMatrixFlags(args []string) {
+	// This function is now handled by parseFlags
+}
+
 func main() {
+	// Initialize matrix variables map
+	matrixVars = make(map[string]string)
+	
 	// Add global flags
 	rootCmd.PersistentFlags().CountVarP(&verboseLevel, "verbose", "v", "increase verbosity level (-v, -vv, -vvv)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "disable verbose output (silence mode)")
@@ -180,6 +297,9 @@ func main() {
 	rootCmd.AddCommand(listStepsCmd)
 	rootCmd.AddCommand(validateCmd)
 	
+	// Parse matrix flags before executing
+	parseMatrixFlags(os.Args[1:])
+	
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -189,18 +309,24 @@ func main() {
 
 // runRoot handles the root command
 func runRoot(cmd *cobra.Command, args []string) error {
+	// Parse flags manually since we disabled automatic flag parsing
+	remainingArgs, err := parseFlags(args)
+	if err != nil {
+		return err
+	}
+	
 	// Check if version flags were set
-	if versionFlag, _ := cmd.Flags().GetBool("version"); versionFlag {
+	if versionFlag {
 		fmt.Printf("%s version %s\n", appName, getVersion())
 		return nil
 	}
-	if versionOnlyFlag, _ := cmd.Flags().GetBool("version-only"); versionOnlyFlag {
+	if versionOnlyFlag {
 		fmt.Printf("%s\n", getVersion())
 		return nil
 	}
 	
 	// If no arguments, show help
-	if len(args) == 0 {
+	if len(remainingArgs) == 0 {
 		return cmd.Help()
 	}
 	
@@ -221,21 +347,21 @@ func runRoot(cmd *cobra.Command, args []string) error {
 			os.Exit(1)
 		}
 		// If config loading fails, treat as stage name (fallback behavior)
-		return runStageDirect(cmd, args)
+		return runStageDirect(cmd, remainingArgs)
 	}
 	
-	stageOrActionName := args[0]
+	stageOrActionName := remainingArgs[0]
 	
 	// Check if it's a stage name first (higher priority)
 	if _, isStage := cfg.Stages[stageOrActionName]; isStage {
 	// It's a stage, run it directly
-	return runStageDirect(cmd, args)
+	return runStageDirect(cmd, remainingArgs)
 	}
 	
 	// Check if it's an action name
 	if _, isAction := cfg.GetAction(stageOrActionName); isAction {
 		// It's an action, run it directly
-		return runActionDirect(cmd, args)
+		return runActionDirect(cmd, remainingArgs)
 	}
 	
 	// Check if it's a built-in action
@@ -244,12 +370,12 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	builtinActions := runner.ListBuiltInActions()
 	if _, isBuiltinAction := builtinActions[stageOrActionName]; isBuiltinAction {
 		// It's a built-in action, run it directly
-		return runActionDirect(cmd, args)
+		return runActionDirect(cmd, remainingArgs)
 	}
 	
 	// If not found as stage or action, treat as stage name (fallback behavior)
 	// This allows for dynamic stage names or better error messages from run command
-	return runStageDirect(cmd, args)
+	return runStageDirect(cmd, remainingArgs)
 }
 
 // runStageDirect runs a stage directly without going through cobra command execution
@@ -289,6 +415,11 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		if len(parts) == 2 {
 			variables[parts[0]] = parts[1]
 		}
+	}
+	
+	// Add matrix variables from CLI flags
+	for key, value := range matrixVars {
+		variables[fmt.Sprintf("matrix.%s", key)] = value
 	}
 	
 	// Add platform variables
@@ -398,6 +529,11 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 		if len(parts) == 2 {
 			variables[parts[0]] = parts[1]
 		}
+	}
+	
+	// Add matrix variables from CLI flags
+	for key, value := range matrixVars {
+		variables[fmt.Sprintf("matrix.%s", key)] = value
 	}
 	
 	// Add platform variables

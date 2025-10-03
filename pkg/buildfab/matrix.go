@@ -13,13 +13,22 @@ import (
 
 // MatrixExpander handles matrix expansion and job creation
 type MatrixExpander struct {
-	config *Config
+	config        *Config
+	cliMatrixVars map[string]string // CLI-provided matrix variables
 }
 
 // NewMatrixExpander creates a new matrix expander
-func NewMatrixExpander(config *Config) *MatrixExpander {
+func NewMatrixExpander(config *Config, cliMatrixVars ...map[string]string) *MatrixExpander {
+	var matrixVars map[string]string
+	if len(cliMatrixVars) > 0 {
+		matrixVars = cliMatrixVars[0]
+	} else {
+		matrixVars = make(map[string]string)
+	}
+	
 	return &MatrixExpander{
-		config: config,
+		config:        config,
+		cliMatrixVars: matrixVars,
 	}
 }
 
@@ -29,8 +38,19 @@ func (me *MatrixExpander) ExpandMatrix(step *Step, action *Action) ([]*MatrixJob
 		return nil, fmt.Errorf("step has no matrix configuration")
 	}
 
+	// Override matrix values with CLI-provided values if any
+	matrixValues := make(map[string][]interface{})
+	for key, values := range step.Matrix.Values {
+		matrixValues[key] = values
+	}
+
+	// Override with CLI-provided matrix values
+	for cliKey, cliValue := range me.cliMatrixVars {
+		matrixValues[cliKey] = []interface{}{cliValue}
+	}
+
 	// Generate Cartesian product of all matrix values
-	combinations := me.generateCombinations(step.Matrix.Values)
+	combinations := me.generateCombinations(matrixValues)
 	
 	jobs := make([]*MatrixJob, 0, len(combinations))
 	for i, combination := range combinations {
@@ -52,8 +72,19 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 		return nil, fmt.Errorf("step has no matrix configuration")
 	}
 
+	// Override matrix values with CLI-provided values if any
+	matrixValues := make(map[string][]interface{})
+	for key, values := range step.Matrix.Values {
+		matrixValues[key] = values
+	}
+
+	// Override with CLI-provided matrix values
+	for cliKey, cliValue := range me.cliMatrixVars {
+		matrixValues[cliKey] = []interface{}{cliValue}
+	}
+
 	// Generate Cartesian product of all matrix values
-	combinations := me.generateCombinations(step.Matrix.Values)
+	combinations := me.generateCombinations(matrixValues)
 	
 	steps := make([]Step, 0, len(combinations))
 	totalJobs := len(combinations)

@@ -660,8 +660,18 @@ func (r *Runner) expandMatrixSteps(steps []Step) ([]Step, error) {
 				return nil, fmt.Errorf("action not found: %s", step.Action)
 			}
 			
-			// Create matrix expander
-			expander := NewMatrixExpander(r.config)
+			// Extract matrix variables from CLI variables
+			matrixVars := make(map[string]string)
+			for key, value := range r.opts.Variables {
+				if strings.HasPrefix(key, "matrix.") {
+					matrixKey := strings.TrimPrefix(key, "matrix.")
+					matrixVars[matrixKey] = value
+				}
+			}
+			
+			
+			// Create matrix expander with CLI matrix variables
+			expander := NewMatrixExpander(r.config, matrixVars)
 			
 			// Expand matrix into individual steps
 			matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
