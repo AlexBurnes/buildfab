@@ -131,18 +131,60 @@ func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName stri
 
 // OnStepOutput handles step output events from executor
 func (o *OrderedOutputManager) OnStepOutput(ctx context.Context, stepName string, output string) {
-    o.mu.Lock()
-    defer o.mu.Unlock()
+	o.mu.Lock()
+	defer o.mu.Unlock()
 
-    if data, exists := o.stepData[stepName]; exists {
-        data.Output = append(data.Output, output)
-        if o.debug {
-            fmt.Fprintf(o.errorOutput, "[DEBUG] Buffered output for %s: %s\n", stepName, output)
-        }
-    }
+	// For matrix steps, show output immediately if it's the current step
+	// This enables real-time streaming for matrix execution
+	if o.shouldStreamOutput(stepName) {
+		lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+		for _, line := range lines {
+			if line != "" {
+				fmt.Fprintf(o.errorOutput, "    %s\n", line)
+			}
+		}
+		// Don't buffer output when streaming - it's already displayed
+		return
+	}
 
-    // Don't show output immediately - it will be shown when the step completes
-    // This prevents duplication between real-time streaming and buffered output flushing
+	// Otherwise, buffer output for later display when step completes
+	if data, exists := o.stepData[stepName]; exists {
+		data.Output = append(data.Output, output)
+		if o.debug {
+			fmt.Fprintf(o.errorOutput, "[DEBUG] Buffered output for %s: %s\n", stepName, output)
+		}
+	}
+}
+
+// shouldStreamOutput checks if the given step should have its output streamed
+func (o *OrderedOutputManager) shouldStreamOutput(stepName string) bool {
+	// Find the step in declaration order
+	stepIndex := -1
+	for i, step := range o.steps {
+		if step.Action == stepName {
+			stepIndex = i
+			break
+		}
+	}
+	
+	if stepIndex == -1 {
+		return false
+	}
+	
+	// Only allow streaming for the first step in declaration order that hasn't been completed yet
+	// Check if all previous steps in declaration order have been completed
+	for i := 0; i < stepIndex; i++ {
+		if data, exists := o.stepData[o.steps[i].Action]; !exists || !data.Completed {
+			return false
+		}
+	}
+	
+	// Check if this step itself has been completed - if so, don't stream
+	if data, exists := o.stepData[stepName]; exists && data.Completed {
+		return false
+	}
+	
+	return true
 }
 
 // OnStepError handles step error events from executor

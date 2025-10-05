@@ -5,15 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.16.5_feat.1_fix.1] - 2025-09-29
+
+## [v0.16.14] - 2025-10-03
 
 ### Fixed
-- **Matrix Output Suppression**: Fixed race condition in matrix execution where some step output was being lost due to timing issues between step completion and output buffering
-  - Added double-flush mechanism in OrderedOutputManager to ensure all buffered output is displayed
-  - Matrix steps now consistently show complete output regardless of execution timing
-  - Resolved intermittent missing output lines in verbose mode
+- **Matrix Streaming Output**: Fixed matrix steps to stream output in real-time instead of buffering
+  - Matrix steps now stream output in real-time just like single actions, providing consistent user experience
+  - Root cause identified - matrix steps were using OrderedStepCallback buffering system instead of DAG streaming system
+  - Solution implemented - modified OrderedOutputManager.OnStepOutput to support streaming for matrix steps without duplication
+  - Key changes - added shouldStreamOutput() method to determine streaming eligibility, modified OnStepOutput() to stream immediately for eligible steps, prevented duplication by not buffering already-streamed output
+  - Perfect user experience - matrix steps now stream output in real-time with no duplicate output when steps complete
+  - Comprehensive testing - verified matrix execution and single action execution have identical streaming behavior
 
-## [Unreleased]
+## [v0.16.13] - 2025-10-03
+
+### Fixed
+- **Verbosity Flags Parsing**: Fixed verbosity flags parsing issue where `-vv` and `-vvv` flags were not being recognized
+  - Updated `handleRegularFlag` function to properly handle multiple consecutive `-v` characters
+  - Added specific cases for `-vv` (adds 2 to verbose level) and `-vvv` (adds 3 to verbose level)
+  - Maintained backward compatibility with existing `-v`, `--verbose`, `-q`, and `--quiet` flags
+  - All verbosity levels now work correctly: `-q` (quiet), `-v` (level 1), `-vv` (level 2), `-vvv` (level 3)
+
+## [v0.16.12] - 2025-10-03
+
+### Added
+- **Matrix CLI Flags Feature**: Implemented `--matrix.*` CLI flag functionality to override matrix values defined in YAML configuration
+  - Added dynamic matrix flag parsing that allows CLI flags like `--matrix.test_name="custom_test"` and `--matrix.platform="macos"`
+  - Extended existing `NewMatrixExpander` function with optional variadic parameter `cliMatrixVars ...map[string]string` for better design and backward compatibility
+  - Implemented custom flag parsing to handle `--matrix.*` flags by disabling automatic flag parsing and implementing custom `parseFlags` and `handleRegularFlag` functions
+  - Updated both regular Runner and SimpleRunner matrix expansion paths to extract CLI matrix variables and pass them to the matrix expander
+  - Matrix value override logic - CLI-provided matrix values now correctly override YAML configuration values, allowing matrix expansion to use CLI values instead of full Cartesian product
+  - Comprehensive testing verified functionality works correctly with matrix flags overriding YAML values and creating single matrix jobs instead of full Cartesian product
+  - Perfect user experience - users can now use CLI flags like `./bin/buildfab -c ./tests/test_matrix_working.yml working-matrix --matrix.test_name="custom_test" --matrix.platform="macos"` to override matrix values
 
 ## [v0.16.10_feat.1_fix.1] - 2025-10-02
 
@@ -32,6 +55,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Matrix feature now works perfectly with all master branch changes including verbosity levels, version display, and warning output enhancements
   - Comprehensive testing confirmed matrix expansion, variable interpolation, and parallel execution all work correctly
   - Matrix feature seamlessly integrates with existing buildfab architecture including OrderedOutputManager, step callbacks, and debug logging
+
+## [0.16.5_feat.1_fix.1] - 2025-09-29
+
+### Fixed
+- **Matrix Output Suppression**: Fixed race condition in matrix execution where some step output was being lost due to timing issues between step completion and output buffering
+  - Added double-flush mechanism in OrderedOutputManager to ensure all buffered output is displayed
+  - Matrix steps now consistently show complete output regardless of execution timing
+  - Resolved intermittent missing output lines in verbose mode
+
 
 ### Fixed
 - **Compilation Errors**: Fixed OnStepComplete method signature calls to include bufferedOutput parameter across all files (buildfab.go, matrix.go)

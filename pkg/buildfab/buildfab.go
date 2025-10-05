@@ -668,8 +668,18 @@ func (r *Runner) expandMatrixSteps(steps []Step) ([]Step, error) {
 				return nil, fmt.Errorf("action not found: %s", step.Action)
 			}
 			
-			// Create matrix expander
-			expander := NewMatrixExpander(r.config)
+			// Extract matrix variables from CLI variables
+			matrixVars := make(map[string]string)
+			for key, value := range r.opts.Variables {
+				if strings.HasPrefix(key, "matrix.") {
+					matrixKey := strings.TrimPrefix(key, "matrix.")
+					matrixVars[matrixKey] = value
+				}
+			}
+			
+			
+			// Create matrix expander with CLI matrix variables
+			expander := NewMatrixExpander(r.config, matrixVars)
 			
 			// Expand matrix into individual steps
 			matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
@@ -1404,6 +1414,7 @@ func (s *StreamingOutputManager) ShouldStreamOutput(stepName string) bool {
 	}
 	
 	if stepIndex == -1 {
+		// Step not found in steps
 		return false
 	}
 	
@@ -1411,15 +1422,18 @@ func (s *StreamingOutputManager) ShouldStreamOutput(stepName string) bool {
 	// Check if all previous steps in declaration order have been displayed
 	for i := 0; i < stepIndex; i++ {
 		if !s.displayed[s.steps[i].Action] {
+			// Previous step not displayed yet
 			return false
 		}
 	}
 	
 	// Check if this step itself has been displayed - if so, don't stream
 	if s.displayed[stepName] {
+		// Step already displayed
 		return false
 	}
 	
+	// Step can stream
 	return true
 }
 
@@ -1560,7 +1574,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 	// Mutex for thread-safe access to shared state
 	var mu sync.Mutex
 	
-	// Create a streaming output manager
+	// Create a streaming output manager using the expanded steps
 	streamingManager := &StreamingOutputManager{
 		steps:     steps,
 		displayed: displayed,
@@ -1716,6 +1730,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 				
 				// Execute the node in parallel with streaming output control
 				go func(nodeName string, node *DAGNode) {
+					// Execute matrix step
 					result, err := r.executeActionForDAGWithStreamingControl(ctx, node.Action, streamingManager)
 					result.Name = nodeName
 					
