@@ -270,9 +270,15 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 		if r.opts.DryRun {
 			description := runner.Description()
 			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepStart(ctx, actionName)
 				r.opts.StepCallback.OnStepComplete(ctx, actionName, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
 			}
 			return nil
+		}
+
+		// Call step start callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepStart(ctx, actionName)
 		}
 
 		start := time.Now()
@@ -322,6 +328,7 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 		if r.opts.DryRun {
 			err := r.runActionInternalDryRun(ctx, action)
 			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepStart(ctx, actionName)
 				status := StepStatusOK
 				message := "would execute action"
 				if err != nil {
@@ -331,6 +338,11 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 				r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, 0, "")
 			}
 			return err
+		}
+
+		// Call step start callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepStart(ctx, actionName)
 		}
 
 	start := time.Now()

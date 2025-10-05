@@ -400,28 +400,131 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
     // Add engine (Docker/Podman)
     parts = append(parts, engineName)
 
-    // Add image
-    parts = append(parts, "run", "--rm")
-
-    // Add mount arguments
-    for _, mount := range config.Mounts {
-        mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
-        if mount.RO {
-            mountArg += ",readonly"
+    // Handle build operations differently
+    if config.Image.Build != nil {
+        // For build operations, we run docker/podman build command
+        parts = append(parts, "build")
+        
+        // Add build args
+        for key, value := range config.Image.Build.Args {
+            parts = append(parts, "--build-arg", fmt.Sprintf("%s=%s", key, value))
         }
-        parts = append(parts, mountArg)
-    }
+        
+        // Add tags
+        for _, tag := range config.Image.Build.Tags {
+            parts = append(parts, "--tag", tag)
+        }
+        
+        // Add network if specified
+        if config.Image.Build.Network != "" {
+            parts = append(parts, "--network", config.Image.Build.Network)
+        }
+        
+        // Add progress if specified
+        if config.Image.Build.Progress != "" {
+            parts = append(parts, "--progress", config.Image.Build.Progress)
+        }
+        
+        // Add dockerfile if specified
+        if config.Image.Build.Dockerfile != "" {
+            parts = append(parts, "-f", config.Image.Build.Dockerfile)
+        }
+        
+        // Add context (default to current directory)
+        context := config.Image.Build.Context
+        if context == "" {
+            context = "."
+        }
+        parts = append(parts, context)
+    } else if config.Image.Slim != nil {
+        // For slim operations, we need to mount the Docker socket
+        if engineName == "docker" {
+            parts = append(parts, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+        } else if engineName == "podman" {
+            parts = append(parts, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
+        }
+        
+        // For slim operations, we run the dslim/slim container with specific arguments
+        parts = append(parts, "dslim/slim:latest")
+        parts = append(parts, "slim", "build")
+        
+        // Add slim-specific flags
+        if !config.Image.Slim.HttpProbe {
+            parts = append(parts, "--http-probe=false")
+            parts = append(parts, "--continue-after=exit")
+        }
+        
+        parts = append(parts, config.Image.Slim.Target)
+        
+        // Add exec command if specified
+        if config.Image.Slim.Exec != "" {
+            parts = append(parts, "--exec", config.Image.Slim.Exec)
+        }
+        
+        // Add tags for the slim image
+        for _, tag := range config.Image.Slim.Tags {
+            parts = append(parts, "--tag", tag)
+        }
+    } else {
+        // Regular container execution
+        parts = append(parts, "run", "--rm")
+        
+        // Add mount arguments
+        for _, mount := range config.Mounts {
+            mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
+            if mount.RO {
+                mountArg += ",readonly"
+            }
+            parts = append(parts, mountArg)
+        }
+        
+        // Add cache mounts
+        for cacheName, cachePath := range config.Cache {
+            targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+            cacheMountArg := fmt.Sprintf("--mount=type=bind,source=%s,target=%s", cachePath, targetPath)
+            parts = append(parts, cacheMountArg)
+        }
+        
+        // Add CPU and memory limits
+        if config.CPU > 0 {
+            parts = append(parts, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+            
+            // Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
+            cpuSet := ""
+            for i := 0; i < config.CPU; i++ {
+                if i > 0 {
+                    cpuSet += ","
+                }
+                cpuSet += fmt.Sprintf("%d", i)
+            }
+            parts = append(parts, "--cpuset-cpus", cpuSet)
+        }
+        
+        if config.Memory != "" {
+            parts = append(parts, "-m", config.Memory)
+        }
+        
+        // Add user if specified
+        if config.User != "" {
+            parts = append(parts, "-u", config.User)
+        }
+        
+        // Add network if specified
+        if config.Network != "" {
+            parts = append(parts, "--network", config.Network)
+        }
+        
+        // Add image
+        parts = append(parts, config.Image.From)
 
-    // Add image
-    parts = append(parts, config.Image.From)
-
-    // Add command to run
-    if config.Run != "" {
-        parts = append(parts, "sh", "-c", config.Run)
-    } else if config.RunAction != "" {
-        parts = append(parts, "buildfab", "action", config.RunAction)
-    } else if config.RunStage != "" {
-        parts = append(parts, "buildfab", "run", config.RunStage)
+        // Add command to run
+        if config.Run != "" {
+            parts = append(parts, "sh", "-c", config.Run)
+        } else if config.RunAction != "" {
+            parts = append(parts, "buildfab", "action", config.RunAction)
+        } else if config.RunStage != "" {
+            parts = append(parts, "buildfab", "run", config.RunStage)
+        }
     }
 
     return strings.Join(parts, " ")

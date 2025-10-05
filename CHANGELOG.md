@@ -8,8 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2025-10-05
+
 ### Added
-- **Docker Container Feature Implementation**: Comprehensive Docker and Podman container feature with advanced functionality (~95% complete)
+- **Slim Container Support**: Complete implementation of slim container functionality using dslim/slim tool
+  - Added `SlimImage` method to Engine interface for both Docker and Podman engines
+  - Implemented slim container operations with target, tags, network, http_probe, and exec options
+  - Created working container-docker-build.yml example demonstrating slim functionality
+  - Fixed HTTP probe issues with `--continue-after=exit` flag for non-interactive slim operations
+
+### Fixed
+- **Container Command Display**: Fixed container command display in verbose mode level 2 (`-vv`)
+  - Build operations now show complete `docker build` commands with all arguments
+  - Slim operations now show complete `docker run dslim/slim` commands with all arguments
+  - Regular container operations show complete `docker run` commands with all arguments
+  - Updated OrderedOutputManager.buildContainerCommand to handle build, slim, and regular operations
+
+### Changed
+- **Docker Container Feature Implementation**: Comprehensive Docker and Podman container feature with advanced functionality (100% complete)
   - **Basic Container Execution**: Full support for running containers with Docker and Podman engines, automatic engine detection, and proper error handling
   - **Mount Support**: Comprehensive mount system with bind mounts, read-only options, and automatic workspace mounting for `run_action`/`run_stage` execution
   - **Environment Variables**: Full environment variable support with `env` field and `env_file` loading from mounted workspace directory

@@ -95,14 +95,68 @@ func (d *dockerEngineImpl) BuildImage(ctx context.Context, config ContainerBuild
 	return "", fmt.Errorf("no tags specified")
 }
 
+func (d *dockerEngineImpl) SlimImage(ctx context.Context, config ContainerSlim) (string, error) {
+	// Build docker slim command using dslim/slim container
+	args := []string{"run", "--rm"}
+	
+	// Add network if specified
+	if config.Network != "" {
+		args = append(args, "--network", config.Network)
+	}
+	
+	// Add volume mount for Docker socket (required for slim to work)
+	args = append(args, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+	
+	// Add the slim image
+	args = append(args, "dslim/slim:latest")
+	
+	// Add slim command
+	args = append(args, "slim")
+	
+	// Add target image
+	args = append(args, "build")
+	
+	// Add http probe setting (after build command)
+	if !config.HttpProbe {
+		args = append(args, "--http-probe=false")
+		// When http-probe is false, we need to specify continue-after to make it non-interactive
+		args = append(args, "--continue-after=exit")
+	}
+	
+	args = append(args, config.Target)
+	
+	// Add exec command if specified
+	if config.Exec != "" {
+		args = append(args, "--exec", config.Exec)
+	}
+	
+	// Add tags for the slim image
+	for _, tag := range config.Tags {
+		args = append(args, "--tag", tag)
+	}
+	
+	// Execute docker slim command
+	cmd := exec.CommandContext(ctx, d.binary, args...)
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		return "", fmt.Errorf("docker slim failed: %w, output: %s", err, string(output))
+	}
+	
+	// Return the first tag as the slim image name
+	if len(config.Tags) > 0 {
+		return config.Tags[0], nil
+	}
+	
+	// If no tags specified, return the target with -slim suffix
+	return config.Target + "-slim", nil
+}
+
 func (d *dockerEngineImpl) RunContainer(ctx context.Context, config ContainerConfig) (*ContainerResult, error) {
 	// Build docker run command
 	args := []string{"run", "--rm"}
 	
-	// Add working directory if specified
-	if config.Workdir != "" {
-		args = append(args, "-w", config.Workdir)
-	}
+	// Working directory is handled via cd command in the shell, not via -w option
 	
 	// Add environment variables
 	for key, value := range config.Env {
@@ -165,9 +219,9 @@ func (d *dockerEngineImpl) RunContainer(ctx context.Context, config ContainerCon
 	if config.Run != "" {
 		args = append(args, "sh", "-c", config.Run)
 	} else if config.RunAction != "" {
-		args = append(args, "buildfab", "action", config.RunAction)
+		args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
 	} else if config.RunStage != "" {
-		args = append(args, "buildfab", "run", config.RunStage)
+		args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
 	}
 	
 	// Execute docker run command
@@ -195,10 +249,7 @@ func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config 
 	// Build docker run command (same as RunContainer)
 	args := []string{"run", "--rm"}
 	
-	// Add working directory if specified
-	if config.Workdir != "" {
-		args = append(args, "-w", config.Workdir)
-	}
+	// Working directory is handled via cd command in the shell, not via -w option
 	
 	// Add environment variables
 	for key, value := range config.Env {
@@ -261,9 +312,9 @@ func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config 
 	if config.Run != "" {
 		args = append(args, "sh", "-c", config.Run)
 	} else if config.RunAction != "" {
-		args = append(args, "buildfab", "action", config.RunAction)
+		args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
 	} else if config.RunStage != "" {
-		args = append(args, "buildfab", "run", config.RunStage)
+		args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
 	}
 	
 	// Execute docker run command with streaming
@@ -431,14 +482,68 @@ func (p *podmanEngineImpl) BuildImage(ctx context.Context, config ContainerBuild
 	return "", fmt.Errorf("no tags specified")
 }
 
+func (p *podmanEngineImpl) SlimImage(ctx context.Context, config ContainerSlim) (string, error) {
+	// Build podman slim command using dslim/slim container
+	args := []string{"run", "--rm"}
+	
+	// Add network if specified
+	if config.Network != "" {
+		args = append(args, "--network", config.Network)
+	}
+	
+	// Add volume mount for Podman socket (required for slim to work with Podman)
+	args = append(args, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
+	
+	// Add the slim image
+	args = append(args, "dslim/slim:latest")
+	
+	// Add slim command
+	args = append(args, "slim")
+	
+	// Add target image
+	args = append(args, "build")
+	
+	// Add http probe setting (after build command)
+	if !config.HttpProbe {
+		args = append(args, "--http-probe=false")
+		// When http-probe is false, we need to specify continue-after to make it non-interactive
+		args = append(args, "--continue-after=exit")
+	}
+	
+	args = append(args, config.Target)
+	
+	// Add exec command if specified
+	if config.Exec != "" {
+		args = append(args, "--exec", config.Exec)
+	}
+	
+	// Add tags for the slim image
+	for _, tag := range config.Tags {
+		args = append(args, "--tag", tag)
+	}
+	
+	// Execute podman slim command
+	cmd := exec.CommandContext(ctx, p.binary, args...)
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		return "", fmt.Errorf("podman slim failed: %w, output: %s", err, string(output))
+	}
+	
+	// Return the first tag as the slim image name
+	if len(config.Tags) > 0 {
+		return config.Tags[0], nil
+	}
+	
+	// If no tags specified, return the target with -slim suffix
+	return config.Target + "-slim", nil
+}
+
 func (p *podmanEngineImpl) RunContainer(ctx context.Context, config ContainerConfig) (*ContainerResult, error) {
 	// Build podman run command
 	args := []string{"run", "--rm"}
 	
-	// Add working directory if specified
-	if config.Workdir != "" {
-		args = append(args, "-w", config.Workdir)
-	}
+	// Working directory is handled via cd command in the shell, not via -w option
 	
 	// Add environment variables
 	for key, value := range config.Env {
@@ -501,9 +606,9 @@ func (p *podmanEngineImpl) RunContainer(ctx context.Context, config ContainerCon
 	if config.Run != "" {
 		args = append(args, "sh", "-c", config.Run)
 	} else if config.RunAction != "" {
-		args = append(args, "buildfab", "action", config.RunAction)
+		args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
 	} else if config.RunStage != "" {
-		args = append(args, "buildfab", "run", config.RunStage)
+		args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
 	}
 	
 	// Execute podman run command
@@ -531,10 +636,7 @@ func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config 
 	// Build podman run command (same as RunContainer)
 	args := []string{"run", "--rm"}
 	
-	// Add working directory if specified
-	if config.Workdir != "" {
-		args = append(args, "-w", config.Workdir)
-	}
+	// Working directory is handled via cd command in the shell, not via -w option
 	
 	// Add environment variables
 	for key, value := range config.Env {
@@ -597,9 +699,9 @@ func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config 
 	if config.Run != "" {
 		args = append(args, "sh", "-c", config.Run)
 	} else if config.RunAction != "" {
-		args = append(args, "buildfab", "action", config.RunAction)
+		args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
 	} else if config.RunStage != "" {
-		args = append(args, "buildfab", "run", config.RunStage)
+		args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
 	}
 	
 	// Execute podman run command with streaming

@@ -20,11 +20,8 @@ stages:
 
   container-build:
     steps:
-      - action: build
-      - action: version-module
-        require: [build]
-      - action: rpm-build
-        require: [version-module]
+      - action: test-check
+
 
 actions:
 
@@ -32,6 +29,7 @@ actions:
   - name: image-build
     description: Run build in docker containers, check ci build locally
     container:
+      engine: podman
       image:
         from: ${{ matrix.image }}
       workdir: /buildfab
@@ -40,6 +38,10 @@ actions:
       cpu: 2            # Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
       memory: 4G         # Memory limit
       network: "host"     # Network mode
-      env_file: .env  # Load environment from /tmp/buildfab-workspace/docker_config.sh
+      env_file: .docker-env  # Load environment from /tmp/buildfab-workspace/docker_config.sh
       run_stage: container-build  # Run the container-build stage
       # Note: 'buildfab' command is automatically aliased to /tmp/buildfab-bin/buildfab
+
+  - name: test-check
+    run: | 
+      sh examples/test.sh

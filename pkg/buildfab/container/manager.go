@@ -48,6 +48,22 @@ func (m *Manager) ExecuteAction(ctx context.Context, config ContainerConfig) (*C
 		return nil, err
 	}
 	
+	// Handle slim image operation
+	if config.Image.Slim != nil {
+		image, err := m.engine.SlimImage(ctx, *config.Image.Slim)
+		if err != nil {
+			return nil, err
+		}
+		// For slim operations, we don't run a container, just return success
+		return &ContainerResult{
+			ContainerID: "slim-operation",
+			ExitCode:    0,
+			Output:      fmt.Sprintf("Slim image created: %s", image),
+			Error:       "",
+			Artifacts:   []string{},
+		}, nil
+	}
+	
 	// Pull or build image
 	if config.Image.Build != nil {
 		image, err := m.engine.BuildImage(ctx, *config.Image.Build)
@@ -72,6 +88,27 @@ func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config Containe
 	// Validate configuration
 	if err := m.validateConfig(config); err != nil {
 		return nil, err
+	}
+	
+	// Handle slim image operation
+	if config.Image.Slim != nil {
+		image, err := m.engine.SlimImage(ctx, *config.Image.Slim)
+		if err != nil {
+			return nil, err
+		}
+		// For slim operations, we don't run a container, just return success
+		result := &ContainerResult{
+			ContainerID: "slim-operation",
+			ExitCode:    0,
+			Output:      fmt.Sprintf("Slim image created: %s", image),
+			Error:       "",
+			Artifacts:   []string{},
+		}
+		// Send output to callback if provided
+		if outputCallback != nil {
+			outputCallback(result.Output)
+		}
+		return result, nil
 	}
 	
 	// Pull or build image
@@ -101,8 +138,15 @@ func (m *Manager) GetEngineName() string {
 // validateConfig validates the container configuration
 func (m *Manager) validateConfig(config ContainerConfig) error {
 	// Validate required fields
-	if config.Image.From == "" && config.Image.Build == nil {
-		return fmt.Errorf("image.from or image.build must be specified")
+	if config.Image.From == "" && config.Image.Build == nil && config.Image.Slim == nil {
+		return fmt.Errorf("image.from, image.build, or image.slim must be specified")
+	}
+	
+	// Validate slim configuration
+	if config.Image.Slim != nil {
+		if config.Image.Slim.Target == "" {
+			return fmt.Errorf("image.slim.target must be specified for slim operations")
+		}
 	}
 	
 	// Validate mounts

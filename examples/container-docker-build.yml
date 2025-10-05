@@ -1,3 +1,6 @@
+project:
+  name: buildfab
+
 name: container-docker-build-example
 
 stages:
@@ -12,14 +15,15 @@ actions:
   - name: build-docker-image
     description: Build docker container with buildfab container feature
     container:
+      engine: docker
       image:
         build:
           dockerfile: Dockerfile
           context: .
           args:
-            VERSION: ${{ env.VERSION }}
+            VERSION: latest
           tags:
-            - ${{ env.PROJECT }}:${{ env.VERSION }}
+            - buildfab:latest
           network: host
           progress: plain
       # No need for from, workdir, env, or run - buildfab handles the build locally
@@ -28,20 +32,12 @@ actions:
   - name: slim-docker-image
     description: Make slim version of docker container with buildfab container feature
     container:
+      engine: docker
       image:
-        from: dslim/slim:latest  # Use slim tool
         slim:
-          target: ${{ env.PROJECT }}:${{ env.VERSION }}
+          target: buildfab:latest  # Target the image built in the previous step
           tags:
-            - ${{ env.PROJECT }}:${{ env.VERSION }}-slim
+            - buildfab:slim
           network: host
           http_probe: false
-          exec: "/usr/local/bin/${{ env.MODULE }} -v"
-      workdir: /workspace
-      env:
-        PROJECT: ${{ env.PROJECT }}
-        VERSION: ${{ env.VERSION }}
-        MODULE: ${{ env.MODULE }}
-      run: |
-        # Slim build command will be executed by buildfab
-        echo "Creating slim Docker image with buildfab container feature"
+          exec: "/usr/local/bin/buildfab --version"  # Test command for slim tool

@@ -17,7 +17,7 @@ func TestSimpleContainerExecution(t *testing.T) {
 		Image: container.ContainerImage{
 			From: "alpine:latest",
 		},
-		Commands: []string{"echo 'Hello from container'"},
+		Run: "echo 'Hello from container'",
 	}
 	
 	manager, err := container.NewManager()

@@ -17,7 +17,7 @@ func TestContainerActionExecution(t *testing.T) {
 		Image: container.ContainerImage{
 			From: "alpine:latest",
 		},
-		Commands: []string{"echo", "Hello from container"},
+		Run: "echo \"Hello from container\"",
 	}
 	
 	runner, err := containerRunner.NewContainerRunner()
@@ -25,7 +25,7 @@ func TestContainerActionExecution(t *testing.T) {
 		t.Skip("No container engine available")
 	}
 	
-	result, err := runner.RunAction(context.Background(), config)
+	result, err := runner.RunAction(context.Background(), config, "")
 	if err != nil {
 		t.Errorf("Container action failed: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestContainerRunStageExecution(t *testing.T) {
 		t.Skip("No container engine available")
 	}
 	
-	result, err := runner.RunAction(context.Background(), config)
+	result, err := runner.RunAction(context.Background(), config, "")
 	if err != nil {
 		t.Errorf("Container run_stage failed: %v", err)
 	}
