@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+## [v0.16.15] - 2025-10-05
+
+### Fixed
+- **Container Streaming Output**: Fixed container engines to provide real-time streaming output using pipes instead of buffered CombinedOutput
+- **Matrix-Container Integration**: Fixed matrix expansion to properly interpolate variables in container configurations (image, run commands, environment variables)
+- **Shell Compatibility**: Updated container examples to use sh-compatible syntax instead of bash-specific features
+
+### Added
+- **Matrix-Container Integration**: Matrix feature now works seamlessly with containers for parallel execution across different images/configurations
+- **Container Streaming Callbacks**: Added RunContainerWithCallback method to container engines for real-time output streaming
+- **Container Variable Interpolation**: Matrix variables are now properly interpolated in container image names, run commands, and environment variables
+
+### Documentation
+- **Container Implementation Status**: Updated documentation with comprehensive analysis of container feature status and matrix integration
+- **Matrix-Container Examples**: Added working examples demonstrating matrix execution with containers
+- **Shell Compatibility Guidelines**: Added documentation about using sh-compatible syntax in container commands
+
+### Fixed
+- **Container Configuration Schema**: Fixed critical schema mismatch where container configuration used `Commands` field instead of required `run` field
+  - Updated `pkg/buildfab/container/types.go` to use `Run string` instead of `Commands []string`
+  - Updated all container engine implementations (Docker and Podman) to use `run` field consistently
+  - Updated all container examples to use `run` field instead of `commands`
+  - Container configuration now matches action configuration schema for consistency
+  - Basic container execution now works correctly with `run` field
+
+### Documentation
+- **Container Implementation Status**: Added comprehensive documentation of current Docker feature implementation status
+  - Created `docs/Container-implementation-status.md` with detailed analysis of working and broken features
+  - Documented that container feature is ~70% complete with basic execution working
+  - Identified critical issues: `run_action`/`run_stage` broken due to missing `prepareContainer()` implementation
+  - Listed all working features: basic execution, mounts, environment variables, resource limits
+  - Listed missing features: image building, artifact collection, environment file support
+  - Provided working examples and next steps for implementation
+
 ## [v0.16.14] - 2025-10-03
 
 ### Fixed

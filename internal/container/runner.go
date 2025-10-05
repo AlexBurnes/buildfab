@@ -50,6 +50,11 @@ func (r *ContainerRunner) RunAction(ctx context.Context, config container.Contai
 	return result, nil
 }
 
+// GetManager returns the container manager
+func (r *ContainerRunner) GetManager() *container.Manager {
+	return r.manager
+}
+
 // prepareContainer prepares the container for execution
 func (r *ContainerRunner) prepareContainer(ctx context.Context, config container.ContainerConfig) error {
 	// Only copy buildfab binary and config if using run_stage or run_action

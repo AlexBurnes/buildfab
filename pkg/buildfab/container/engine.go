@@ -13,6 +13,7 @@ type Engine interface {
 	
 	// Container operations
 	RunContainer(ctx context.Context, config ContainerConfig) (*ContainerResult, error)
+	RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string)) (*ContainerResult, error)
 	StopContainer(ctx context.Context, containerID string) error
 	RemoveContainer(ctx context.Context, containerID string) error
 	

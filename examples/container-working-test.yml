@@ -16,6 +16,6 @@ actions:
     container:
       image:
         from: alpine:latest
-      commands:
-        - echo "Hello from container!"
-        - echo "Container is working correctly"
+      run: |
+        echo "Hello from container!"
+        echo "Container is working correctly"

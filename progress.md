@@ -467,7 +467,19 @@
 - **Test coverage improvement**: Overall project coverage improved from 58.6% to 72.5%
 
 ## What's Left to Build
-- **Container Feature Implementation (REQUIREMENTS CLARIFIED)**: Add Docker and Podman support for isolated execution environments with comprehensive requirements clarification
+- **Container Feature Implementation (INVESTIGATION COMPLETED)**: Docker and Podman support for isolated execution environments - investigation completed, critical issues identified
+  - **Current Status**: ~70% complete with basic container execution working but critical functionality missing
+  - **Working Features**: Basic container execution, engine detection (Docker/Podman), mount support, environment variables, resource limits, integration with buildfab action system
+  - **Critical Issues Identified**:
+    - **Schema Mismatch**: Container configuration uses `Commands` field instead of required `run` field
+    - **Missing Implementation**: `prepareContainer()` and `collectArtifacts()` methods are placeholders
+    - **Broken Execution**: `run_action` and `run_stage` fail because buildfab binary not copied into containers
+    - **Missing Features**: Image building, artifact collection, environment file support not implemented
+  - **Immediate Fixes Needed**:
+    - Fix container configuration schema (Commands → run)
+    - Implement `prepareContainer()` method for buildfab binary/config copying
+    - Implement `collectArtifacts()` method for artifact collection
+    - Fix `run_action` and `run_stage` execution
   - **Phase 1 (Weeks 1-2)**: Basic container execution with Alpine/Debian images and action/stage execution
   - **Phase 2 (Weeks 3-4)**: Mount support for directories and files, CPU and memory limiting capabilities
   - **Phase 3 (Weeks 5-6)**: Container image building from Dockerfiles, artifact collection and advanced configuration

@@ -114,6 +114,24 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 			matrixAction.Run = me.interpolateVariables(matrixAction.Run, matrixVars)
 		}
 		
+		// Interpolate variables in container configuration
+		if matrixAction.Container != nil {
+			// Interpolate container image
+			if matrixAction.Container.Image.From != "" {
+				matrixAction.Container.Image.From = me.interpolateVariables(matrixAction.Container.Image.From, matrixVars)
+			}
+			
+			// Interpolate container run command
+			if matrixAction.Container.Run != "" {
+				matrixAction.Container.Run = me.interpolateVariables(matrixAction.Container.Run, matrixVars)
+			}
+			
+			// Interpolate environment variables
+			for key, value := range matrixAction.Container.Env {
+				matrixAction.Container.Env[key] = me.interpolateVariables(value, matrixVars)
+			}
+		}
+		
 		// DEBUG: Add delay option to the action (uncomment for debugging)
 		// if matrixAction.Options == nil {
 		// 	matrixAction.Options = make(map[string]interface{})

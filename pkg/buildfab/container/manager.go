@@ -67,6 +67,32 @@ func (m *Manager) ExecuteAction(ctx context.Context, config ContainerConfig) (*C
 	return m.engine.RunContainer(ctx, config)
 }
 
+// ExecuteActionWithCallback executes a container action with streaming callback
+func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string)) (*ContainerResult, error) {
+	// Validate configuration
+	if err := m.validateConfig(config); err != nil {
+		return nil, err
+	}
+	
+	// Pull or build image
+	if config.Image.Build != nil {
+		image, err := m.engine.BuildImage(ctx, *config.Image.Build)
+		if err != nil {
+			return nil, err
+		}
+		config.Image.From = image
+	} else {
+		if exists, _ := m.engine.ImageExists(ctx, config.Image.From); !exists {
+			if err := m.engine.PullImage(ctx, config.Image.From); err != nil {
+				return nil, err
+			}
+		}
+	}
+	
+	// Run container with callback
+	return m.engine.RunContainerWithCallback(ctx, config, outputCallback)
+}
+
 // validateConfig validates the container configuration
 func (m *Manager) validateConfig(config ContainerConfig) error {
 	// Validate required fields

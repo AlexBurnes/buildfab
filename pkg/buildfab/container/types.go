@@ -16,7 +16,7 @@ type ContainerConfig struct {
 	Cache      map[string]string `yaml:"cache"`
 	RunStage   string            `yaml:"run_stage"`
 	RunAction  string            `yaml:"run_action"`
-	Commands   []string          `yaml:"commands"`
+	Run        string            `yaml:"run"`
 }
 
 // ContainerImage represents container image configuration

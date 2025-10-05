@@ -108,8 +108,8 @@ func (p *PodmanEngine) RunContainer(ctx context.Context, config container.Contai
 	args = append(args, config.Image.From)
 	
 	// Add command to run
-	if len(config.Commands) > 0 {
-		args = append(args, config.Commands...)
+	if config.Run != "" {
+		args = append(args, "sh", "-c", config.Run)
 	} else if config.RunAction != "" {
 		args = append(args, "buildfab", "action", config.RunAction)
 	} else if config.RunStage != "" {

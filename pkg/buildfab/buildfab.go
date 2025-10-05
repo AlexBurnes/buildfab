@@ -2791,8 +2791,22 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 		}
 	}
 	
-	// Execute container action
-	containerResult, err := runner.RunAction(ctx, *action.Container)
+	// Execute container action with streaming callback
+	var containerResult *container.ContainerResult
+	err = func() error {
+		// Create a callback function for real-time output streaming
+		outputCallback := func(line string) {
+			if r.opts.StepCallback != nil && r.opts.VerboseLevel > 0 && line != "" {
+				r.opts.StepCallback.OnStepOutput(ctx, action.Name, line)
+			}
+		}
+		
+		// Get the container manager and execute with callback
+		manager := runner.GetManager()
+		var err error
+		containerResult, err = manager.ExecuteActionWithCallback(ctx, *action.Container, outputCallback)
+		return err
+	}()
 	if err != nil {
 		return Result{
 			Status:  StatusError,
@@ -2802,18 +2816,7 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 	}
 	
 	// Display container output based on verbosity level
-	if containerResult != nil && containerResult.Output != "" {
-		// Only show output if not in quiet mode (VerboseLevel > 0)
-		if r.opts.VerboseLevel > 0 && r.opts.Output != nil {
-			// Properly align container output
-			lines := strings.Split(strings.TrimSpace(containerResult.Output), "\n")
-			for _, line := range lines {
-				if line != "" {
-					fmt.Fprintf(r.opts.Output, "  %s\n", line)
-				}
-			}
-		}
-	}
+	// Container output is now streamed in real-time via the callback
 	
 	// Display container error if available (always show errors)
 	if containerResult != nil && containerResult.Error != "" {
@@ -2856,14 +2859,9 @@ func (r *Runner) buildContainerCommand(config *container.ContainerConfig) string
 	parts = append(parts, "run", "--rm")
 	parts = append(parts, config.Image.From)
 	
-	// Add commands
-	if len(config.Commands) > 0 {
-		if len(config.Commands) > 1 {
-			shellCmd := strings.Join(config.Commands, " && ")
-			parts = append(parts, "sh", "-c", fmt.Sprintf("'%s'", shellCmd))
-		} else {
-			parts = append(parts, config.Commands...)
-		}
+	// Add command to run
+	if config.Run != "" {
+		parts = append(parts, "sh", "-c", config.Run)
 	} else if config.RunAction != "" {
 		parts = append(parts, "buildfab", "action", config.RunAction)
 	} else if config.RunStage != "" {
