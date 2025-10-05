@@ -44,9 +44,55 @@ func (d *dockerEngineImpl) ImageExists(ctx context.Context, image string) (bool,
 }
 
 func (d *dockerEngineImpl) BuildImage(ctx context.Context, config ContainerBuild) (string, error) {
-	// Implementation for building images
-	// Return generated image tag
-	return "", fmt.Errorf("not implemented")
+	// Build docker build command
+	args := []string{"build"}
+	
+	// Add build args
+	for key, value := range config.Args {
+		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+	}
+	
+	// Add tags
+	for _, tag := range config.Tags {
+		args = append(args, "--tag", tag)
+	}
+	
+	// Add network if specified
+	if config.Network != "" {
+		args = append(args, "--network", config.Network)
+	}
+	
+	// Add progress if specified
+	if config.Progress != "" {
+		args = append(args, "--progress", config.Progress)
+	}
+	
+	// Add dockerfile if specified
+	if config.Dockerfile != "" {
+		args = append(args, "-f", config.Dockerfile)
+	}
+	
+	// Add context (default to current directory)
+	context := config.Context
+	if context == "" {
+		context = "."
+	}
+	args = append(args, context)
+	
+	// Execute docker build command
+	cmd := exec.CommandContext(ctx, d.binary, args...)
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		return "", fmt.Errorf("docker build failed: %w, output: %s", err, string(output))
+	}
+	
+	// Return the first tag as the image name
+	if len(config.Tags) > 0 {
+		return config.Tags[0], nil
+	}
+	
+	return "", fmt.Errorf("no tags specified")
 }
 
 func (d *dockerEngineImpl) RunContainer(ctx context.Context, config ContainerConfig) (*ContainerResult, error) {
@@ -74,17 +120,28 @@ func (d *dockerEngineImpl) RunContainer(ctx context.Context, config ContainerCon
 		}
 	}
 	
+	// Add cache mounts
+	for cacheName, cachePath := range config.Cache {
+		// Mount cache to standard buildfab cache location
+		targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+		cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
+		args = append(args, "--mount", cacheMountArg)
+	}
+	
 	// Add CPU and memory limits
-	if len(config.CPUs) > 0 {
+	if config.CPU > 0 {
+		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+		
+		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
 		cpuSet := ""
-		for i, cpu := range config.CPUs {
+		for i := 0; i < config.CPU; i++ {
 			if i > 0 {
 				cpuSet += ","
 			}
-			cpuSet += fmt.Sprintf("%d", cpu)
+			cpuSet += fmt.Sprintf("%d", i)
 		}
 		args = append(args, "--cpuset-cpus", cpuSet)
-		args = append(args, "--cpus", fmt.Sprintf("%d", len(config.CPUs)))
 	}
 	
 	if config.Memory != "" {
@@ -159,17 +216,28 @@ func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config 
 		}
 	}
 	
+	// Add cache mounts
+	for cacheName, cachePath := range config.Cache {
+		// Mount cache to standard buildfab cache location
+		targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+		cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
+		args = append(args, "--mount", cacheMountArg)
+	}
+	
 	// Add CPU and memory limits
-	if len(config.CPUs) > 0 {
+	if config.CPU > 0 {
+		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+		
+		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
 		cpuSet := ""
-		for i, cpu := range config.CPUs {
+		for i := 0; i < config.CPU; i++ {
 			if i > 0 {
 				cpuSet += ","
 			}
-			cpuSet += fmt.Sprintf("%d", cpu)
+			cpuSet += fmt.Sprintf("%d", i)
 		}
 		args = append(args, "--cpuset-cpus", cpuSet)
-		args = append(args, "--cpus", fmt.Sprintf("%d", len(config.CPUs)))
 	}
 	
 	if config.Memory != "" {
@@ -312,9 +380,55 @@ func (p *podmanEngineImpl) ImageExists(ctx context.Context, image string) (bool,
 }
 
 func (p *podmanEngineImpl) BuildImage(ctx context.Context, config ContainerBuild) (string, error) {
-	// Implementation for building images
-	// Return generated image tag
-	return "", fmt.Errorf("not implemented")
+	// Build podman build command
+	args := []string{"build"}
+	
+	// Add build args
+	for key, value := range config.Args {
+		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+	}
+	
+	// Add tags
+	for _, tag := range config.Tags {
+		args = append(args, "--tag", tag)
+	}
+	
+	// Add network if specified
+	if config.Network != "" {
+		args = append(args, "--network", config.Network)
+	}
+	
+	// Add progress if specified
+	if config.Progress != "" {
+		args = append(args, "--progress", config.Progress)
+	}
+	
+	// Add dockerfile if specified
+	if config.Dockerfile != "" {
+		args = append(args, "-f", config.Dockerfile)
+	}
+	
+	// Add context (default to current directory)
+	context := config.Context
+	if context == "" {
+		context = "."
+	}
+	args = append(args, context)
+	
+	// Execute podman build command
+	cmd := exec.CommandContext(ctx, p.binary, args...)
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		return "", fmt.Errorf("podman build failed: %w, output: %s", err, string(output))
+	}
+	
+	// Return the first tag as the image name
+	if len(config.Tags) > 0 {
+		return config.Tags[0], nil
+	}
+	
+	return "", fmt.Errorf("no tags specified")
 }
 
 func (p *podmanEngineImpl) RunContainer(ctx context.Context, config ContainerConfig) (*ContainerResult, error) {
@@ -342,17 +456,28 @@ func (p *podmanEngineImpl) RunContainer(ctx context.Context, config ContainerCon
 		}
 	}
 	
+	// Add cache mounts
+	for cacheName, cachePath := range config.Cache {
+		// Mount cache to standard buildfab cache location
+		targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+		cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
+		args = append(args, "--mount", cacheMountArg)
+	}
+	
 	// Add CPU and memory limits
-	if len(config.CPUs) > 0 {
+	if config.CPU > 0 {
+		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+		
+		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
 		cpuSet := ""
-		for i, cpu := range config.CPUs {
+		for i := 0; i < config.CPU; i++ {
 			if i > 0 {
 				cpuSet += ","
 			}
-			cpuSet += fmt.Sprintf("%d", cpu)
+			cpuSet += fmt.Sprintf("%d", i)
 		}
 		args = append(args, "--cpuset-cpus", cpuSet)
-		args = append(args, "--cpus", fmt.Sprintf("%d", len(config.CPUs)))
 	}
 	
 	if config.Memory != "" {
@@ -427,17 +552,28 @@ func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config 
 		}
 	}
 	
+	// Add cache mounts
+	for cacheName, cachePath := range config.Cache {
+		// Mount cache to standard buildfab cache location
+		targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+		cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
+		args = append(args, "--mount", cacheMountArg)
+	}
+	
 	// Add CPU and memory limits
-	if len(config.CPUs) > 0 {
+	if config.CPU > 0 {
+		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+		
+		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
 		cpuSet := ""
-		for i, cpu := range config.CPUs {
+		for i := 0; i < config.CPU; i++ {
 			if i > 0 {
 				cpuSet += ","
 			}
-			cpuSet += fmt.Sprintf("%d", cpu)
+			cpuSet += fmt.Sprintf("%d", i)
 		}
 		args = append(args, "--cpuset-cpus", cpuSet)
-		args = append(args, "--cpus", fmt.Sprintf("%d", len(config.CPUs)))
 	}
 	
 	if config.Memory != "" {

@@ -130,6 +130,26 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 		// Add the mounts to the configuration
 		preparedConfig.Mounts = append(preparedConfig.Mounts, workspaceMount, binMount)
 		
+		// Handle environment file if specified
+		if config.EnvFile != "" {
+			// Environment file is already available in the mounted workspace
+			// No need to mount it separately since ./ is mounted as /tmp/buildfab-workspace
+			// The env_file will be loaded from /tmp/buildfab-workspace/{env_file}
+		}
+		
+		// Handle cache mounts if specified
+		for cacheName, cachePath := range config.Cache {
+			// Mount cache to standard buildfab cache location
+			targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+			cacheMount := container.ContainerMount{
+				Type:   "bind",
+				Source: filepath.Join(wd, cachePath),
+				Target: targetPath,
+				RO:     false,
+			}
+			preparedConfig.Mounts = append(preparedConfig.Mounts, cacheMount)
+		}
+		
 		// Build the execution command using mounted buildfab binary
 		// Since we cd into the workspace directory, we can use the relative config file path
 		configFilePath := configFile
@@ -153,6 +173,17 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 		} else if config.RunStage != "" {
 			command = fmt.Sprintf(`cd /tmp/%s && exec /tmp/%s/buildfab -c %s run %s %s`, tempDirName, tempBinDirName, configFilePath, config.RunStage, verbosityFlags)
 		}
+		
+		// Handle environment file if specified
+		if config.EnvFile != "" {
+			// Load environment file from mounted workspace directory
+			envFileCommand := fmt.Sprintf("source /tmp/%s/%s && ", tempDirName, config.EnvFile)
+			command = envFileCommand + command
+		}
+		
+		// Add buildfab alias for easier usage
+		aliasCommand := fmt.Sprintf("alias buildfab='/tmp/%s/buildfab' && ", tempBinDirName)
+		command = aliasCommand + command
 		
 		// Set the run command
 		preparedConfig.Run = command

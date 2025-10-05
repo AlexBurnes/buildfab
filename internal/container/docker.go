@@ -78,16 +78,19 @@ func (d *DockerEngine) RunContainer(ctx context.Context, config container.Contai
 	}
 	
 	// Add CPU and memory limits
-	if len(config.CPUs) > 0 {
+	if config.CPU > 0 {
+		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+		
+		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
 		cpuSet := ""
-		for i, cpu := range config.CPUs {
+		for i := 0; i < config.CPU; i++ {
 			if i > 0 {
 				cpuSet += ","
 			}
-			cpuSet += fmt.Sprintf("%d", cpu)
+			cpuSet += fmt.Sprintf("%d", i)
 		}
 		args = append(args, "--cpuset-cpus", cpuSet)
-		args = append(args, "--cpus", fmt.Sprintf("%d", len(config.CPUs)))
 	}
 	
 	if config.Memory != "" {

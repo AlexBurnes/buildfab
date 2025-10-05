@@ -5,7 +5,7 @@ type ContainerConfig struct {
 	Engine     string            `yaml:"engine"`
 	Image      ContainerImage    `yaml:"image"`
 	Workdir    string            `yaml:"workdir"`
-	CPUs       []int             `yaml:"cpus"`
+	CPU        int               `yaml:"cpu"`         // Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
 	Memory     string            `yaml:"memory"`
 	Mounts     []ContainerMount  `yaml:"mounts"`
 	Artifacts  ContainerArtifacts `yaml:"artifacts"`
@@ -23,6 +23,7 @@ type ContainerConfig struct {
 type ContainerImage struct {
 	From  string           `yaml:"from"`
 	Build *ContainerBuild  `yaml:"build"`
+	Slim  *ContainerSlim   `yaml:"slim"`
 }
 
 // ContainerBuild represents container build configuration
@@ -30,6 +31,18 @@ type ContainerBuild struct {
 	Dockerfile string            `yaml:"dockerfile"`
 	Context    string            `yaml:"context"`
 	Args       map[string]string `yaml:"args"`
+	Tags       []string          `yaml:"tags"`
+	Network    string            `yaml:"network"`
+	Progress   string            `yaml:"progress"`
+}
+
+// ContainerSlim represents container slim configuration
+type ContainerSlim struct {
+	Target    string   `yaml:"target"`
+	Tags      []string `yaml:"tags"`
+	Network   string   `yaml:"network"`
+	HttpProbe bool     `yaml:"http_probe"`
+	Exec      string   `yaml:"exec"`
 }
 
 // ContainerMount represents container mount configuration

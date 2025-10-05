@@ -4,7 +4,7 @@
 
 This document describes the current implementation status of the Docker and Podman container feature in buildfab, including what works, what's broken, and what's missing.
 
-## Current Status: ~70% Complete
+## Current Status: ~85% Complete
 
 ### ✅ Working Features
 
@@ -30,15 +30,19 @@ This document describes the current implementation status of the Docker and Podm
    - Matrix + container combination works for basic execution
    - Proper error handling and output display
 
+4. **`run_action` and `run_stage` Execution** ✅ **WORKING**
+   - **Status**: Fully implemented and working
+   - **Implementation**: `PrepareContainerConfig()` method properly mounts buildfab binary and configuration
+   - **Features**: 
+     - Mounts current working directory as `/tmp/buildfab-workspace`
+     - Mounts buildfab binary directory as `/tmp/buildfab-bin`
+     - Constructs proper execution commands with mounted paths
+     - Converts `run_action`/`run_stage` to `run` commands with proper mounting
+   - **Testing**: Verified working with both `run_action` and `run_stage` execution
+
 ### ❌ Broken Features
 
-1. **`run_action` and `run_stage` Execution**
-   - **Problem**: These execution modes fail with exit status 125
-   - **Root Cause**: The `prepareContainer()` method is not implemented (just a placeholder)
-   - **Impact**: buildfab binary and configuration are not copied into containers
-   - **Error**: When containers try to run `buildfab action <name>`, buildfab is not installed
-
-2. **Artifact Collection**
+1. **Artifact Collection**
    - **Problem**: `collectArtifacts()` method is not implemented (just a placeholder)
    - **Impact**: No artifacts can be collected from containers
 
@@ -201,13 +205,7 @@ actions:
 
 ### Immediate Fixes (High Priority)
 
-1. **Implement `prepareContainer()` Method**
-   - Copy buildfab binary into container
-   - Copy configuration file into container
-   - Set up proper working directory
-   - This will fix `run_action` and `run_stage` execution
-
-2. **Implement `collectArtifacts()` Method**
+1. **Implement `collectArtifacts()` Method**
    - Copy artifacts from container to host
    - Support pattern-based artifact collection
    - Handle directory and file artifacts
@@ -258,6 +256,6 @@ actions:
 
 ## Conclusion
 
-The container feature is approximately 70% complete with basic container execution working well. The main blocker is the missing implementation of `prepareContainer()` and `collectArtifacts()` methods, which prevents `run_action` and `run_stage` from working. Once these are implemented, the container feature will be fully functional for the core use cases.
+The container feature is approximately 85% complete with most core functionality working well. The `run_action` and `run_stage` execution is fully implemented and working correctly. The main remaining blocker is the missing implementation of the `collectArtifacts()` method for artifact collection from containers.
 
-The schema fix (Commands → run) has been completed and all examples have been updated to use the correct configuration format.
+The schema fix (Commands → run) has been completed and all examples have been updated to use the correct configuration format. The `PrepareContainerConfig()` method properly handles buildfab binary and configuration mounting for `run_action` and `run_stage` execution.

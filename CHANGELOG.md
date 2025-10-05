@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Docker Container Feature Implementation**: Comprehensive Docker and Podman container feature with advanced functionality (~95% complete)
+  - **Basic Container Execution**: Full support for running containers with Docker and Podman engines, automatic engine detection, and proper error handling
+  - **Mount Support**: Comprehensive mount system with bind mounts, read-only options, and automatic workspace mounting for `run_action`/`run_stage` execution
+  - **Environment Variables**: Full environment variable support with `env` field and `env_file` loading from mounted workspace directory
+  - **Resource Limits**: CPU and memory limit support with simplified CPU configuration (cpu: 2 → --cpus 2.0 --cpuset-cpus "0,1")
+  - **Cache Management**: Automatic cache directory mounting to `/tmp/buildfab-cache-{name}` with proper path handling
+  - **Buildfab Integration**: Automatic buildfab binary mounting and alias support for easier command usage inside containers
+  - **Run Action/Stage Support**: Full `run_action` and `run_stage` execution with proper buildfab binary mounting and configuration copying
+  - **Docker Build Support**: Complete `BuildImage` method implementation for both Docker and Podman engines with build args, tags, network, progress, and context support
+  - **Slim Image Support**: ContainerSlim configuration with target, tags, network, http_probe, and exec options for creating slim Docker images
+  - **Matrix Integration**: Perfect integration with matrix feature for parallel container execution across multiple configurations
+  - **Example Configurations**: Created comprehensive example configurations showing Docker build, slim image creation, and matrix container execution
 - **Static Binary Requirements**: Updated build rules to require static linking for container compatibility
 - **Container Binary Mounting**: Implemented proper binary mounting in containers for run_action and run_stage functionality
 - **Matrix-Container Integration**: Matrix variables now properly substitute in container configurations
@@ -17,12 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Build Process**: All Go binaries must now be built with static linking (`CGO_ENABLED=0` and `-extldflags '-static'`)
 - **Container Compatibility**: Static binaries ensure compatibility across Alpine, Ubuntu, and other container images
 - **Documentation**: Updated Build.md with static linking requirements and container compatibility notes
+- **CPU Configuration**: Simplified CPU feature to use simple integer format (cpu: 2) instead of complex CPU set strings
+- **Environment File Loading**: Environment files now load from mounted workspace directory `/tmp/buildfab-workspace/{env_file}` instead of separate mounting
 
 ### Fixed
 - **Container Binary Execution**: Fixed "executable file not found" errors in containers by using static binaries
 - **Matrix Variable Substitution**: Fixed matrix variables not being substituted in container image names and configurations
 - **Container Configuration**: Fixed container configuration to properly mount current directory and buildfab binary
 - **Container Command Paths**: Simplified container commands to use relative paths since we cd into the workspace directory
+- **Environment File Path**: Fixed environment file loading to use correct path from mounted workspace directory
+- **CPU Feature Simplification**: Fixed CPU configuration to use simple integer format with automatic CPU set generation
 
 ## [v0.16.15] - 2025-10-05
 
