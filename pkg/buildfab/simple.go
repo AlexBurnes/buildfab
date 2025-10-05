@@ -132,6 +132,25 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 
     // Create ordered step callback to collect results with proper ordering
     stepCallback := NewOrderedStepCallback(expandedSteps, r.opts.VerboseLevel, r.opts.Debug, r.opts.ErrorOutput, r.config)
+    
+    // Set config path for container command display
+    stepCallback.manager.SetConfigPath(r.opts.ConfigPath)
+    
+    // Update interpolated actions for matrix steps
+    // We need to expand matrix steps to get interpolated actions
+    interpolatedActions := make(map[string]*Action)
+    for _, step := range expandedSteps {
+        // Check if this is a matrix-expanded step (has a dot in the name)
+        if strings.Contains(step.Action, ".") {
+            // Get the action from config (it should be already added by matrix expansion)
+            if action, exists := r.config.GetAction(step.Action); exists {
+                interpolatedActions[step.Action] = &action
+            }
+        }
+    }
+    
+    // Update interpolated actions in the step callback
+    stepCallback.UpdateInterpolatedActions(interpolatedActions)
 
     // Convert to complex options for internal executor
     complexOpts := &RunOptions{

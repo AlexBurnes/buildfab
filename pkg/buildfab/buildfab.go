@@ -185,6 +185,7 @@ type RunOptions struct {
 	Only        []string          // Only run steps matching these labels
 	WithRequires bool             // Include required dependencies when running single step
 	StepCallback StepCallback     // Optional callback for step execution events
+	InterpolatedActions map[string]*Action // Interpolated actions from matrix expansion (internal use)
 }
 
 // DefaultRunOptions returns default run options
@@ -224,6 +225,7 @@ type Runner struct {
 	config   *Config
 	opts     *RunOptions
 	registry ActionRegistry
+	interpolatedActions map[string]*Action // Store interpolated actions from matrix expansion
 }
 
 // NewRunner creates a new buildfab runner with default built-in actions
@@ -240,6 +242,7 @@ func NewRunnerWithRegistry(config *Config, opts *RunOptions, registry ActionRegi
 		config:   config,
 		opts:     opts,
 		registry: registry,
+		interpolatedActions: make(map[string]*Action),
 	}
 }
 
@@ -677,10 +680,15 @@ func (r *Runner) expandMatrixSteps(steps []Step) ([]Step, error) {
 			// Create matrix expander with CLI matrix variables
 			expander := NewMatrixExpander(r.config, matrixVars)
 			
-			// Expand matrix into individual steps
-			matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
+			// Expand matrix into individual steps with interpolated actions
+			matrixSteps, interpolatedActions, err := expander.ExpandMatrixToStepsWithActions(&step, &action)
 			if err != nil {
 				return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+			}
+			
+			// Store interpolated actions for later use by OrderedOutputManager
+			for stepName, interpolatedAction := range interpolatedActions {
+				r.interpolatedActions[stepName] = interpolatedAction
 			}
 			
 			if r.opts.Debug {
@@ -705,6 +713,72 @@ func (r *Runner) expandMatrixSteps(steps []Step) ([]Step, error) {
 	return expandedSteps, nil
 }
 
+// expandMatrixStepsWithActions expands matrix steps into individual steps and returns interpolated actions
+func (r *Runner) expandMatrixStepsWithActions(steps []Step) ([]Step, map[string]*Action, error) {
+	var expandedSteps []Step
+	allInterpolatedActions := make(map[string]*Action)
+	
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixStepsWithActions: processing %d steps\n", len(steps))
+	}
+	
+	for i, step := range steps {
+		if r.opts.Debug {
+			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step %d: Action=%s, Matrix=%v\n", i, step.Action, step.Matrix != nil)
+		}
+		
+		// Check if this step has matrix configuration
+		if step.Matrix != nil {
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding matrix step: %s\n", step.Action)
+			}
+			
+			// Get the action for this step
+			action, exists := r.config.GetAction(step.Action)
+			if !exists {
+				return nil, nil, fmt.Errorf("action not found: %s", step.Action)
+			}
+			
+			// Extract matrix variables from CLI variables
+			matrixVars := make(map[string]string)
+			for key, value := range r.opts.Variables {
+				if strings.HasPrefix(key, "matrix.") {
+					matrixVars[key] = value
+				}
+			}
+			
+			// Create matrix expander with CLI matrix variables
+			expander := NewMatrixExpander(r.config, matrixVars)
+			
+			// Expand matrix into individual steps with interpolated actions
+			matrixSteps, interpolatedActions, err := expander.ExpandMatrixToStepsWithActions(&step, &action)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+			}
+			
+			// Store interpolated actions for later use by OrderedOutputManager
+			for stepName, interpolatedAction := range interpolatedActions {
+				allInterpolatedActions[stepName] = interpolatedAction
+			}
+			
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanded into %d steps\n", len(matrixSteps))
+				for j, matrixStep := range matrixSteps {
+					fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix step %d: Action=%s, Description=%s\n", j, matrixStep.Action, matrixStep.Description)
+				}
+			}
+			
+			// Add expanded steps
+			expandedSteps = append(expandedSteps, matrixSteps...)
+		} else {
+			// Regular step - add as-is
+			expandedSteps = append(expandedSteps, step)
+		}
+	}
+	
+	return expandedSteps, allInterpolatedActions, nil
+}
+
 // runStageInternal executes a stage using parallel execution with ordered streaming output
 func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	stage, _ := r.config.GetStage(stageName)
@@ -720,15 +794,23 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 		return r.executeStageDryRun(ctx, stageName, stage.Steps)
 	}
 	
-	// If we have a step callback, use it for execution
-	if r.opts.StepCallback != nil {
-		return r.executeStageWithCallback(ctx, stage.Steps)
-	}
-	
-	// Expand matrix steps into individual steps
-	expandedSteps, err := r.expandMatrixSteps(stage.Steps)
+	// Expand matrix steps into individual steps with interpolated actions
+	expandedSteps, interpolatedActions, err := r.expandMatrixStepsWithActions(stage.Steps)
 	if err != nil {
 		return fmt.Errorf("failed to expand matrix steps: %w", err)
+	}
+	
+	// Store interpolated actions in RunOptions for use by StepCallback
+	r.opts.InterpolatedActions = interpolatedActions
+	
+	// If we have a step callback, use it for execution
+	if r.opts.StepCallback != nil {
+		// Update interpolated actions in the step callback if it supports it
+		if orderedCallback, ok := r.opts.StepCallback.(*OrderedStepCallback); ok {
+			orderedCallback.UpdateInterpolatedActions(interpolatedActions)
+			orderedCallback.manager.SetConfigPath(r.opts.ConfigPath)
+		}
+		return r.executeStageWithCallback(ctx, expandedSteps)
 	}
 	
 	// Build execution DAG
@@ -738,7 +820,7 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	}
 	
 	// Execute DAG with parallel execution but ordered streaming output
-	results, err := r.executeDAGWithOrderedStreaming(ctx, dag, expandedSteps)
+	results, err := r.executeDAGWithOrderedStreaming(ctx, dag, expandedSteps, interpolatedActions)
 	
 	// Check if execution was terminated due to context cancellation
 	terminated := ctx.Err() != nil
@@ -1403,6 +1485,7 @@ type StreamingOutputManager struct {
 	displayed map[string]bool
 	started   map[string]bool
 	mu        *sync.Mutex
+	interpolatedActions map[string]*Action // Interpolated actions for matrix steps
 }
 
 // ShouldStreamOutput checks if the given step should have its output streamed
@@ -1561,7 +1644,7 @@ func (r *Runner) detectCycles(dag map[string]*DAGNode) error {
 }
 
 // executeDAGWithOrderedStreaming executes the DAG with parallel execution but ordered streaming output
-func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[string]*DAGNode, steps []Step) ([]Result, error) {
+func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[string]*DAGNode, steps []Step, interpolatedActions map[string]*Action) ([]Result, error) {
 	var results []Result
 	completed := make(map[string]bool)
 	failed := make(map[string]bool)
@@ -1586,6 +1669,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 		displayed: displayed,
 		started:   make(map[string]bool),
 		mu:        &mu,
+		interpolatedActions: interpolatedActions,
 	}
 	
 	// Start a goroutine to handle results and display them in order

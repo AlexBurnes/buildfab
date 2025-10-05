@@ -54,7 +54,20 @@ func NewOrderedOutputManager(steps []Step, verboseLevel int, debug bool, errorOu
         debug:       debug,
         errorOutput: errorOutput,
         config:      config,
+        interpolatedActions: make(map[string]*Action),
     }
+}
+
+// SetConfigPath sets the configuration file path
+func (o *OrderedOutputManager) SetConfigPath(configPath string) {
+    o.configPath = configPath
+}
+
+// SetInterpolatedAction sets the interpolated action for a step
+func (o *OrderedOutputManager) SetInterpolatedAction(stepName string, action *Action) {
+    o.mu.Lock()
+    defer o.mu.Unlock()
+    o.interpolatedActions[stepName] = action
 }
 
 // RegisterStep registers a step for execution
@@ -341,20 +354,32 @@ func (o *OrderedOutputManager) showStepStart(stepName string) {
 
 // showContainerCommand shows the container command for container actions
 func (o *OrderedOutputManager) showContainerCommand(stepName string) {
-    // Extract base action name from matrix step name (e.g., "container-platform-view.alpine:latest" -> "container-platform-view")
-    baseActionName := stepName
-    if dotIndex := strings.Index(stepName, "."); dotIndex != -1 {
-        baseActionName = stepName[:dotIndex]
+    // Check if we have an interpolated action for this step
+    action, exists := o.interpolatedActions[stepName]
+    if !exists {
+        // Fallback to base action name for non-matrix steps
+        baseActionName := stepName
+        if dotIndex := strings.Index(stepName, "."); dotIndex != -1 {
+            baseActionName = stepName[:dotIndex]
+        }
+        var ok bool
+        actionValue, ok := o.config.GetAction(baseActionName)
+        if !ok {
+            return
+        }
+        action = &actionValue
     }
     
-    // Get the action to check if it's a container action
-    action, exists := o.config.GetAction(baseActionName)
-    if exists && action.Container != nil {
+    if action.Container != nil {
         // Create a temporary runner to prepare the configuration for display
         tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(o.verboseLevel)
         if err == nil {
-            // Get config path from the ordered output manager (we'll need to add this field)
-            configPath := ".project.yml" // Default config path
+            // Use the actual config path
+            configPath := o.configPath
+            if configPath == "" {
+                configPath = ".project.yml" // Fallback
+            }
+            // Use the interpolated container configuration with matrix variables already substituted
             preparedConfig := tempRunner.PrepareContainerConfig(*action.Container, configPath)
             containerCmd := o.buildContainerCommand(&preparedConfig)
             fmt.Fprintf(o.errorOutput, "  🐳 Running container: %s\n", containerCmd)
@@ -516,6 +541,37 @@ func NewOrderedStepCallback(steps []Step, verboseLevel int, debug bool, errorOut
         manager: manager,
         results: make([]StepResult, 0),
         mu:      &sync.Mutex{},
+    }
+}
+
+// NewOrderedStepCallbackWithActions creates a new ordered step callback with interpolated actions
+func NewOrderedStepCallbackWithActions(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config, configPath string, interpolatedActions map[string]*Action) *OrderedStepCallback {
+    manager := NewOrderedOutputManager(steps, verboseLevel, debug, errorOutput, config)
+    
+    // Set config path
+    manager.SetConfigPath(configPath)
+    
+    // Set interpolated actions
+    for stepName, action := range interpolatedActions {
+        manager.SetInterpolatedAction(stepName, action)
+    }
+
+    // Register all steps
+    for _, step := range steps {
+        manager.RegisterStep(step.Action)
+    }
+
+    return &OrderedStepCallback{
+        manager: manager,
+        results: make([]StepResult, 0),
+        mu:      &sync.Mutex{},
+    }
+}
+
+// UpdateInterpolatedActions updates the interpolated actions from RunOptions
+func (c *OrderedStepCallback) UpdateInterpolatedActions(interpolatedActions map[string]*Action) {
+    for stepName, action := range interpolatedActions {
+        c.manager.SetInterpolatedAction(stepName, action)
     }
 }
 
