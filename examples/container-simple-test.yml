@@ -1,0 +1,40 @@
+# Simple Container Test Example
+# This example demonstrates basic container execution
+
+project:
+  name: container-simple-test
+  modules: [buildfab]
+
+actions:
+  - name: hello-container
+    description: Say hello from container
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Hello from container!"
+        echo "Container is working correctly"
+        echo "Testing streaming output..."
+        i=1
+        while [ $i -le 10 ]; do
+          echo "Line $i - streaming test"
+          sleep 1
+          i=$((i + 1))
+        done
+        echo "Streaming test complete"
+
+  - name: test-container
+    description: Test container execution
+    run: |
+      echo "Testing container feature"
+      buildfab action hello-container
+
+  - name: test-podman
+    description: run podman directly
+    run: |
+      podman run --rm --mount type=bind,source=./,target=/src,ro alpine:latest sh -c "cd /src && sh examples/test.sh"
+
+  - name: test-script
+    description: run test script locally
+    run: | 
+      sh examples/test.sh

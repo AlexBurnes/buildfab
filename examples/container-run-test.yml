@@ -1,0 +1,98 @@
+# Container Run Action and Run Stage Test Example
+# This example demonstrates container execution with run_action and run_stage
+
+project:
+  name: container-run-test
+  modules: [buildfab]
+
+stages:
+  test-run-action:
+    steps:
+      - action: test-run-action
+
+  test-run-stage:
+    steps:
+      - action: test-run-stage
+
+  test-both:
+    steps:
+      - action: test-run-action
+      - action: test-run-stage
+
+actions:
+  # Simple action that can be called via run_action
+  - name: hello-action
+    description: Say hello from a simple action
+    run: |
+      echo "Hello from buildfab action!"
+      echo "This action is running inside a container"
+      echo "Platform: $(uname -s)"
+      echo "Architecture: $(uname -m)"
+
+  # Container action using run_action
+  - name: test-run-action
+    description: Test run_action functionality
+    container:
+      image:
+        from: alpine:latest
+      run_action: hello-action
+
+  # Container action using run_stage
+  - name: test-run-stage
+    description: Test run_stage functionality
+    container:
+      image:
+        from: ubuntu:22.04
+      run_stage: test-run-action
+
+  # Container action with artifacts
+  - name: test-with-artifacts
+    description: Test container with artifact collection
+    container:
+      image:
+        from: alpine:latest
+      workdir: /workspace
+      run: |
+        echo "Creating test artifacts..."
+        mkdir -p /workspace/artifacts
+        echo "Hello from container!" > /workspace/artifacts/test.txt
+        echo "Container platform: $(uname -s)" >> /workspace/artifacts/test.txt
+        echo "Container architecture: $(uname -m)" >> /workspace/artifacts/test.txt
+        ls -la /workspace/artifacts/
+      artifacts:
+        output: ./container-artifacts
+        path:
+          - /workspace/artifacts/test.txt
+
+  # Container action with environment variables
+  - name: test-with-env
+    description: Test container with environment variables
+    container:
+      image:
+        from: alpine:latest
+      env:
+        TEST_VAR: "container-test"
+        BUILD_ENV: "container"
+      run: |
+        echo "Environment variables:"
+        echo "TEST_VAR: $TEST_VAR"
+        echo "BUILD_ENV: $BUILD_ENV"
+        echo "Container is working correctly"
+
+  # Container action with mounts
+  - name: test-with-mounts
+    description: Test container with volume mounts
+    container:
+      image:
+        from: alpine:latest
+      workdir: /workspace
+      mounts:
+        - type: bind
+          source: .
+          target: /workspace
+          ro: false
+      run: |
+        echo "Testing volume mounts..."
+        ls -la /workspace
+        echo "Mount test successful" > /workspace/mount-test.txt
+        cat /workspace/mount-test.txt

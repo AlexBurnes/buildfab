@@ -99,6 +99,9 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 			matrixVars[fmt.Sprintf("matrix.%s", key)] = fmt.Sprintf("%v", value)
 		}
 		
+		// Debug: Print matrix variables for this step (commented out for production)
+		// fmt.Printf("DEBUG: Matrix step %d variables: %+v\n", i, matrixVars)
+		
 		// DEBUG: Add delay for testing parallel execution and output ordering
 		// Uncomment the following lines to enable delays for debugging:
 		// delay := i + 1  // Ascending order: 1, 2, 3, 4
@@ -106,12 +109,36 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 		
 		// Create a new action with matrix variables interpolated
 		matrixAction := *action // Copy the original action
+		
+		// Create a deep copy of the container configuration if it exists
+		if matrixAction.Container != nil {
+			containerCopy := *matrixAction.Container
+			matrixAction.Container = &containerCopy
+		}
 		matrixAction.Name = me.generateStepName(action.Name, combination, step.Matrix.Values) // Generate name with matrix values
 		
 		// Interpolate variables in the action
 		if matrixAction.Run != "" {
 			// Interpolate variables in the run command
 			matrixAction.Run = me.interpolateVariables(matrixAction.Run, matrixVars)
+		}
+		
+		// Interpolate variables in container configuration
+		if matrixAction.Container != nil {
+			// Interpolate container image
+			if matrixAction.Container.Image.From != "" {
+				matrixAction.Container.Image.From = me.interpolateVariables(matrixAction.Container.Image.From, matrixVars)
+			}
+			
+			// Interpolate container run command
+			if matrixAction.Container.Run != "" {
+				matrixAction.Container.Run = me.interpolateVariables(matrixAction.Container.Run, matrixVars)
+			}
+			
+			// Interpolate environment variables
+			for key, value := range matrixAction.Container.Env {
+				matrixAction.Container.Env[key] = me.interpolateVariables(value, matrixVars)
+			}
 		}
 		
 		// DEBUG: Add delay option to the action (uncomment for debugging)
@@ -136,6 +163,97 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 	}
 
 	return steps, nil
+}
+
+// ExpandMatrixToStepsWithActions expands a matrix configuration into individual steps and returns interpolated actions
+func (me *MatrixExpander) ExpandMatrixToStepsWithActions(step *Step, action *Action) ([]Step, map[string]*Action, error) {
+	if step.Matrix == nil {
+		return nil, nil, fmt.Errorf("step has no matrix configuration")
+	}
+
+	// Override matrix values with CLI-provided values if any
+	matrixValues := make(map[string][]interface{})
+	for key, values := range step.Matrix.Values {
+		matrixValues[key] = values
+	}
+
+	// Override with CLI-provided matrix values
+	for cliKey, cliValue := range me.cliMatrixVars {
+		matrixValues[cliKey] = []interface{}{cliValue}
+	}
+
+	// Generate Cartesian product of all matrix values
+	combinations := me.generateCombinations(matrixValues)
+	
+	var steps []Step
+	interpolatedActions := make(map[string]*Action)
+	
+	for _, combination := range combinations {
+		// Create matrix variables for this combination
+		matrixVars := make(map[string]string)
+		for key, value := range combination {
+			matrixVars[key] = fmt.Sprintf("%v", value)
+		}
+		
+		// Generate step name with matrix values
+		stepName := me.generateStepName(step.Action, combination, step.Matrix.Values)
+		
+		// Create description with matrix values
+		description := me.interpolateVariables(step.Description, matrixVars)
+		
+		// Create a new action with matrix variables interpolated
+		matrixAction := *action // Copy the original action
+		
+		// Create a deep copy of the container configuration if it exists
+		if matrixAction.Container != nil {
+			containerCopy := *matrixAction.Container
+			matrixAction.Container = &containerCopy
+		}
+		matrixAction.Name = stepName // Generate name with matrix values
+		
+		// Interpolate variables in the action
+		if matrixAction.Run != "" {
+			// Interpolate variables in the run command
+			matrixAction.Run = me.interpolateVariables(matrixAction.Run, matrixVars)
+		}
+		
+		// Interpolate variables in container configuration
+		if matrixAction.Container != nil {
+			// Interpolate container image
+			if matrixAction.Container.Image.From != "" {
+				matrixAction.Container.Image.From = me.interpolateVariables(matrixAction.Container.Image.From, matrixVars)
+			}
+			
+			// Interpolate container run command
+			if matrixAction.Container.Run != "" {
+				matrixAction.Container.Run = me.interpolateVariables(matrixAction.Container.Run, matrixVars)
+			}
+			
+			// Interpolate environment variables
+			for key, value := range matrixAction.Container.Env {
+				matrixAction.Container.Env[key] = me.interpolateVariables(value, matrixVars)
+			}
+		}
+		
+		// Add the interpolated action to the config
+		me.config.Actions = append(me.config.Actions, matrixAction)
+		
+		// Store the interpolated action for later use
+		interpolatedActions[stepName] = &matrixAction
+		
+		// Create new step that references the interpolated action
+		newStep := Step{
+			Action:      stepName, // Use the interpolated action name
+			Description: description,
+			Require:     step.Require, // Keep original dependencies
+			OnError:     step.OnError,
+			If:          step.If,
+		}
+		
+		steps = append(steps, newStep)
+	}
+
+	return steps, interpolatedActions, nil
 }
 
 // interpolateVariables interpolates variables in a string

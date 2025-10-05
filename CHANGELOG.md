@@ -6,6 +6,90 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+## [0.17.0] - 2025-10-05
+
+### Added
+- **Slim Container Support**: Complete implementation of slim container functionality using dslim/slim tool
+  - Added `SlimImage` method to Engine interface for both Docker and Podman engines
+  - Implemented slim container operations with target, tags, network, http_probe, and exec options
+  - Created working container-docker-build.yml example demonstrating slim functionality
+  - Fixed HTTP probe issues with `--continue-after=exit` flag for non-interactive slim operations
+
+### Fixed
+- **Container Command Display**: Fixed container command display in verbose mode level 2 (`-vv`)
+  - Build operations now show complete `docker build` commands with all arguments
+  - Slim operations now show complete `docker run dslim/slim` commands with all arguments
+  - Regular container operations show complete `docker run` commands with all arguments
+  - Updated OrderedOutputManager.buildContainerCommand to handle build, slim, and regular operations
+
+### Changed
+- **Docker Container Feature Implementation**: Comprehensive Docker and Podman container feature with advanced functionality (100% complete)
+  - **Basic Container Execution**: Full support for running containers with Docker and Podman engines, automatic engine detection, and proper error handling
+  - **Mount Support**: Comprehensive mount system with bind mounts, read-only options, and automatic workspace mounting for `run_action`/`run_stage` execution
+  - **Environment Variables**: Full environment variable support with `env` field and `env_file` loading from mounted workspace directory
+  - **Resource Limits**: CPU and memory limit support with simplified CPU configuration (cpu: 2 → --cpus 2.0 --cpuset-cpus "0,1")
+  - **Cache Management**: Automatic cache directory mounting to `/tmp/buildfab-cache-{name}` with proper path handling
+  - **Buildfab Integration**: Automatic buildfab binary mounting and alias support for easier command usage inside containers
+  - **Run Action/Stage Support**: Full `run_action` and `run_stage` execution with proper buildfab binary mounting and configuration copying
+  - **Docker Build Support**: Complete `BuildImage` method implementation for both Docker and Podman engines with build args, tags, network, progress, and context support
+  - **Slim Image Support**: ContainerSlim configuration with target, tags, network, http_probe, and exec options for creating slim Docker images
+  - **Matrix Integration**: Perfect integration with matrix feature for parallel container execution across multiple configurations
+  - **Example Configurations**: Created comprehensive example configurations showing Docker build, slim image creation, and matrix container execution
+- **Static Binary Requirements**: Updated build rules to require static linking for container compatibility
+- **Container Binary Mounting**: Implemented proper binary mounting in containers for run_action and run_stage functionality
+- **Matrix-Container Integration**: Matrix variables now properly substitute in container configurations
+
+### Changed
+- **Build Process**: All Go binaries must now be built with static linking (`CGO_ENABLED=0` and `-extldflags '-static'`)
+- **Container Compatibility**: Static binaries ensure compatibility across Alpine, Ubuntu, and other container images
+- **Documentation**: Updated Build.md with static linking requirements and container compatibility notes
+- **CPU Configuration**: Simplified CPU feature to use simple integer format (cpu: 2) instead of complex CPU set strings
+- **Environment File Loading**: Environment files now load from mounted workspace directory `/tmp/buildfab-workspace/{env_file}` instead of separate mounting
+
+### Fixed
+- **Container Binary Execution**: Fixed "executable file not found" errors in containers by using static binaries
+- **Matrix Variable Substitution**: Fixed matrix variables not being substituted in container image names and configurations
+- **Container Configuration**: Fixed container configuration to properly mount current directory and buildfab binary
+- **Container Command Paths**: Simplified container commands to use relative paths since we cd into the workspace directory
+- **Environment File Path**: Fixed environment file loading to use correct path from mounted workspace directory
+- **CPU Feature Simplification**: Fixed CPU configuration to use simple integer format with automatic CPU set generation
+
+## [v0.16.15] - 2025-10-05
+
+### Fixed
+- **Container Streaming Output**: Fixed container engines to provide real-time streaming output using pipes instead of buffered CombinedOutput
+- **Matrix-Container Integration**: Fixed matrix expansion to properly interpolate variables in container configurations (image, run commands, environment variables)
+- **Shell Compatibility**: Updated container examples to use sh-compatible syntax instead of bash-specific features
+
+### Added
+- **Matrix-Container Integration**: Matrix feature now works seamlessly with containers for parallel execution across different images/configurations
+- **Container Streaming Callbacks**: Added RunContainerWithCallback method to container engines for real-time output streaming
+- **Container Variable Interpolation**: Matrix variables are now properly interpolated in container image names, run commands, and environment variables
+
+### Documentation
+- **Container Implementation Status**: Updated documentation with comprehensive analysis of container feature status and matrix integration
+- **Matrix-Container Examples**: Added working examples demonstrating matrix execution with containers
+- **Shell Compatibility Guidelines**: Added documentation about using sh-compatible syntax in container commands
+
+### Fixed
+- **Container Configuration Schema**: Fixed critical schema mismatch where container configuration used `Commands` field instead of required `run` field
+  - Updated `pkg/buildfab/container/types.go` to use `Run string` instead of `Commands []string`
+  - Updated all container engine implementations (Docker and Podman) to use `run` field consistently
+  - Updated all container examples to use `run` field instead of `commands`
+  - Container configuration now matches action configuration schema for consistency
+  - Basic container execution now works correctly with `run` field
+
+### Documentation
+- **Container Implementation Status**: Added comprehensive documentation of current Docker feature implementation status
+  - Created `docs/Container-implementation-status.md` with detailed analysis of working and broken features
+  - Documented that container feature is ~70% complete with basic execution working
+  - Identified critical issues: `run_action`/`run_stage` broken due to missing `prepareContainer()` implementation
+  - Listed all working features: basic execution, mounts, environment variables, resource limits
+  - Listed missing features: image building, artifact collection, environment file support
+  - Provided working examples and next steps for implementation
+
 ## [v0.16.14] - 2025-10-03
 
 ### Fixed

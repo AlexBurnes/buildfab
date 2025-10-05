@@ -16,6 +16,7 @@ scripts/buildfab
 
 # environment and tockens
 .env
+.docker-env
 
 # docs
 

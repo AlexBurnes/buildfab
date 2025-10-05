@@ -74,14 +74,14 @@ cmake --build . --target test
 ### 3. Direct Go Build
 
 ```bash
-# Build CLI application
-go build -o buildfab cmd/buildfab/main.go
+# Build CLI application (static binary for container compatibility)
+CGO_ENABLED=0 go build -ldflags="-s -w -extldflags '-static'" -o buildfab cmd/buildfab/main.go
 
-# Build with specific flags
-go build -ldflags="-s -w" -o buildfab cmd/buildfab/main.go
+# Build with version information
+VERSION=$(cat VERSION) && CGO_ENABLED=0 go build -ldflags="-X main.appVersion=${VERSION} -s -w -extldflags '-static'" -o buildfab cmd/buildfab/main.go
 
-# Build for specific platform
-GOOS=linux GOARCH=amd64 go build -o buildfab-linux-amd64 cmd/buildfab/main.go
+# Build for specific platform (static binary)
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w -extldflags '-static'" -o buildfab-linux-amd64 cmd/buildfab/main.go
 ```
 
 ### 3. Cross-Platform Builds
@@ -90,10 +90,34 @@ GOOS=linux GOARCH=amd64 go build -o buildfab-linux-amd64 cmd/buildfab/main.go
 # Build for all supported platforms
 ./buildtools/build-and-package.sh
 
-# Build specific platform
-GOOS=windows GOARCH=amd64 go build -o buildfab.exe cmd/buildfab/main.go
-GOOS=darwin GOARCH=arm64 go build -o buildfab-darwin-arm64 cmd/buildfab/main.go
+# Build specific platform (static binaries)
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w -extldflags '-static'" -o buildfab.exe cmd/buildfab/main.go
+GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w -extldflags '-static'" -o buildfab-darwin-arm64 cmd/buildfab/main.go
 ```
+
+## Static Linking Requirements
+
+### Container Compatibility
+
+For container compatibility, buildfab binaries **MUST** be statically linked to work across different container images (Alpine, Ubuntu, etc.):
+
+```bash
+# Required build flags for container compatibility
+CGO_ENABLED=0 go build -ldflags="-s -w -extldflags '-static'" -o buildfab cmd/buildfab/main.go
+```
+
+**Why static linking is required:**
+- Alpine Linux uses musl libc, not glibc
+- Dynamic binaries require specific runtime libraries
+- Static binaries work in any Linux container
+- Ensures consistent behavior across container images
+
+### Build Flags Explanation
+
+- `CGO_ENABLED=0`: Disables CGO to ensure pure Go compilation
+- `-ldflags="-s -w"`: Strips debug information and symbol table
+- `-extldflags '-static'`: Forces static linking of external libraries
+- `-X main.appVersion=${VERSION}`: Embeds version information at build time
 
 ## Build Configuration
 
@@ -231,11 +255,11 @@ GitHub Actions automatically:
 
 ### Local Development
 ```bash
-# Quick build for testing
-go build -o buildfab cmd/buildfab/main.go
+# Quick build for testing (static binary)
+CGO_ENABLED=0 go build -ldflags="-s -w -extldflags '-static'" -o buildfab cmd/buildfab/main.go
 
-# Build with debug info
-go build -gcflags="all=-N -l" -o buildfab cmd/buildfab/main.go
+# Build with debug info (static binary)
+CGO_ENABLED=0 go build -gcflags="all=-N -l" -ldflags="-s -w -extldflags '-static'" -o buildfab cmd/buildfab/main.go
 ```
 
 ### CI/CD Builds

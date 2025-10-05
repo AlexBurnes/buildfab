@@ -86,14 +86,21 @@
   - Created comprehensive user test examples for different matrix scenarios including basic matrix, parallel execution, error handling, and long-running tests
   - Feature branch created (feature/matrix) with feature version v0.16.5_feat.1 for matrix feature development
   - VERSION 0.16.6 RELEASED with comprehensive matrix feature implementation
-- **Container Feature Implementation**: Docker and Podman support for isolated execution environments
-  - Container configuration in actions with engine selection (docker/podman) and automatic engine detection
-  - Image management supporting both existing images and build-from-Dockerfile with automatic tagging
-  - Mount management (bind mounts, volume mounts, cache mounts) with proper permissions and isolation
-  - Environment variable support, working directory, user context, and network mode configuration
-  - Buildfab integration inside containers (run_stage support) with binary availability and configuration mounting
-  - Container execution engine with proper lifecycle management, error handling, and cleanup
-  - CLI support for container-specific commands and overrides with comprehensive error reporting
+- **Container Feature Implementation (CLARIFIED)**: Docker and Podman support for isolated execution environments with comprehensive requirements clarification
+  - **Container Configuration Schema**: Enhanced YAML schema with CPU/memory limits, artifact collection, environment file support, and resource management
+  - **Engine Support**: Docker (primary) and Podman (secondary) with automatic detection and fallback, Linux containers initially
+  - **Image Management**: Support for existing images and build-from-Dockerfile with automatic pulling and container cleanup (--rm)
+  - **Mount Management**: Bind mounts with host directory validation, read-only/read-write permissions, user-controlled configuration
+  - **Resource Limits**: CPU limits (--cpus, --cpuset-cpus) and memory limits (human-readable format: 4G, 500M) with user configuration
+  - **Artifact Collection**: Manual configuration with pattern support for files and directories, permission handling via uid/gid
+  - **Environment Integration**: Explicit environment variable configuration, env_file support, no default host environment pass-through
+  - **Buildfab Integration**: Runtime installation of current buildfab binary only for run_stage/run_action options, configuration copying only when needed, run_stage/run_action/run command support
+  - **Error Handling**: Standard action error reporting with verbosity levels, full Docker command display with -vv, engine-managed cleanup
+  - **Matrix Integration**: Independent features using variables for integration, no special integration code required
+  - **Implementation Approach**: 4-phase incremental development (basic execution, mounts/resources, image building, testing/documentation)
+  - **Testing Strategy**: Container image building, resource limiting validation, mount testing, artifact collection verification, matrix integration testing, Podman as primary testing engine (no superuser access required)
+  - **Matrix Integration**: Matrix testing examples with Alpine, Ubuntu, and Debian containers for platform detection testing
+  - **Documentation**: User guides with examples, API reference, troubleshooting with manual container command reproduction, matrix container examples
 - **Caching Feature Implementation**: Comprehensive caching system for build optimization
   - Cache configuration support for ccache, Conan, vcpkg, Go modules, npm, and pip with proper isolation
   - Cache mount management with proper isolation, cleanup, and cross-platform compatibility

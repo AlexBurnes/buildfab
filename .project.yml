@@ -77,6 +77,20 @@ stages:
       - action: goreleaser-release
         require: [create-installers, pre-check]
 
+  #distr:
+  #  steps:
+  #    - action: container-build
+  #      matrix:
+  #        image:
+  #          - "debian:12.7"
+  #          - "alpine:latest"
+  #          - "ubuntu:22.04"
+  #      strategy:
+  #          max_parallel: 2    
+  #          fail_fast: true     
+  #          continue_on_error: false
+  #          order: "fifo"
+
 actions:
   # Version and validation actions
   - name: version-check
@@ -291,3 +305,14 @@ actions:
     run: |
       export PATH="$(go env GOPATH)/bin:$PATH"
       goreleaser release --clean
+
+  #- name: container-build
+  #  container:
+  #    image: 
+  #      from: ${{ matrix.image }}
+  #    workdir: /buildfab
+  #    cpu: 2
+  #    memory: 4G
+  #    network: "host"
+  #    env_file: .docker-env
+  #    run_stage: build

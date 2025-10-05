@@ -1,0 +1,47 @@
+project:
+  name: "container-build-matrix"
+
+stages:
+  images-build:
+    steps:
+      - action: image-build
+        matrix:
+          values:
+            image: [
+              "debian:12.7",
+              "alpine:latest", 
+              "ubuntu:22.04"
+            ]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  container-build:
+    steps:
+      - action: test-check
+
+
+actions:
+
+  # Run build in docker containers using buildfab container feature
+  - name: image-build
+    description: Run build in docker containers, check ci build locally
+    container:
+      engine: podman
+      image:
+        from: ${{ matrix.image }}
+      workdir: /buildfab
+      cache: 
+        conan: ./.cache  # Mount ./.cache as /tmp/buildfab-cache-conan
+      cpu: 2            # Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+      memory: 4G         # Memory limit
+      network: "host"     # Network mode
+      env_file: .docker-env  # Load environment from /tmp/buildfab-workspace/docker_config.sh
+      run_stage: container-build  # Run the container-build stage
+      # Note: 'buildfab' command is automatically aliased to /tmp/buildfab-bin/buildfab
+
+  - name: test-check
+    run: | 
+      sh examples/test.sh

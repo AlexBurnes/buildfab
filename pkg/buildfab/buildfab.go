@@ -11,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+	
+	"github.com/AlexBurnes/buildfab/pkg/buildfab/container"
+	containerRunner "github.com/AlexBurnes/buildfab/internal/container"
 )
 
 // Color constants for output formatting
@@ -38,12 +41,13 @@ type Config struct {
 
 // Action represents a single action that can be executed
 type Action struct {
-	Name     string                 `yaml:"name"`
-	Run      string                 `yaml:"run,omitempty"`
-	Uses     string                 `yaml:"uses,omitempty"`
-	Shell    string                 `yaml:"shell,omitempty"` // Optional shell specification
-	Variants []ActionVariant        `yaml:"variants,omitempty"` // Optional variants for conditional execution
-	Options  map[string]interface{} `yaml:"options,omitempty"` // Optional action options (e.g., delay)
+	Name      string                 `yaml:"name"`
+	Run       string                 `yaml:"run,omitempty"`
+	Uses      string                 `yaml:"uses,omitempty"`
+	Shell     string                 `yaml:"shell,omitempty"` // Optional shell specification
+	Variants  []ActionVariant        `yaml:"variants,omitempty"` // Optional variants for conditional execution
+	Options   map[string]interface{} `yaml:"options,omitempty"` // Optional action options (e.g., delay)
+	Container *container.ContainerConfig `yaml:"container,omitempty"` // Optional container configuration
 }
 
 // ActionVariant represents a conditional variant of an action
@@ -181,6 +185,7 @@ type RunOptions struct {
 	Only        []string          // Only run steps matching these labels
 	WithRequires bool             // Include required dependencies when running single step
 	StepCallback StepCallback     // Optional callback for step execution events
+	InterpolatedActions map[string]*Action // Interpolated actions from matrix expansion (internal use)
 }
 
 // DefaultRunOptions returns default run options
@@ -220,6 +225,7 @@ type Runner struct {
 	config   *Config
 	opts     *RunOptions
 	registry ActionRegistry
+	interpolatedActions map[string]*Action // Store interpolated actions from matrix expansion
 }
 
 // NewRunner creates a new buildfab runner with default built-in actions
@@ -236,6 +242,7 @@ func NewRunnerWithRegistry(config *Config, opts *RunOptions, registry ActionRegi
 		config:   config,
 		opts:     opts,
 		registry: registry,
+		interpolatedActions: make(map[string]*Action),
 	}
 }
 
@@ -256,18 +263,22 @@ func (r *Runner) RunStage(ctx context.Context, stageName string) error {
 func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 	// Check if it's a built-in action first
 	if runner, exists := r.registry.GetRunner(actionName); exists {
-		// Call step start callback if provided
-		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepStart(ctx, actionName)
-		}
+		// Note: Step callbacks are handled at the DAG execution level, not here
+		// to avoid duplicate callbacks when running actions inside containers
 
 		// Handle dry-run mode for built-in actions
 		if r.opts.DryRun {
 			description := runner.Description()
 			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepStart(ctx, actionName)
 				r.opts.StepCallback.OnStepComplete(ctx, actionName, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
 			}
 			return nil
+		}
+
+		// Call step start callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepStart(ctx, actionName)
 		}
 
 		start := time.Now()
@@ -310,15 +321,14 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 		return fmt.Errorf("action not found: %s", actionName)
 	}
 
-	// Call step start callback if provided
-	if r.opts.StepCallback != nil {
-		r.opts.StepCallback.OnStepStart(ctx, actionName)
-	}
+	// Note: Step callbacks are handled at the DAG execution level, not here
+	// to avoid duplicate callbacks when running actions inside containers
 
 		// Handle dry-run mode for custom actions
 		if r.opts.DryRun {
 			err := r.runActionInternalDryRun(ctx, action)
 			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepStart(ctx, actionName)
 				status := StepStatusOK
 				message := "would execute action"
 				if err != nil {
@@ -328,6 +338,11 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 				r.opts.StepCallback.OnStepComplete(ctx, actionName, status, message, 0, "")
 			}
 			return err
+		}
+
+		// Call step start callback if provided
+		if r.opts.StepCallback != nil {
+			r.opts.StepCallback.OnStepStart(ctx, actionName)
 		}
 
 	start := time.Now()
@@ -588,13 +603,17 @@ func (c *Config) Validate() error {
 				}
 			}
 		} else {
-			// Action without variants: validate direct run/uses
-			if action.Run == "" && action.Uses == "" {
-				return fmt.Errorf("action %s must have either 'run' or 'uses'", action.Name)
+			// Action without variants: validate direct run/uses or container
+			if action.Run == "" && action.Uses == "" && action.Container == nil {
+				return fmt.Errorf("action %s must have either 'run', 'uses', or 'container'", action.Name)
 			}
 			
 			if action.Run != "" && action.Uses != "" {
 				return fmt.Errorf("action %s cannot have both 'run' and 'uses'", action.Name)
+			}
+			
+			if action.Container != nil && (action.Run != "" || action.Uses != "") {
+				return fmt.Errorf("action %s cannot have both 'container' and 'run'/'uses'", action.Name)
 			}
 		}
 		
@@ -673,10 +692,15 @@ func (r *Runner) expandMatrixSteps(steps []Step) ([]Step, error) {
 			// Create matrix expander with CLI matrix variables
 			expander := NewMatrixExpander(r.config, matrixVars)
 			
-			// Expand matrix into individual steps
-			matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
+			// Expand matrix into individual steps with interpolated actions
+			matrixSteps, interpolatedActions, err := expander.ExpandMatrixToStepsWithActions(&step, &action)
 			if err != nil {
 				return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+			}
+			
+			// Store interpolated actions for later use by OrderedOutputManager
+			for stepName, interpolatedAction := range interpolatedActions {
+				r.interpolatedActions[stepName] = interpolatedAction
 			}
 			
 			if r.opts.Debug {
@@ -701,6 +725,72 @@ func (r *Runner) expandMatrixSteps(steps []Step) ([]Step, error) {
 	return expandedSteps, nil
 }
 
+// expandMatrixStepsWithActions expands matrix steps into individual steps and returns interpolated actions
+func (r *Runner) expandMatrixStepsWithActions(steps []Step) ([]Step, map[string]*Action, error) {
+	var expandedSteps []Step
+	allInterpolatedActions := make(map[string]*Action)
+	
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixStepsWithActions: processing %d steps\n", len(steps))
+	}
+	
+	for i, step := range steps {
+		if r.opts.Debug {
+			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step %d: Action=%s, Matrix=%v\n", i, step.Action, step.Matrix != nil)
+		}
+		
+		// Check if this step has matrix configuration
+		if step.Matrix != nil {
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding matrix step: %s\n", step.Action)
+			}
+			
+			// Get the action for this step
+			action, exists := r.config.GetAction(step.Action)
+			if !exists {
+				return nil, nil, fmt.Errorf("action not found: %s", step.Action)
+			}
+			
+			// Extract matrix variables from CLI variables
+			matrixVars := make(map[string]string)
+			for key, value := range r.opts.Variables {
+				if strings.HasPrefix(key, "matrix.") {
+					matrixVars[key] = value
+				}
+			}
+			
+			// Create matrix expander with CLI matrix variables
+			expander := NewMatrixExpander(r.config, matrixVars)
+			
+			// Expand matrix into individual steps with interpolated actions
+			matrixSteps, interpolatedActions, err := expander.ExpandMatrixToStepsWithActions(&step, &action)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+			}
+			
+			// Store interpolated actions for later use by OrderedOutputManager
+			for stepName, interpolatedAction := range interpolatedActions {
+				allInterpolatedActions[stepName] = interpolatedAction
+			}
+			
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanded into %d steps\n", len(matrixSteps))
+				for j, matrixStep := range matrixSteps {
+					fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix step %d: Action=%s, Description=%s\n", j, matrixStep.Action, matrixStep.Description)
+				}
+			}
+			
+			// Add expanded steps
+			expandedSteps = append(expandedSteps, matrixSteps...)
+		} else {
+			// Regular step - add as-is
+			expandedSteps = append(expandedSteps, step)
+		}
+	}
+	
+	return expandedSteps, allInterpolatedActions, nil
+}
+
 // runStageInternal executes a stage using parallel execution with ordered streaming output
 func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	stage, _ := r.config.GetStage(stageName)
@@ -716,15 +806,23 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 		return r.executeStageDryRun(ctx, stageName, stage.Steps)
 	}
 	
-	// If we have a step callback, use it for execution
-	if r.opts.StepCallback != nil {
-		return r.executeStageWithCallback(ctx, stage.Steps)
-	}
-	
-	// Expand matrix steps into individual steps
-	expandedSteps, err := r.expandMatrixSteps(stage.Steps)
+	// Expand matrix steps into individual steps with interpolated actions
+	expandedSteps, interpolatedActions, err := r.expandMatrixStepsWithActions(stage.Steps)
 	if err != nil {
 		return fmt.Errorf("failed to expand matrix steps: %w", err)
+	}
+	
+	// Store interpolated actions in RunOptions for use by StepCallback
+	r.opts.InterpolatedActions = interpolatedActions
+	
+	// If we have a step callback, use it for execution
+	if r.opts.StepCallback != nil {
+		// Update interpolated actions in the step callback if it supports it
+		if orderedCallback, ok := r.opts.StepCallback.(*OrderedStepCallback); ok {
+			orderedCallback.UpdateInterpolatedActions(interpolatedActions)
+			orderedCallback.manager.SetConfigPath(r.opts.ConfigPath)
+		}
+		return r.executeStageWithCallback(ctx, expandedSteps)
 	}
 	
 	// Build execution DAG
@@ -734,7 +832,7 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	}
 	
 	// Execute DAG with parallel execution but ordered streaming output
-	results, err := r.executeDAGWithOrderedStreaming(ctx, dag, expandedSteps)
+	results, err := r.executeDAGWithOrderedStreaming(ctx, dag, expandedSteps, interpolatedActions)
 	
 	// Check if execution was terminated due to context cancellation
 	terminated := ctx.Err() != nil
@@ -872,6 +970,7 @@ func (r *Runner) executeStageWithCallback(ctx context.Context, steps []Step) err
 	if err != nil {
 		return fmt.Errorf("failed to build execution DAG: %w", err)
 	}
+	
 	
 	// Execute DAG with step callback
 	results, err := r.executeDAGWithCallback(ctx, dag, expandedSteps)
@@ -1252,20 +1351,21 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 
 // executeActionForDAGWithCallback executes a single action for DAG execution using step callbacks
 func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Action, stepConfig *Step) (Result, error) {
-	// Debug output for step configuration
-	if r.opts.Debug {
-		if stepConfig != nil {
-			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step config: %+v\n", stepConfig)
-			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix config: %+v\n", stepConfig.Matrix)
-		} else {
-			fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step config is nil\n")
-		}
-	}
 	// Matrix steps are now expanded into individual steps, so this is just a regular step
 	
 	// Call step start callback if provided
+	stepName := action.Name
+	if stepConfig != nil && stepConfig.Action != "" {
+		stepName = stepConfig.Action // Use step action name for matrix steps (e.g., "container-platform-view.alpine:latest")
+	}
+	
+	// Debug: Print step information
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] executeActionForDAGWithCallback: action.Name=%s, stepConfig.Action=%s, stepName=%s\n", action.Name, stepConfig.Action, stepName)
+	}
+	
 	if r.opts.StepCallback != nil {
-		r.opts.StepCallback.OnStepStart(ctx, action.Name)
+		r.opts.StepCallback.OnStepStart(ctx, stepName)
 	}
 
 	var result Result
@@ -1314,10 +1414,11 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	effectiveAction := action
 	if variant != nil {
 		effectiveAction = Action{
-			Name:  action.Name,
-			Run:   variant.Run,
-			Uses:  variant.Uses,
-			Shell: variant.Shell,
+			Name:      action.Name,
+			Run:       variant.Run,
+			Uses:      variant.Uses,
+			Shell:     variant.Shell,
+			Container: action.Container, // Preserve container configuration
 		}
 	}
 	
@@ -1396,6 +1497,7 @@ type StreamingOutputManager struct {
 	displayed map[string]bool
 	started   map[string]bool
 	mu        *sync.Mutex
+	interpolatedActions map[string]*Action // Interpolated actions for matrix steps
 }
 
 // ShouldStreamOutput checks if the given step should have its output streamed
@@ -1554,7 +1656,7 @@ func (r *Runner) detectCycles(dag map[string]*DAGNode) error {
 }
 
 // executeDAGWithOrderedStreaming executes the DAG with parallel execution but ordered streaming output
-func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[string]*DAGNode, steps []Step) ([]Result, error) {
+func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[string]*DAGNode, steps []Step, interpolatedActions map[string]*Action) ([]Result, error) {
 	var results []Result
 	completed := make(map[string]bool)
 	failed := make(map[string]bool)
@@ -1579,6 +1681,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 		displayed: displayed,
 		started:   make(map[string]bool),
 		mu:        &mu,
+		interpolatedActions: interpolatedActions,
 	}
 	
 	// Start a goroutine to handle results and display them in order
@@ -2228,6 +2331,16 @@ func (r *Runner) executeActionForDAGWithStep(ctx context.Context, action Action,
 	if step != nil && step.Description != "" {
 		stepName = step.Description // Use description for matrix steps
 	}
+	// For matrix steps, use the step action name (which includes the matrix suffix)
+	if step != nil && step.Action != "" {
+		stepName = step.Action // Use step action name for matrix steps (e.g., "container-platform-view.alpine:latest")
+	}
+	
+	// Debug: Print step information
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] executeActionForDAGWithStep: action.Name=%s, step.Action=%s, stepName=%s\n", action.Name, step.Action, stepName)
+	}
+	
 	if r.opts.StepCallback != nil {
 		r.opts.StepCallback.OnStepStart(ctx, stepName)
 	}
@@ -2372,6 +2485,11 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 
 // runCustomActionForDAG executes a custom action for DAG execution
 func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Result, error) {
+	// Check if action has container configuration
+	if action.Container != nil {
+		return r.runContainerAction(ctx, action)
+	}
+	
 	if action.Run == "" {
 		return Result{
 			Status:  StatusError,
@@ -2489,11 +2607,18 @@ func (r *Runner) runActionInternal(ctx context.Context, action Action) error {
 	effectiveAction := action
 	if variant != nil {
 		effectiveAction = Action{
-			Name:  action.Name,
-			Run:   variant.Run,
-			Uses:  variant.Uses,
-			Shell: variant.Shell,
+			Name:      action.Name,
+			Run:       variant.Run,
+			Uses:      variant.Uses,
+			Shell:     variant.Shell,
+			Container: action.Container, // Preserve container configuration
 		}
+	}
+	
+	// Check if action has container configuration
+	if effectiveAction.Container != nil {
+		_, err := r.runContainerAction(ctx, effectiveAction)
+		return err
 	}
 	
 	if effectiveAction.Uses != "" {
@@ -2524,10 +2649,11 @@ func (r *Runner) runActionInternalDryRun(ctx context.Context, action Action) err
 	effectiveAction := action
 	if variant != nil {
 		effectiveAction = Action{
-			Name:  action.Name,
-			Run:   variant.Run,
-			Uses:  variant.Uses,
-			Shell: variant.Shell,
+			Name:      action.Name,
+			Run:       variant.Run,
+			Uses:      variant.Uses,
+			Shell:     variant.Shell,
+			Container: action.Container, // Preserve container configuration
 		}
 	}
 	
@@ -2745,4 +2871,114 @@ func (r *Runner) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd,
 		cmd.Process.Kill()
 		return ctx.Err()
 	}
+}
+
+// runContainerAction executes an action inside a container
+func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result, error) {
+	// Create container runner with specified engine or default
+	var runner *containerRunner.ContainerRunner
+	var err error
+	
+	if action.Container.Engine != "" {
+		// Use specified engine
+		runner, err = containerRunner.NewContainerRunnerWithEngine(action.Container.Engine)
+		if err == nil {
+			runner.VerbosityLevel = r.opts.VerboseLevel
+		}
+	} else {
+		// Use default engine (Podman)
+		runner, err = containerRunner.NewContainerRunnerWithVerbosity(r.opts.VerboseLevel)
+	}
+	
+	if err != nil {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("failed to create container runner: %v", err),
+			Error:   err,
+		}, fmt.Errorf("failed to create container runner: %w", err)
+	}
+	
+	// Container command output is now displayed in OnStepStart callback
+	
+	// Execute container action using the runner's RunActionWithCallback method
+	// This will properly prepare the container configuration for run_action/run_stage
+	var containerResult *container.ContainerResult
+	err = func() error {
+		// Create a callback function for real-time output streaming
+		outputCallback := func(line string) {
+			if r.opts.StepCallback != nil && r.opts.VerboseLevel > 0 && line != "" {
+				r.opts.StepCallback.OnStepOutput(ctx, action.Name, line)
+			}
+		}
+		
+			var err error
+			containerResult, err = runner.RunActionWithCallback(ctx, *action.Container, r.opts.ConfigPath, outputCallback)
+			return err
+	}()
+	if err != nil {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("container action failed: %v", err),
+			Error:   err,
+		}, fmt.Errorf("container action failed: %w", err)
+	}
+	
+	// Display container output based on verbosity level
+	// Container output is now streamed in real-time via the callback
+
+	// Check container exit code
+	if containerResult != nil && containerResult.ExitCode != 0 {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("container exited with code %d", containerResult.ExitCode),
+			Error:   fmt.Errorf("container exited with code %d", containerResult.ExitCode),
+		}, fmt.Errorf("container exited with code %d", containerResult.ExitCode)
+	}
+	
+	// Return successful result
+	return Result{
+		Status:         StatusOK,
+		Message:        "container action executed successfully",
+		BufferedOutput: containerResult.Output,
+	}, nil
+}
+
+// buildContainerCommand builds a human-readable representation of the container command
+func (r *Runner) buildContainerCommand(config *container.ContainerConfig) string {
+	var parts []string
+	
+	// Use specified engine or default to podman
+	engineName := "podman" // Default to podman
+	if config.Engine != "" {
+		engineName = config.Engine
+	}
+	
+	// Add engine (Docker/Podman)
+	parts = append(parts, engineName)
+	
+	// Add image
+	parts = append(parts, "run", "--rm")
+	
+	// Add mount arguments
+	for _, mount := range config.Mounts {
+		mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
+		if mount.RO {
+			mountArg += ",readonly"
+		}
+		parts = append(parts, mountArg)
+	}
+	
+	// Add image
+	parts = append(parts, config.Image.From)
+	
+	// Add command to run
+	if config.Run != "" {
+		parts = append(parts, "sh", "-c", config.Run)
+	} else if config.RunAction != "" {
+		parts = append(parts, "buildfab", "action", config.RunAction)
+	} else if config.RunStage != "" {
+		parts = append(parts, "buildfab", "run", config.RunStage)
+	}
+	
+	return strings.Join(parts, " ")
 }

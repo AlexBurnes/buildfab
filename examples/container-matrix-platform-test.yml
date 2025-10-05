@@ -1,0 +1,98 @@
+# Container Matrix Platform Detection Example
+# This example demonstrates how to use matrix feature with containers
+# to test platform detection across different container images
+
+project:
+  name: container-matrix-test
+  modules: [buildfab]
+
+stages:
+  test-platforms:
+    steps:
+      - action: platform-test
+        matrix:
+          values:
+            image: ["alpine:latest", "ubuntu:22.04", "debian:12"]
+        strategy:
+          max_parallel: 3
+          fail_fast: false
+          continue_on_error: true
+
+  test-view:
+    steps:
+      - action: container-platform-view
+        matrix:
+          values:
+            image: ["alpine:latest", "ubuntu:22.04", "debian:12"]
+        strategy:
+          max_parallel: 3
+          fail_fast: false
+          continue_on_error: true
+
+  test-stream:
+    steps:
+      - action: stream-test
+        matrix:
+          values:
+            image: ["alpine:latest", "ubuntu:22.04", "debian:12"]
+        strategy:
+          max_parallel: 3
+          fail_fast: false
+          continue_on_error: true
+
+actions:
+  - name: platform-view
+    description: Display platform information
+    run: |
+      echo "=== Platform Detection Test ==="
+      echo "Platform: ${{platform}}"
+      echo "Architecture: '${{arch}}'"
+      echo "OS: '${{os}}'"
+      echo "OS Version: '${{os_version}}'"
+      echo "CPU Count: ${{cpu}}"
+      echo "================================"
+
+  - name: container-platform-view
+    description: Test platform detection in ${{ matrix.image }}
+    container:
+      image:
+        from: ${{ matrix.image }}
+      run_action: platform-view
+
+  - name: platform-test
+    description: Test platform detection in ${{ matrix.image }}
+    container:
+      image:
+        from: ${{ matrix.image }}
+      workdir: /test
+      mounts:
+        - type: bind
+          source: .
+          target: /test
+          ro: false
+      run: |
+        echo "=== Platform Detection Test ==="
+        echo "Container Image: ${{ matrix.image }}"
+        echo "Platform: $(uname -m)"
+        echo "Architecture: $(uname -m)"
+        echo "OS: $(uname -s)"
+        echo "OS Version: $(cat /etc/os-release 2>/dev/null | head -1 || echo 'unknown')"
+        echo "CPU Count: $(nproc 2>/dev/null || echo 'unknown')"
+        echo "================================"
+
+  - name: stream-test
+    description: Test platform detection in ${{ matrix.image }}
+    container:
+      image:
+        from: ${{ matrix.image }}
+      run: |
+        echo "Hello from container!"
+        echo "Container is working correctly"
+        echo "Testing streaming output..."
+        i=1
+        while [ $i -le 10 ]; do
+          echo "Line $i - streaming test"
+          sleep 1
+          i=$((i + 1))
+        done
+        echo "Streaming test complete"

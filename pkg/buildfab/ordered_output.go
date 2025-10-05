@@ -7,6 +7,9 @@ import (
     "strings"
     "sync"
     "time"
+    
+    "github.com/AlexBurnes/buildfab/pkg/buildfab/container"
+    containerRunner "github.com/AlexBurnes/buildfab/internal/container"
 )
 
 // OrderedOutputManager manages step output in proper order using a queue-based approach
@@ -24,6 +27,8 @@ type OrderedOutputManager struct {
     debug       bool
     errorOutput io.Writer
     config      *Config                    // Configuration for command extraction
+    configPath  string                     // Configuration file path for container commands
+    interpolatedActions map[string]*Action // Interpolated actions for matrix steps
 }
 
 // StepOutputData contains all output data for a step
@@ -49,7 +54,20 @@ func NewOrderedOutputManager(steps []Step, verboseLevel int, debug bool, errorOu
         debug:       debug,
         errorOutput: errorOutput,
         config:      config,
+        interpolatedActions: make(map[string]*Action),
     }
+}
+
+// SetConfigPath sets the configuration file path
+func (o *OrderedOutputManager) SetConfigPath(configPath string) {
+    o.configPath = configPath
+}
+
+// SetInterpolatedAction sets the interpolated action for a step
+func (o *OrderedOutputManager) SetInterpolatedAction(stepName string, action *Action) {
+    o.mu.Lock()
+    defer o.mu.Unlock()
+    o.interpolatedActions[stepName] = action
 }
 
 // RegisterStep registers a step for execution
@@ -323,10 +341,193 @@ func (o *OrderedOutputManager) checkAndShowNextStep() {
 func (o *OrderedOutputManager) showStepStart(stepName string) {
     if o.verboseLevel > 0 {
         fmt.Fprintf(o.errorOutput, "  💻 %s\n", stepName)
+        
+        // Show container command output for container actions if verbosity level is 2 or higher
+        if o.verboseLevel >= 2 {
+            o.showContainerCommand(stepName)
+        }
     } else {
         // In quiet mode, don't show individual step indicators
         // The summary will show the overall results
     }
+}
+
+// showContainerCommand shows the container command for container actions
+func (o *OrderedOutputManager) showContainerCommand(stepName string) {
+    // Check if we have an interpolated action for this step
+    action, exists := o.interpolatedActions[stepName]
+    if !exists {
+        // Fallback to base action name for non-matrix steps
+        baseActionName := stepName
+        if dotIndex := strings.Index(stepName, "."); dotIndex != -1 {
+            baseActionName = stepName[:dotIndex]
+        }
+        var ok bool
+        actionValue, ok := o.config.GetAction(baseActionName)
+        if !ok {
+            return
+        }
+        action = &actionValue
+    }
+    
+    if action.Container != nil {
+        // Create a temporary runner to prepare the configuration for display
+        tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(o.verboseLevel)
+        if err == nil {
+            // Use the actual config path
+            configPath := o.configPath
+            if configPath == "" {
+                configPath = ".project.yml" // Fallback
+            }
+            // Use the interpolated container configuration with matrix variables already substituted
+            preparedConfig := tempRunner.PrepareContainerConfig(*action.Container, configPath)
+            containerCmd := o.buildContainerCommand(&preparedConfig)
+            fmt.Fprintf(o.errorOutput, "  🐳 Running container: %s\n", containerCmd)
+        }
+    }
+}
+
+// buildContainerCommand builds a human-readable representation of the container command
+func (o *OrderedOutputManager) buildContainerCommand(config *container.ContainerConfig) string {
+    var parts []string
+
+    // Use specified engine or default to podman
+    engineName := "podman" // Default to podman
+    if config.Engine != "" {
+        engineName = config.Engine
+    }
+
+    // Add engine (Docker/Podman)
+    parts = append(parts, engineName)
+
+    // Handle build operations differently
+    if config.Image.Build != nil {
+        // For build operations, we run docker/podman build command
+        parts = append(parts, "build")
+        
+        // Add build args
+        for key, value := range config.Image.Build.Args {
+            parts = append(parts, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+        }
+        
+        // Add tags
+        for _, tag := range config.Image.Build.Tags {
+            parts = append(parts, "--tag", tag)
+        }
+        
+        // Add network if specified
+        if config.Image.Build.Network != "" {
+            parts = append(parts, "--network", config.Image.Build.Network)
+        }
+        
+        // Add progress if specified
+        if config.Image.Build.Progress != "" {
+            parts = append(parts, "--progress", config.Image.Build.Progress)
+        }
+        
+        // Add dockerfile if specified
+        if config.Image.Build.Dockerfile != "" {
+            parts = append(parts, "-f", config.Image.Build.Dockerfile)
+        }
+        
+        // Add context (default to current directory)
+        context := config.Image.Build.Context
+        if context == "" {
+            context = "."
+        }
+        parts = append(parts, context)
+    } else if config.Image.Slim != nil {
+        // For slim operations, we need to mount the Docker socket
+        if engineName == "docker" {
+            parts = append(parts, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+        } else if engineName == "podman" {
+            parts = append(parts, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
+        }
+        
+        // For slim operations, we run the dslim/slim container with specific arguments
+        parts = append(parts, "dslim/slim:latest")
+        parts = append(parts, "slim", "build")
+        
+        // Add slim-specific flags
+        if !config.Image.Slim.HttpProbe {
+            parts = append(parts, "--http-probe=false")
+            parts = append(parts, "--continue-after=exit")
+        }
+        
+        parts = append(parts, config.Image.Slim.Target)
+        
+        // Add exec command if specified
+        if config.Image.Slim.Exec != "" {
+            parts = append(parts, "--exec", config.Image.Slim.Exec)
+        }
+        
+        // Add tags for the slim image
+        for _, tag := range config.Image.Slim.Tags {
+            parts = append(parts, "--tag", tag)
+        }
+    } else {
+        // Regular container execution
+        parts = append(parts, "run", "--rm")
+        
+        // Add mount arguments
+        for _, mount := range config.Mounts {
+            mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
+            if mount.RO {
+                mountArg += ",readonly"
+            }
+            parts = append(parts, mountArg)
+        }
+        
+        // Add cache mounts
+        for cacheName, cachePath := range config.Cache {
+            targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+            cacheMountArg := fmt.Sprintf("--mount=type=bind,source=%s,target=%s", cachePath, targetPath)
+            parts = append(parts, cacheMountArg)
+        }
+        
+        // Add CPU and memory limits
+        if config.CPU > 0 {
+            parts = append(parts, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+            
+            // Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
+            cpuSet := ""
+            for i := 0; i < config.CPU; i++ {
+                if i > 0 {
+                    cpuSet += ","
+                }
+                cpuSet += fmt.Sprintf("%d", i)
+            }
+            parts = append(parts, "--cpuset-cpus", cpuSet)
+        }
+        
+        if config.Memory != "" {
+            parts = append(parts, "-m", config.Memory)
+        }
+        
+        // Add user if specified
+        if config.User != "" {
+            parts = append(parts, "-u", config.User)
+        }
+        
+        // Add network if specified
+        if config.Network != "" {
+            parts = append(parts, "--network", config.Network)
+        }
+        
+        // Add image
+        parts = append(parts, config.Image.From)
+
+        // Add command to run
+        if config.Run != "" {
+            parts = append(parts, "sh", "-c", config.Run)
+        } else if config.RunAction != "" {
+            parts = append(parts, "buildfab", "action", config.RunAction)
+        } else if config.RunStage != "" {
+            parts = append(parts, "buildfab", "run", config.RunStage)
+        }
+    }
+
+    return strings.Join(parts, " ")
 }
 
 // showStepCompletion shows the completion message for a step
@@ -443,6 +644,37 @@ func NewOrderedStepCallback(steps []Step, verboseLevel int, debug bool, errorOut
         manager: manager,
         results: make([]StepResult, 0),
         mu:      &sync.Mutex{},
+    }
+}
+
+// NewOrderedStepCallbackWithActions creates a new ordered step callback with interpolated actions
+func NewOrderedStepCallbackWithActions(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config, configPath string, interpolatedActions map[string]*Action) *OrderedStepCallback {
+    manager := NewOrderedOutputManager(steps, verboseLevel, debug, errorOutput, config)
+    
+    // Set config path
+    manager.SetConfigPath(configPath)
+    
+    // Set interpolated actions
+    for stepName, action := range interpolatedActions {
+        manager.SetInterpolatedAction(stepName, action)
+    }
+
+    // Register all steps
+    for _, step := range steps {
+        manager.RegisterStep(step.Action)
+    }
+
+    return &OrderedStepCallback{
+        manager: manager,
+        results: make([]StepResult, 0),
+        mu:      &sync.Mutex{},
+    }
+}
+
+// UpdateInterpolatedActions updates the interpolated actions from RunOptions
+func (c *OrderedStepCallback) UpdateInterpolatedActions(interpolatedActions map[string]*Action) {
+    for stepName, action := range interpolatedActions {
+        c.manager.SetInterpolatedAction(stepName, action)
     }
 }
 

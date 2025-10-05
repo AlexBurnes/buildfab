@@ -340,8 +340,5 @@ actions:
     mounts:
       - type: bind; source: .; target: /src; ro: false
       - type: bind; source: ./dist; target: /out
+    env_file: .docker-env
     run_stage: build
-    #run: |
-    #  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-    #  cmake --build build -j
-    #  cp -r build/* /out/

@@ -1,0 +1,21 @@
+# Working Container Test Example
+# This example demonstrates container execution with stages
+
+project:
+  name: container-working-test
+  modules: [buildfab]
+
+stages:
+  test-container:
+    steps:
+      - action: hello-container
+
+actions:
+  - name: hello-container
+    description: Say hello from container
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Hello from container!"
+        echo "Container is working correctly"
