@@ -93,6 +93,11 @@ func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config Containe
 	return m.engine.RunContainerWithCallback(ctx, config, outputCallback)
 }
 
+// GetEngineName returns the name of the current engine
+func (m *Manager) GetEngineName() string {
+	return m.engine.GetEngineName()
+}
+
 // validateConfig validates the container configuration
 func (m *Manager) validateConfig(config ContainerConfig) error {
 	// Validate required fields

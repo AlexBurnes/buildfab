@@ -260,10 +260,8 @@ func (r *Runner) RunStage(ctx context.Context, stageName string) error {
 func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 	// Check if it's a built-in action first
 	if runner, exists := r.registry.GetRunner(actionName); exists {
-		// Call step start callback if provided
-		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepStart(ctx, actionName)
-		}
+		// Note: Step callbacks are handled at the DAG execution level, not here
+		// to avoid duplicate callbacks when running actions inside containers
 
 		// Handle dry-run mode for built-in actions
 		if r.opts.DryRun {
@@ -314,10 +312,8 @@ func (r *Runner) RunAction(ctx context.Context, actionName string) error {
 		return fmt.Errorf("action not found: %s", actionName)
 	}
 
-	// Call step start callback if provided
-	if r.opts.StepCallback != nil {
-		r.opts.StepCallback.OnStepStart(ctx, actionName)
-	}
+	// Note: Step callbacks are handled at the DAG execution level, not here
+	// to avoid duplicate callbacks when running actions inside containers
 
 		// Handle dry-run mode for custom actions
 		if r.opts.DryRun {
@@ -1264,8 +1260,18 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	// Matrix steps are now expanded into individual steps, so this is just a regular step
 	
 	// Call step start callback if provided
+	stepName := action.Name
+	if stepConfig != nil && stepConfig.Action != "" {
+		stepName = stepConfig.Action // Use step action name for matrix steps (e.g., "container-platform-view.alpine:latest")
+	}
+	
+	// Debug: Print step information
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] executeActionForDAGWithCallback: action.Name=%s, stepConfig.Action=%s, stepName=%s\n", action.Name, stepConfig.Action, stepName)
+	}
+	
 	if r.opts.StepCallback != nil {
-		r.opts.StepCallback.OnStepStart(ctx, action.Name)
+		r.opts.StepCallback.OnStepStart(ctx, stepName)
 	}
 
 	var result Result
@@ -2229,6 +2235,16 @@ func (r *Runner) executeActionForDAGWithStep(ctx context.Context, action Action,
 	if step != nil && step.Description != "" {
 		stepName = step.Description // Use description for matrix steps
 	}
+	// For matrix steps, use the step action name (which includes the matrix suffix)
+	if step != nil && step.Action != "" {
+		stepName = step.Action // Use step action name for matrix steps (e.g., "container-platform-view.alpine:latest")
+	}
+	
+	// Debug: Print step information
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] executeActionForDAGWithStep: action.Name=%s, step.Action=%s, stepName=%s\n", action.Name, step.Action, stepName)
+	}
+	
 	if r.opts.StepCallback != nil {
 		r.opts.StepCallback.OnStepStart(ctx, stepName)
 	}
@@ -2770,9 +2786,12 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 	if action.Container.Engine != "" {
 		// Use specified engine
 		runner, err = containerRunner.NewContainerRunnerWithEngine(action.Container.Engine)
+		if err == nil {
+			runner.VerbosityLevel = r.opts.VerboseLevel
+		}
 	} else {
 		// Use default engine (Podman)
-		runner, err = containerRunner.NewContainerRunner()
+		runner, err = containerRunner.NewContainerRunnerWithVerbosity(r.opts.VerboseLevel)
 	}
 	
 	if err != nil {
@@ -2783,15 +2802,10 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 		}, fmt.Errorf("failed to create container runner: %w", err)
 	}
 	
-	// Show container command if verbosity level is 2 or higher
-	if r.opts.VerboseLevel >= 2 {
-		containerCmd := r.buildContainerCommand(action.Container)
-		if r.opts.Output != nil {
-			fmt.Fprintf(r.opts.Output, "  🐳 Running container: %s\n", containerCmd)
-		}
-	}
+	// Container command output is now displayed in OnStepStart callback
 	
-	// Execute container action with streaming callback
+	// Execute container action using the runner's RunActionWithCallback method
+	// This will properly prepare the container configuration for run_action/run_stage
 	var containerResult *container.ContainerResult
 	err = func() error {
 		// Create a callback function for real-time output streaming
@@ -2801,11 +2815,9 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 			}
 		}
 		
-		// Get the container manager and execute with callback
-		manager := runner.GetManager()
-		var err error
-		containerResult, err = manager.ExecuteActionWithCallback(ctx, *action.Container, outputCallback)
-		return err
+			var err error
+			containerResult, err = runner.RunActionWithCallback(ctx, *action.Container, r.opts.ConfigPath, outputCallback)
+			return err
 	}()
 	if err != nil {
 		return Result{
@@ -2817,14 +2829,7 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 	
 	// Display container output based on verbosity level
 	// Container output is now streamed in real-time via the callback
-	
-	// Display container error if available (always show errors)
-	if containerResult != nil && containerResult.Error != "" {
-		if r.opts.ErrorOutput != nil {
-			fmt.Fprintf(r.opts.ErrorOutput, "  Container error: %s\n", containerResult.Error)
-		}
-	}
-	
+
 	// Check container exit code
 	if containerResult != nil && containerResult.ExitCode != 0 {
 		return Result{
@@ -2857,6 +2862,17 @@ func (r *Runner) buildContainerCommand(config *container.ContainerConfig) string
 	
 	// Add image
 	parts = append(parts, "run", "--rm")
+	
+	// Add mount arguments
+	for _, mount := range config.Mounts {
+		mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
+		if mount.RO {
+			mountArg += ",readonly"
+		}
+		parts = append(parts, mountArg)
+	}
+	
+	// Add image
 	parts = append(parts, config.Image.From)
 	
 	// Add command to run

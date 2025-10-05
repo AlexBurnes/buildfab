@@ -18,6 +18,17 @@ stages:
           fail_fast: false
           continue_on_error: true
 
+  test-view:
+    steps:
+      - action: container-platform-view
+        matrix:
+          values:
+            image: ["alpine:latest", "ubuntu:22.04", "debian:12"]
+        strategy:
+          max_parallel: 3
+          fail_fast: false
+          continue_on_error: true
+
   test-stream:
     steps:
       - action: stream-test
@@ -34,13 +45,19 @@ actions:
     description: Display platform information
     run: |
       echo "=== Platform Detection Test ==="
-      echo "Container Image: ${{ matrix.image }}"
       echo "Platform: ${{platform}}"
       echo "Architecture: '${{arch}}'"
       echo "OS: '${{os}}'"
       echo "OS Version: '${{os_version}}'"
       echo "CPU Count: ${{cpu}}"
       echo "================================"
+
+  - name: container-platform-view
+    description: Test platform detection in ${{ matrix.image }}
+    container:
+      image:
+        from: ${{ matrix.image }}
+      run_action: platform-view
 
   - name: platform-test
     description: Test platform detection in ${{ matrix.image }}

@@ -32,9 +32,9 @@ actions:
   - name: test-podman
     description: run podman directly
     run: |
-      podman run --rm --mount type=bind,source=./,target=/src,ro alpine:latest sh -c "cd /src && sh test.sh"
+      podman run --rm --mount type=bind,source=./,target=/src,ro alpine:latest sh -c "cd /src && sh examples/test.sh"
 
   - name: test-script
     description: run test script locally
     run: | 
-      sh test.sh
+      sh examples/test.sh

@@ -8,6 +8,9 @@ import (
     "runtime"
     "strings"
     "time"
+    
+    "github.com/AlexBurnes/buildfab/pkg/buildfab/container"
+    containerRunner "github.com/AlexBurnes/buildfab/internal/container"
 )
 
 // formatExecutionTime formats a duration in the requested format (e.g., '20s' or '1m 20s')
@@ -192,6 +195,7 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
         output:  r.opts.ErrorOutput,  // Use errorOutput for step results
         errorOutput: r.opts.ErrorOutput,
         config:  r.config,
+        configPath: r.opts.ConfigPath,
         bufferedOutput: make(map[string]*BufferedOutput),
     }
 
@@ -293,6 +297,7 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
             output:  r.opts.ErrorOutput,  // Use errorOutput for step results
             errorOutput: r.opts.ErrorOutput,
             config:  r.config,
+            configPath: r.opts.ConfigPath,
             bufferedOutput: make(map[string]*BufferedOutput),
         },
     }
@@ -310,6 +315,7 @@ type SimpleStepCallback struct {
     results     []StepResult
     displayed   map[string]bool
     config      *Config // Store config to access action details
+    configPath  string  // Store config path for container actions
     bufferedOutput map[string]*BufferedOutput // Store buffered output for quiet mode
 }
 
@@ -332,12 +338,82 @@ func (c *SimpleStepCallback) StoreBufferedOutput(stepName, stdout, stderr string
 }
 
 func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
+    fmt.Fprintf(c.errorOutput, "  🔥 DEBUG: OnStepStart called with stepName=%s, verboseLevel=%d\n", stepName, c.verboseLevel)
     if c.verboseLevel > 0 {
         fmt.Fprintf(c.errorOutput, "  💻 %s\n", stepName)
+        
+        // Show container command output for container actions if verbosity level is 2 or higher
+        if c.verboseLevel >= 2 {
+            // Extract base action name from matrix step name (e.g., "container-platform-view.alpine:latest" -> "container-platform-view")
+            baseActionName := stepName
+            if dotIndex := strings.Index(stepName, "."); dotIndex != -1 {
+                baseActionName = stepName[:dotIndex]
+            }
+            
+            fmt.Fprintf(c.errorOutput, "  🐳 DEBUG: stepName=%s, baseActionName=%s, verboseLevel=%d\n", stepName, baseActionName, c.verboseLevel)
+            
+            // Get the action to check if it's a container action
+            action, exists := c.config.GetAction(baseActionName)
+            fmt.Fprintf(c.errorOutput, "  🐳 DEBUG: exists=%v, hasContainer=%v\n", exists, exists && action.Container != nil)
+            if exists && action.Container != nil {
+                // Create a temporary runner to prepare the configuration for display
+                tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(c.verboseLevel)
+                if err == nil {
+                    preparedConfig := tempRunner.PrepareContainerConfig(*action.Container, c.configPath)
+                    containerCmd := c.buildContainerCommand(&preparedConfig)
+                    fmt.Fprintf(c.errorOutput, "  🐳 Running container: %s\n", containerCmd)
+                } else {
+                    fmt.Fprintf(c.errorOutput, "  🐳 DEBUG: Failed to create container runner: %v\n", err)
+                }
+            }
+        } else {
+            // Debug: Print verbosity level
+            fmt.Fprintf(c.errorOutput, "  🐳 DEBUG: verboseLevel=%d (need >= 2 for container command output)\n", c.verboseLevel)
+        }
     } else {
         // In silence mode, show running indicator
         fmt.Fprintf(c.errorOutput, "  %s%s%s %s running...\r", colorCyan, "○", colorReset, stepName)
     }
+}
+
+// buildContainerCommand builds a human-readable representation of the container command
+func (c *SimpleStepCallback) buildContainerCommand(config *container.ContainerConfig) string {
+    var parts []string
+
+    // Use specified engine or default to podman
+    engineName := "podman" // Default to podman
+    if config.Engine != "" {
+        engineName = config.Engine
+    }
+
+    // Add engine (Docker/Podman)
+    parts = append(parts, engineName)
+
+    // Add image
+    parts = append(parts, "run", "--rm")
+
+    // Add mount arguments
+    for _, mount := range config.Mounts {
+        mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
+        if mount.RO {
+            mountArg += ",readonly"
+        }
+        parts = append(parts, mountArg)
+    }
+
+    // Add image
+    parts = append(parts, config.Image.From)
+
+    // Add command to run
+    if config.Run != "" {
+        parts = append(parts, "sh", "-c", config.Run)
+    } else if config.RunAction != "" {
+        parts = append(parts, "buildfab", "action", config.RunAction)
+    } else if config.RunStage != "" {
+        parts = append(parts, "buildfab", "run", config.RunStage)
+    }
+
+    return strings.Join(parts, " ")
 }
 
 func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {

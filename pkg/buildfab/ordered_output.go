@@ -7,6 +7,9 @@ import (
     "strings"
     "sync"
     "time"
+    
+    "github.com/AlexBurnes/buildfab/pkg/buildfab/container"
+    containerRunner "github.com/AlexBurnes/buildfab/internal/container"
 )
 
 // OrderedOutputManager manages step output in proper order using a queue-based approach
@@ -24,6 +27,8 @@ type OrderedOutputManager struct {
     debug       bool
     errorOutput io.Writer
     config      *Config                    // Configuration for command extraction
+    configPath  string                     // Configuration file path for container commands
+    interpolatedActions map[string]*Action // Interpolated actions for matrix steps
 }
 
 // StepOutputData contains all output data for a step
@@ -323,10 +328,78 @@ func (o *OrderedOutputManager) checkAndShowNextStep() {
 func (o *OrderedOutputManager) showStepStart(stepName string) {
     if o.verboseLevel > 0 {
         fmt.Fprintf(o.errorOutput, "  💻 %s\n", stepName)
+        
+        // Show container command output for container actions if verbosity level is 2 or higher
+        if o.verboseLevel >= 2 {
+            o.showContainerCommand(stepName)
+        }
     } else {
         // In quiet mode, don't show individual step indicators
         // The summary will show the overall results
     }
+}
+
+// showContainerCommand shows the container command for container actions
+func (o *OrderedOutputManager) showContainerCommand(stepName string) {
+    // Extract base action name from matrix step name (e.g., "container-platform-view.alpine:latest" -> "container-platform-view")
+    baseActionName := stepName
+    if dotIndex := strings.Index(stepName, "."); dotIndex != -1 {
+        baseActionName = stepName[:dotIndex]
+    }
+    
+    // Get the action to check if it's a container action
+    action, exists := o.config.GetAction(baseActionName)
+    if exists && action.Container != nil {
+        // Create a temporary runner to prepare the configuration for display
+        tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(o.verboseLevel)
+        if err == nil {
+            // Get config path from the ordered output manager (we'll need to add this field)
+            configPath := ".project.yml" // Default config path
+            preparedConfig := tempRunner.PrepareContainerConfig(*action.Container, configPath)
+            containerCmd := o.buildContainerCommand(&preparedConfig)
+            fmt.Fprintf(o.errorOutput, "  🐳 Running container: %s\n", containerCmd)
+        }
+    }
+}
+
+// buildContainerCommand builds a human-readable representation of the container command
+func (o *OrderedOutputManager) buildContainerCommand(config *container.ContainerConfig) string {
+    var parts []string
+
+    // Use specified engine or default to podman
+    engineName := "podman" // Default to podman
+    if config.Engine != "" {
+        engineName = config.Engine
+    }
+
+    // Add engine (Docker/Podman)
+    parts = append(parts, engineName)
+
+    // Add image
+    parts = append(parts, "run", "--rm")
+
+    // Add mount arguments
+    for _, mount := range config.Mounts {
+        mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
+        if mount.RO {
+            mountArg += ",readonly"
+        }
+        parts = append(parts, mountArg)
+    }
+
+    // Add image
+    parts = append(parts, config.Image.From)
+
+    // Add command to run
+    if config.Run != "" {
+        parts = append(parts, "sh", "-c", config.Run)
+    } else if config.RunAction != "" {
+        parts = append(parts, "buildfab", "action", config.RunAction)
+    } else if config.RunStage != "" {
+        parts = append(parts, "buildfab", "run", config.RunStage)
+    }
+
+    return strings.Join(parts, " ")
 }
 
 // showStepCompletion shows the completion message for a step

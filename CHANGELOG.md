@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Static Binary Requirements**: Updated build rules to require static linking for container compatibility
+- **Container Binary Mounting**: Implemented proper binary mounting in containers for run_action and run_stage functionality
+- **Matrix-Container Integration**: Matrix variables now properly substitute in container configurations
+
+### Changed
+- **Build Process**: All Go binaries must now be built with static linking (`CGO_ENABLED=0` and `-extldflags '-static'`)
+- **Container Compatibility**: Static binaries ensure compatibility across Alpine, Ubuntu, and other container images
+- **Documentation**: Updated Build.md with static linking requirements and container compatibility notes
+
+### Fixed
+- **Container Binary Execution**: Fixed "executable file not found" errors in containers by using static binaries
+- **Matrix Variable Substitution**: Fixed matrix variables not being substituted in container image names and configurations
+- **Container Configuration**: Fixed container configuration to properly mount current directory and buildfab binary
+- **Container Command Paths**: Simplified container commands to use relative paths since we cd into the workspace directory
+
 ## [v0.16.15] - 2025-10-05
 
 ### Fixed

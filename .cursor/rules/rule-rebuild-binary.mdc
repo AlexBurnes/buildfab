@@ -15,16 +15,16 @@ Always rebuild the binary after making any code changes before testing with exam
 - After any modification to source code
 
 ## Required Steps
-1. **Build the binary with proper version**:
+1. **Build the binary with proper version (STATIC LINKING REQUIRED)**:
    ```bash
-   # Method 1: Using VERSION file (recommended)
-   VERSION=$(cat VERSION) && go build -ldflags "-X main.appVersion=${VERSION} -s -w" -o bin/buildfab ./cmd/buildfab
+   # Method 1: Using VERSION file with static linking (recommended)
+   VERSION=$(cat VERSION) && CGO_ENABLED=0 go build -ldflags "-X main.appVersion=${VERSION} -s -w -extldflags '-static'" -o bin/buildfab ./cmd/buildfab
    
    # Method 2: Using buildfab action (best practice)
    ./bin/buildfab action install-binary
    
-   # Method 3: Manual build without version (development only)
-   go build -o bin/buildfab ./cmd/buildfab
+   # Method 3: Manual build without version (development only) - STATIC REQUIRED
+   CGO_ENABLED=0 go build -ldflags "-s -w -extldflags '-static'" -o bin/buildfab ./cmd/buildfab
    ```
 
 2. **Verify build success**:
@@ -41,6 +41,12 @@ Always rebuild the binary after making any code changes before testing with exam
 - **Include version in builds**: Use ldflags to embed version at build time for proper version display
 - **Verify version after build**: Always check `./bin/buildfab --version` to ensure correct version
 - **Use buildfab actions**: The `install-binary` action handles version correctly automatically
+
+## Static Linking Requirements
+- **MANDATORY for container compatibility**: Binaries MUST be statically linked to work in containers
+- **Alpine Linux compatibility**: Static binaries work in Alpine (musl libc) and Ubuntu (glibc)
+- **Container feature dependency**: The container feature requires static binaries to mount and execute
+- **Build flags required**: `CGO_ENABLED=0` and `-extldflags '-static'` are mandatory
 
 ## Common Mistakes to Avoid
 - Forgetting to rebuild after code changes
@@ -62,8 +68,8 @@ This rule should be applied:
 ### Correct Workflow
 ```bash
 # 1. Make code changes
-# 2. Build binary with version
-VERSION=$(cat VERSION) && go build -ldflags "-X main.appVersion=${VERSION} -s -w" -o bin/buildfab ./cmd/buildfab
+# 2. Build binary with version (STATIC LINKING REQUIRED)
+VERSION=$(cat VERSION) && CGO_ENABLED=0 go build -ldflags "-X main.appVersion=${VERSION} -s -w -extldflags '-static'" -o bin/buildfab ./cmd/buildfab
 
 # 3. Verify version
 ./bin/buildfab --version
@@ -87,6 +93,9 @@ VERSION=$(cat VERSION) && go build -ldflags "-X main.appVersion=${VERSION} -s -w
 # 1. Make code changes
 # 2. Test with old binary (WRONG!)
 ./bin/buildfab run test-container --config examples/container-working-test.yml --verbose
+
+# OR building without static linking (WON'T WORK IN CONTAINERS!)
+go build -o bin/buildfab ./cmd/buildfab
 
 # OR building without version (results in "unknown" version)
 go build -o bin/buildfab ./cmd/buildfab

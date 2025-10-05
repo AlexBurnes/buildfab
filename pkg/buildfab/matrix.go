@@ -99,6 +99,9 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 			matrixVars[fmt.Sprintf("matrix.%s", key)] = fmt.Sprintf("%v", value)
 		}
 		
+		// Debug: Print matrix variables for this step (commented out for production)
+		// fmt.Printf("DEBUG: Matrix step %d variables: %+v\n", i, matrixVars)
+		
 		// DEBUG: Add delay for testing parallel execution and output ordering
 		// Uncomment the following lines to enable delays for debugging:
 		// delay := i + 1  // Ascending order: 1, 2, 3, 4
@@ -106,6 +109,12 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 		
 		// Create a new action with matrix variables interpolated
 		matrixAction := *action // Copy the original action
+		
+		// Create a deep copy of the container configuration if it exists
+		if matrixAction.Container != nil {
+			containerCopy := *matrixAction.Container
+			matrixAction.Container = &containerCopy
+		}
 		matrixAction.Name = me.generateStepName(action.Name, combination, step.Matrix.Values) // Generate name with matrix values
 		
 		// Interpolate variables in the action
