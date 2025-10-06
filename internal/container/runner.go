@@ -50,7 +50,10 @@ func (r *ContainerRunner) RunAction(ctx context.Context, config container.Contai
 		config.CPU, config.Memory, config.Network, config.Workdir)
 	
 	// Prepare container configuration for run_action or run_stage
-	preparedConfig := r.PrepareContainerConfig(config, configFile)
+	preparedConfig, err := r.PrepareContainerConfig(config, configFile)
+	if err != nil {
+		return nil, err
+	}
 	
 	// Execute container with callback (for streaming output)
 	result, err := r.manager.ExecuteActionWithCallback(ctx, preparedConfig, nil)
@@ -69,7 +72,10 @@ func (r *ContainerRunner) RunAction(ctx context.Context, config container.Contai
 // RunActionWithCallback executes a container action with streaming output callback
 func (r *ContainerRunner) RunActionWithCallback(ctx context.Context, config container.ContainerConfig, configFile string, outputCallback func(string)) (*container.ContainerResult, error) {
 	// Prepare container configuration for run_action or run_stage
-	preparedConfig := r.PrepareContainerConfig(config, configFile)
+	preparedConfig, err := r.PrepareContainerConfig(config, configFile)
+	if err != nil {
+		return nil, err
+	}
 	
 	// Execute container with callback
 	result, err := r.manager.ExecuteActionWithCallback(ctx, preparedConfig, outputCallback)
@@ -91,7 +97,7 @@ func (r *ContainerRunner) GetManager() *container.Manager {
 }
 
 // PrepareContainerConfig prepares the container configuration for run_action or run_stage
-func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfig, configFile string) container.ContainerConfig {
+func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfig, configFile string) (container.ContainerConfig, error) {
 	// Create a copy of the config
 	preparedConfig := config
 	
@@ -100,15 +106,12 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 		// Get current working directory and buildfab binary path
 		wd, err := r.getCurrentWorkingDir()
 		if err != nil {
-			// If we can't get the working directory, return the original config
-			return config
+			return config, fmt.Errorf("failed to get current working directory for container mount: %w", err)
 		}
 		
 		binPath, err := r.getBuildfabBinaryPath()
 		if err != nil {
-			// If we can't find the buildfab binary, return the original config
-			// This means the container won't have the buildfab binary mounted
-			return config
+			return config, fmt.Errorf("failed to find buildfab binary for container mount: %w", err)
 		}
 		
 		// Create temporary directory names for mounting
@@ -203,7 +206,7 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 		preparedConfig.RunStage = ""
 	}
 	
-	return preparedConfig
+	return preparedConfig, nil
 }
 
 // getCurrentWorkingDir returns the current working directory
@@ -217,24 +220,56 @@ func (r *ContainerRunner) getCurrentWorkingDir() (string, error) {
 
 // getBuildfabBinaryPath returns the path to the buildfab binary
 func (r *ContainerRunner) getBuildfabBinaryPath() (string, error) {
+	// First, try to get the current executable's path
+	if currentBinaryPath, err := r.getCurrentExecutablePath(); err == nil {
+		// If we found the current executable, use it
+		return currentBinaryPath, nil
+	}
+	
+	// If we can't get the current executable path, fall back to searching common locations
 	wd, err := r.getCurrentWorkingDir()
 	if err != nil {
 		return "", err
 	}
 	
-	// Check for buildfab binary in bin/ directory
-	binPath := filepath.Join(wd, "bin", "buildfab")
-	if _, err := os.Stat(binPath); err == nil {
-		return binPath, nil
+	// Search paths in order of preference
+	searchPaths := []string{
+		filepath.Join(wd, "bin", "buildfab"),     // Development: ./bin/buildfab
+		filepath.Join(wd, "buildfab"),            // Development: ./buildfab
+		"/usr/local/bin/buildfab",                // System installation
+		"/usr/bin/buildfab",                      // System installation
 	}
 	
-	// Check for buildfab binary in current directory
-	currentPath := filepath.Join(wd, "buildfab")
-	if _, err := os.Stat(currentPath); err == nil {
-		return currentPath, nil
+	for _, path := range searchPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
 	}
 	
-	return "", fmt.Errorf("buildfab binary not found in bin/ (%s) or current directory (%s), working dir: %s", binPath, currentPath, wd)
+	return "", fmt.Errorf("buildfab binary not found in any of the following locations: %v, working dir: %s", searchPaths, wd)
+}
+
+// getCurrentExecutablePath returns the path to the current buildfab executable
+func (r *ContainerRunner) getCurrentExecutablePath() (string, error) {
+	// Get the path of the current executable
+	execPath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current executable path: %w", err)
+	}
+	
+	// Resolve any symlinks to get the actual binary path
+	resolvedPath, err := filepath.EvalSymlinks(execPath)
+	if err != nil {
+		// If symlink resolution fails, use the original path
+		resolvedPath = execPath
+	}
+	
+	// Check if the resolved path exists and is executable
+	if _, err := os.Stat(resolvedPath); err != nil {
+		return "", fmt.Errorf("current executable path does not exist: %s", resolvedPath)
+	}
+	
+	return resolvedPath, nil
 }
 
 // collectArtifacts collects artifacts from the container

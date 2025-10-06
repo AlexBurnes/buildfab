@@ -377,9 +377,11 @@ func (o *OrderedOutputManager) showContainerCommand(stepName string) {
                 configPath = ".project.yml" // Fallback
             }
             // Use the interpolated container configuration with matrix variables already substituted
-            preparedConfig := tempRunner.PrepareContainerConfig(*action.Container, configPath)
-            containerCmd := o.buildContainerCommand(&preparedConfig)
-            fmt.Fprintf(o.errorOutput, "  🐳 Running container: %s\n", containerCmd)
+            preparedConfig, prepErr := tempRunner.PrepareContainerConfig(*action.Container, configPath)
+            if prepErr == nil {
+                containerCmd := o.buildContainerCommand(&preparedConfig)
+                fmt.Fprintf(o.errorOutput, "  🐳 Running container: %s\n", containerCmd)
+            }
         }
     }
 }

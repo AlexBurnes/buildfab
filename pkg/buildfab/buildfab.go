@@ -3015,9 +3015,11 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 		// Create a temporary runner to prepare the configuration for display
 		tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(r.opts.VerboseLevel)
 		if err == nil {
-			preparedConfig := tempRunner.PrepareContainerConfig(*interpolatedAction.Container, r.opts.ConfigPath)
-			containerCmd := r.buildContainerCommandForDisplay(&preparedConfig)
-			fmt.Fprintf(r.opts.ErrorOutput, "  🐳 Running container: %s\n", containerCmd)
+			preparedConfig, prepErr := tempRunner.PrepareContainerConfig(*interpolatedAction.Container, r.opts.ConfigPath)
+			if prepErr == nil {
+				containerCmd := r.buildContainerCommandForDisplay(&preparedConfig)
+				fmt.Fprintf(r.opts.ErrorOutput, "  🐳 Running container: %s\n", containerCmd)
+			}
 		}
 	}
 

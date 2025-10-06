@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.6] - 2025-10-06
+
+### Added
+- **Enhanced Binary Search**: Added system path support for buildfab binary detection
+  - Added `/usr/local/bin/buildfab` and `/usr/bin/buildfab` to search paths
+  - Implemented current executable detection using `os.Executable()` with symlink resolution
+  - Enhanced search priority: current executable → `./bin/buildfab` → `./buildfab` → system paths
+  - Better error messages showing all searched locations for easier debugging
+  - Perfect container support for both development and system-installed binaries
+
+### Fixed
+- **Container Error Handling**: Fixed critical bug in `PrepareContainerConfig` where errors were silently ignored
+  - Modified `PrepareContainerConfig` to return `(container.ContainerConfig, error)` instead of silently falling back
+  - Updated all callers to properly handle error return value
+  - Users now get clear error messages when buildfab binary is not found or working directory cannot be accessed
+  - Prevents confusing runtime failures by failing fast with descriptive error messages
+
 ## [0.18.5] - 2025-10-06
 
 ### Fixed

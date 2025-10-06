@@ -3,6 +3,7 @@ bin/
 
 # build directory
 .build
+.cache
 .toolchain
 .goreleaser-binaries/
 .goreleaser-skip-build.yml
