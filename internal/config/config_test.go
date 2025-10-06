@@ -247,7 +247,7 @@ func TestResolveString(t *testing.T) {
 			variables: map[string]string{},
 			expected: "",
 			wantErr:  true,
-			errMsg:   "undefined variable: undefined",
+			errMsg:   "undefined variables: undefined",
 		},
 		{
 			name:  "unclosed variable",
@@ -276,8 +276,8 @@ func TestResolveString(t *testing.T) {
 					t.Errorf("resolveString() expected error, got nil")
 					return
 				}
-				if !strings.Contains(err.Error(), "undefined variables: undefined") {
-					t.Errorf("resolveString() error = %v, want to contain 'undefined variables: undefined'", err.Error())
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("resolveString() error = %v, want to contain '%s'", err.Error(), tt.errMsg)
 				}
 			} else {
 				if err != nil {
