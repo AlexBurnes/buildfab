@@ -95,6 +95,96 @@ func (d *dockerEngineImpl) BuildImage(ctx context.Context, config ContainerBuild
 	return "", fmt.Errorf("no tags specified")
 }
 
+func (d *dockerEngineImpl) BuildImageWithCallback(ctx context.Context, config ContainerBuild, outputCallback func(string)) (string, error) {
+	// Build docker build command
+	args := []string{"build"}
+	
+	// Add build args
+	for key, value := range config.Args {
+		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+	}
+	
+	// Add tags
+	for _, tag := range config.Tags {
+		args = append(args, "--tag", tag)
+	}
+	
+	// Add network if specified
+	if config.Network != "" {
+		args = append(args, "--network", config.Network)
+	}
+	
+	// Add progress if specified
+	if config.Progress != "" {
+		args = append(args, "--progress", config.Progress)
+	}
+	
+	// Add dockerfile if specified
+	if config.Dockerfile != "" {
+		args = append(args, "-f", config.Dockerfile)
+	}
+	
+	// Add context (default to current directory)
+	context := config.Context
+	if context == "" {
+		context = "."
+	}
+	args = append(args, context)
+	
+	// Execute docker build command with streaming output
+	cmd := exec.CommandContext(ctx, d.binary, args...)
+	
+	// Create a pipe for stdout
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	
+	// Create a pipe for stderr
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+	
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start docker build: %w", err)
+	}
+	
+	// Stream output in real-time
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			if outputCallback != nil {
+				outputCallback(scanner.Text())
+			}
+		}
+	}()
+	
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			if outputCallback != nil {
+				outputCallback(scanner.Text())
+			}
+		}
+	}()
+	
+	// Wait for command to complete
+	err = cmd.Wait()
+	
+	if err != nil {
+		return "", fmt.Errorf("docker build failed: %w", err)
+	}
+	
+	// Return the first tag as the image name
+	if len(config.Tags) > 0 {
+		return config.Tags[0], nil
+	}
+	
+	return "", fmt.Errorf("no tags specified")
+}
+
 func (d *dockerEngineImpl) SlimImage(ctx context.Context, config ContainerSlim) (string, error) {
 	// Build docker slim command using dslim/slim container
 	args := []string{"run", "--rm"}
@@ -141,6 +231,101 @@ func (d *dockerEngineImpl) SlimImage(ctx context.Context, config ContainerSlim) 
 	
 	if err != nil {
 		return "", fmt.Errorf("docker slim failed: %w, output: %s", err, string(output))
+	}
+	
+	// Return the first tag as the slim image name
+	if len(config.Tags) > 0 {
+		return config.Tags[0], nil
+	}
+	
+	// If no tags specified, return the target with -slim suffix
+	return config.Target + "-slim", nil
+}
+
+func (d *dockerEngineImpl) SlimImageWithCallback(ctx context.Context, config ContainerSlim, outputCallback func(string)) (string, error) {
+	// Build docker slim command using dslim/slim container
+	args := []string{"run", "--rm"}
+	
+	// Add network if specified
+	if config.Network != "" {
+		args = append(args, "--network", config.Network)
+	}
+	
+	// Add volume mount for Docker socket (required for slim to work)
+	args = append(args, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+	
+	// Add the slim image
+	args = append(args, "dslim/slim:latest")
+	
+	// Add slim command
+	args = append(args, "slim")
+	
+	// Add target image
+	args = append(args, "build")
+	
+	// Add http probe setting (after build command)
+	if !config.HttpProbe {
+		args = append(args, "--http-probe=false")
+		// When http-probe is false, we need to specify continue-after to make it non-interactive
+		args = append(args, "--continue-after=exit")
+	}
+	
+	args = append(args, config.Target)
+	
+	// Add exec command if specified
+	if config.Exec != "" {
+		args = append(args, "--exec", config.Exec)
+	}
+	
+	// Add tags for the slim image
+	for _, tag := range config.Tags {
+		args = append(args, "--tag", tag)
+	}
+	
+	// Execute docker slim command with streaming output
+	cmd := exec.CommandContext(ctx, d.binary, args...)
+	
+	// Create a pipe for stdout
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	
+	// Create a pipe for stderr
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+	
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start docker slim: %w", err)
+	}
+	
+	// Stream output in real-time
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			if outputCallback != nil {
+				outputCallback(scanner.Text())
+			}
+		}
+	}()
+	
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			if outputCallback != nil {
+				outputCallback(scanner.Text())
+			}
+		}
+	}()
+	
+	// Wait for command to complete
+	err = cmd.Wait()
+	
+	if err != nil {
+		return "", fmt.Errorf("docker slim failed: %w", err)
 	}
 	
 	// Return the first tag as the slim image name
@@ -482,6 +667,96 @@ func (p *podmanEngineImpl) BuildImage(ctx context.Context, config ContainerBuild
 	return "", fmt.Errorf("no tags specified")
 }
 
+func (p *podmanEngineImpl) BuildImageWithCallback(ctx context.Context, config ContainerBuild, outputCallback func(string)) (string, error) {
+	// Build podman build command
+	args := []string{"build"}
+	
+	// Add build args
+	for key, value := range config.Args {
+		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+	}
+	
+	// Add tags
+	for _, tag := range config.Tags {
+		args = append(args, "--tag", tag)
+	}
+	
+	// Add network if specified
+	if config.Network != "" {
+		args = append(args, "--network", config.Network)
+	}
+	
+	// Add progress if specified
+	if config.Progress != "" {
+		args = append(args, "--progress", config.Progress)
+	}
+	
+	// Add dockerfile if specified
+	if config.Dockerfile != "" {
+		args = append(args, "-f", config.Dockerfile)
+	}
+	
+	// Add context (default to current directory)
+	context := config.Context
+	if context == "" {
+		context = "."
+	}
+	args = append(args, context)
+	
+	// Execute podman build command with streaming output
+	cmd := exec.CommandContext(ctx, p.binary, args...)
+	
+	// Create a pipe for stdout
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	
+	// Create a pipe for stderr
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+	
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start podman build: %w", err)
+	}
+	
+	// Stream output in real-time
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			if outputCallback != nil {
+				outputCallback(scanner.Text())
+			}
+		}
+	}()
+	
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			if outputCallback != nil {
+				outputCallback(scanner.Text())
+			}
+		}
+	}()
+	
+	// Wait for command to complete
+	err = cmd.Wait()
+	
+	if err != nil {
+		return "", fmt.Errorf("podman build failed: %w", err)
+	}
+	
+	// Return the first tag as the image name
+	if len(config.Tags) > 0 {
+		return config.Tags[0], nil
+	}
+	
+	return "", fmt.Errorf("no tags specified")
+}
+
 func (p *podmanEngineImpl) SlimImage(ctx context.Context, config ContainerSlim) (string, error) {
 	// Build podman slim command using dslim/slim container
 	args := []string{"run", "--rm"}
@@ -528,6 +803,101 @@ func (p *podmanEngineImpl) SlimImage(ctx context.Context, config ContainerSlim) 
 	
 	if err != nil {
 		return "", fmt.Errorf("podman slim failed: %w, output: %s", err, string(output))
+	}
+	
+	// Return the first tag as the slim image name
+	if len(config.Tags) > 0 {
+		return config.Tags[0], nil
+	}
+	
+	// If no tags specified, return the target with -slim suffix
+	return config.Target + "-slim", nil
+}
+
+func (p *podmanEngineImpl) SlimImageWithCallback(ctx context.Context, config ContainerSlim, outputCallback func(string)) (string, error) {
+	// Build podman slim command using dslim/slim container
+	args := []string{"run", "--rm"}
+	
+	// Add network if specified
+	if config.Network != "" {
+		args = append(args, "--network", config.Network)
+	}
+	
+	// Add volume mount for Podman socket (required for slim to work with Podman)
+	args = append(args, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
+	
+	// Add the slim image
+	args = append(args, "dslim/slim:latest")
+	
+	// Add slim command
+	args = append(args, "slim")
+	
+	// Add target image
+	args = append(args, "build")
+	
+	// Add http probe setting (after build command)
+	if !config.HttpProbe {
+		args = append(args, "--http-probe=false")
+		// When http-probe is false, we need to specify continue-after to make it non-interactive
+		args = append(args, "--continue-after=exit")
+	}
+	
+	args = append(args, config.Target)
+	
+	// Add exec command if specified
+	if config.Exec != "" {
+		args = append(args, "--exec", config.Exec)
+	}
+	
+	// Add tags for the slim image
+	for _, tag := range config.Tags {
+		args = append(args, "--tag", tag)
+	}
+	
+	// Execute podman slim command with streaming output
+	cmd := exec.CommandContext(ctx, p.binary, args...)
+	
+	// Create a pipe for stdout
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+	}
+	
+	// Create a pipe for stderr
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+	}
+	
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("failed to start podman slim: %w", err)
+	}
+	
+	// Stream output in real-time
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			if outputCallback != nil {
+				outputCallback(scanner.Text())
+			}
+		}
+	}()
+	
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			if outputCallback != nil {
+				outputCallback(scanner.Text())
+			}
+		}
+	}()
+	
+	// Wait for command to complete
+	err = cmd.Wait()
+	
+	if err != nil {
+		return "", fmt.Errorf("podman slim failed: %w", err)
 	}
 	
 	// Return the first tag as the slim image name

@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.2] - 2025-10-06
+
+### Fixed
+- **Container Streaming Output**: Fixed container build and slim operations to stream output in real-time instead of buffering all output until completion
+  - Added `BuildImageWithCallback` method to Engine interface with streaming implementation for both Docker and Podman engines
+  - Added `SlimImageWithCallback` method with streaming implementation for both Docker and Podman engines
+  - Updated `ExecuteActionWithCallback` to use streaming methods for both build and slim operations
+  - Users now see complete container process output as it happens: Docker build steps, layer downloads, slim inspection phases, minification results, and security profile generation
+  - Real-time feedback makes it easy to monitor build progress, debug issues, and understand optimization results
+
 ## [0.18.1] - 2025-10-06
 
 ### Added

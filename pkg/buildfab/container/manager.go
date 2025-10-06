@@ -92,7 +92,7 @@ func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config Containe
 	
 	// Handle slim image operation
 	if config.Image.Slim != nil {
-		image, err := m.engine.SlimImage(ctx, *config.Image.Slim)
+		image, err := m.engine.SlimImageWithCallback(ctx, *config.Image.Slim, outputCallback)
 		if err != nil {
 			return nil, err
 		}
@@ -104,16 +104,12 @@ func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config Containe
 			Error:       "",
 			Artifacts:   []string{},
 		}
-		// Send output to callback if provided
-		if outputCallback != nil {
-			outputCallback(result.Output)
-		}
 		return result, nil
 	}
 	
 	// Pull or build image
 	if config.Image.Build != nil {
-		image, err := m.engine.BuildImage(ctx, *config.Image.Build)
+		image, err := m.engine.BuildImageWithCallback(ctx, *config.Image.Build, outputCallback)
 		if err != nil {
 			return nil, err
 		}
