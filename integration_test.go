@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -415,6 +417,112 @@ stages:
 					}
 				}
 			}
+		})
+	}
+}
+
+func TestIntegration_CLIFlags(t *testing.T) {
+	// Test CLI flags: -h, --help, --version, -V
+	tests := []struct {
+		name        string
+		args        []string
+		expectHelp  bool
+		expectVersion bool
+		expectError bool
+	}{
+		{
+			name:        "short help flag",
+			args:        []string{"-h"},
+			expectHelp:  true,
+			expectVersion: false,
+			expectError: false,
+		},
+		{
+			name:        "long help flag",
+			args:        []string{"--help"},
+			expectHelp:  true,
+			expectVersion: false,
+			expectError: false,
+		},
+		{
+			name:        "version flag",
+			args:        []string{"--version"},
+			expectHelp:  false,
+			expectVersion: true,
+			expectError: false,
+		},
+		{
+			name:        "version only flag",
+			args:        []string{"-V"},
+			expectHelp:  false,
+			expectVersion: true,
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Build the binary path
+			binaryPath := "./bin/buildfab"
+			
+			// Check if binary exists
+			if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+				t.Skip("buildfab binary not found, skipping CLI flag test")
+			}
+
+			// Execute the command
+			cmd := exec.Command(binaryPath, tt.args...)
+			output, err := cmd.CombinedOutput()
+			outputStr := string(output)
+
+			// Check for errors
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("Expected error for %s, got nil", tt.name)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for %s: %v, output: %s", tt.name, err, outputStr)
+				}
+			}
+
+			// Check for help content
+			if tt.expectHelp {
+				expectedHelpContent := []string{
+					"buildfab is a Go-based runner",
+					"Usage:",
+					"Available Commands:",
+					"Flags:",
+				}
+				for _, expected := range expectedHelpContent {
+					if !strings.Contains(outputStr, expected) {
+						t.Errorf("Help output missing expected content '%s' for %s", expected, tt.name)
+					}
+				}
+			}
+
+			// Check for version content
+			if tt.expectVersion {
+				// For -V flag, should only contain version number
+				if tt.args[0] == "-V" {
+					// Should be just the version number, no extra text
+					lines := strings.Split(strings.TrimSpace(outputStr), "\n")
+					if len(lines) != 1 {
+						t.Errorf("Version-only flag should output single line for %s, got %d lines", tt.name, len(lines))
+					}
+					// Should contain a version pattern (v followed by numbers and dots)
+					if !strings.Contains(outputStr, "v") {
+						t.Errorf("Version-only output missing version pattern for %s, got: %s", tt.name, outputStr)
+					}
+				} else {
+					// For --version flag, should contain both buildfab and version
+					if !strings.Contains(outputStr, "buildfab") || !strings.Contains(outputStr, "version") {
+						t.Errorf("Version output missing version information for %s, got: %s", tt.name, outputStr)
+					}
+				}
+			}
+
+			t.Logf("Test %s passed with output: %s", tt.name, strings.TrimSpace(outputStr))
 		})
 	}
 }

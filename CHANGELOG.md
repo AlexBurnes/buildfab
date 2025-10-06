@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.3] - 2025-10-06
+
+### Fixed
+- **CLI Help Flag Parsing**: Fixed "Error: unknown flag: --help" by adding missing `--help` and `-h` flag handling
+  - Added proper flag handling in `handleRegularFlag` function for both short and long help flags
+  - Users can now use `buildfab --help` and `buildfab -h` without errors
+  - Help flag is properly recognized and handled by cobra's built-in help system
+
+### Added
+- **CLI Flags Integration Tests**: Comprehensive integration tests for all CLI flags
+  - Added `TestIntegration_CLIFlags` test covering `-h`, `--help`, `--version`, and `-V` flags
+  - Proper output validation for help content and version information
+  - Ensures CLI flag functionality is maintained and catches future regressions
+  - Tests both short and long flag forms with comprehensive validation
+
+### Changed
+- **CLI Flag Handling**: Enhanced flag parsing to properly handle help flags in custom parsing logic
+- **Test Coverage**: Extended integration test suite with CLI flag validation
+
 ## [0.18.2] - 2025-10-06
 
 ### Fixed

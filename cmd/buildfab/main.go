@@ -202,6 +202,9 @@ func parseFlags(args []string) ([]string, error) {
 // handleRegularFlag handles regular CLI flags
 func handleRegularFlag(arg string, i *int, args []string) error {
 	switch arg {
+	case "--help", "-h":
+		// Help flag is handled by cobra automatically, just return nil
+		return nil
 	case "--version":
 		versionFlag = true
 	case "--version-only", "-V":
