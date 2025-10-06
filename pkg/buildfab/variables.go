@@ -94,7 +94,7 @@ func InterpolateStep(step Step, variables map[string]string) (Step, error) {
 	for i, req := range step.Require {
 		interpolated, err := InterpolateVariables(req, variables)
 		if err != nil {
-			return step, fmt.Errorf("failed to interpolate variables in step require %d: %w", err)
+			return step, fmt.Errorf("failed to interpolate variables in step require %d: %w", i, err)
 		}
 		step.Require[i] = interpolated
 	}
