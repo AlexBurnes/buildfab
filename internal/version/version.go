@@ -119,6 +119,8 @@ func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, 
 		variables["version.project"] = config.Project.Name
 		if len(config.Project.Modules) > 0 {
 			variables["version.modules"] = strings.Join(config.Project.Modules, ",")
+			// Add first module as the primary module
+			variables["version.module"] = config.Project.Modules[0]
 		}
 	}
 	

@@ -8,6 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.1] - 2025-10-06
+
+### Added
+- **Module Variables**: Added comprehensive module variable support for container builds
+  - Added `module` variable (direct from current config file)
+  - Added `version.module` variable (first module from main project.yml)
+  - Enhanced `version.modules` variable (comma-separated modules from project.yml)
+  - Updated `internal/version/version.go` to detect and provide module variables
+  - Updated `cmd/buildfab/main.go` to load module variables in CLI
+
+### Fixed
+- **Container Command Display**: Fixed container command display to show interpolated variables instead of raw syntax
+  - Analyzed call graph to identify root cause of "${{project}}:${{version}}" display issue
+  - Moved container command display from `OnStepStart` to `runContainerAction` where variables are properly interpolated
+  - Removed duplicate container command display from `OrderedOutputManager`
+  - Created `buildContainerCommandForDisplay` method in Runner for proper command string building
+  - Container commands now show actual values like `buildfab:v0.18.1` instead of `${{project}}:${{version}}`
+
+### Enhanced
+- **Variable Interpolation**: Enhanced container configuration variable interpolation
+  - Implemented comprehensive `InterpolateContainerConfig()` function in `pkg/buildfab/variables.go`
+  - Added `interpolateContainerBuild()` function for build configuration interpolation
+  - Added `interpolateContainerSlim()` function for slim configuration interpolation
+  - All container configuration fields now support variable interpolation (tags, args, targets, exec commands)
+
+### Documentation
+- **Memory Bank Updates**: Updated project documentation to reflect variable module implementation
+  - Updated `activeContext.md` with comprehensive variable module implementation details
+  - Updated `progress.md` with variable module completion status
+  - Documented call graph analysis and container display fix methodology
+
 ## [0.18.0] - 2025-10-06
 
 ### Added

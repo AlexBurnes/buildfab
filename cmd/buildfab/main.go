@@ -431,6 +431,22 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	// Add platform variables
 	variables = buildfab.AddPlatformVariables(variables)
 	
+	// Add version variables
+	variables = buildfab.AddVersionVariables(variables)
+	
+	// Add direct project and version variables for convenience
+	if cfg != nil {
+		variables["project"] = cfg.Project.Name
+		// Add first module as the primary module
+		if len(cfg.Project.Modules) > 0 {
+			variables["module"] = cfg.Project.Modules[0]
+		}
+	}
+	// Add direct version variable from VERSION file
+	if versionStr := getProjectVersion(); versionStr != "unknown" {
+		variables["version"] = versionStr
+	}
+	
 	// If quiet is set, override verbose level to 0
 	// Otherwise, default to verbose level 1 if no verbose flags were provided
 	effectiveVerboseLevel := verboseLevel
@@ -544,6 +560,22 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 	
 	// Add platform variables
 	variables = buildfab.AddPlatformVariables(variables)
+	
+	// Add version variables
+	variables = buildfab.AddVersionVariables(variables)
+	
+	// Add direct project and version variables for convenience
+	if cfg != nil {
+		variables["project"] = cfg.Project.Name
+		// Add first module as the primary module
+		if len(cfg.Project.Modules) > 0 {
+			variables["module"] = cfg.Project.Modules[0]
+		}
+	}
+	// Add direct version variable from VERSION file
+	if versionStr := getProjectVersion(); versionStr != "unknown" {
+		variables["version"] = versionStr
+	}
 	
 	// Create simple run options
 	// If quiet is set, override verbose level to 0

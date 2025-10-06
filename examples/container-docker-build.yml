@@ -21,9 +21,10 @@ actions:
           dockerfile: Dockerfile
           context: .
           args:
-            VERSION: latest
+            VERSION: ${{version}}
           tags:
-            - buildfab:latest
+            - ${{project}}:${{version}}
+            - ${{project}}:latest
           network: host
           progress: plain
       # No need for from, workdir, env, or run - buildfab handles the build locally
@@ -35,9 +36,10 @@ actions:
       engine: docker
       image:
         slim:
-          target: buildfab:latest  # Target the image built in the previous step
+          target: ${{project}}:${{version}}  # Target the image built in the previous step
           tags:
-            - buildfab:slim
+            - ${{project}}:${{version}}-slim
+            - ${{project}}:latest-slim
           network: host
           http_probe: false
-          exec: "/usr/local/bin/buildfab --version"  # Test command for slim tool
+          exec: "/usr/local/bin/${{version.modules}} --version"  # Test command for slim tool

@@ -1471,6 +1471,118 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	return result, err
 }
 
+// buildContainerCommandForDisplay builds a human-readable representation of the container command
+func (r *Runner) buildContainerCommandForDisplay(config *container.ContainerConfig) string {
+	var parts []string
+
+	// Use specified engine or default to podman
+	engineName := "podman" // Default to podman
+	if config.Engine != "" {
+		engineName = config.Engine
+	}
+
+	// Add engine (Docker/Podman)
+	parts = append(parts, engineName)
+
+	// Handle slim operations differently
+	if config.Image.Slim != nil {
+		// For slim operations, we need to mount the Docker socket
+		if engineName == "docker" {
+			parts = append(parts, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+		} else if engineName == "podman" {
+			parts = append(parts, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
+		}
+		
+		// For slim operations, we run the dslim/slim container with specific arguments
+		parts = append(parts, "dslim/slim:latest")
+		parts = append(parts, "slim", "build")
+		
+		// Add slim-specific flags
+		if !config.Image.Slim.HttpProbe {
+			parts = append(parts, "--http-probe=false")
+			parts = append(parts, "--continue-after=exit")
+		}
+		
+		parts = append(parts, config.Image.Slim.Target)
+		
+		// Add exec command if specified
+		if config.Image.Slim.Exec != "" {
+			parts = append(parts, "--exec", config.Image.Slim.Exec)
+		}
+		
+		// Add tags for the slim image
+		for _, tag := range config.Image.Slim.Tags {
+			parts = append(parts, "--tag", tag)
+		}
+	} else if config.Image.Build != nil {
+		// Build operation
+		parts = append(parts, "build")
+		
+		// Add build arguments
+		for key, value := range config.Image.Build.Args {
+			parts = append(parts, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+		}
+		
+		// Add tags
+		for _, tag := range config.Image.Build.Tags {
+			parts = append(parts, "--tag", tag)
+		}
+		
+		// Add network
+		if config.Image.Build.Network != "" {
+			parts = append(parts, "--network", config.Image.Build.Network)
+		}
+		
+		// Add progress
+		if config.Image.Build.Progress != "" {
+			parts = append(parts, "--progress", config.Image.Build.Progress)
+		}
+		
+		// Add dockerfile
+		if config.Image.Build.Dockerfile != "" {
+			parts = append(parts, "-f", config.Image.Build.Dockerfile)
+		}
+		
+		// Add context
+		context := config.Image.Build.Context
+		if context == "" {
+			context = "."
+		}
+		parts = append(parts, context)
+	} else {
+		// Regular container execution
+		parts = append(parts, "run", "--rm")
+		
+		// Add mount arguments
+		for _, mount := range config.Mounts {
+			mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
+			if mount.RO {
+				mountArg += ",readonly"
+			}
+			parts = append(parts, mountArg)
+		}
+		
+		// Add network if specified
+		if config.Network != "" {
+			parts = append(parts, "--network", config.Network)
+		}
+
+		// Add image
+		parts = append(parts, config.Image.From)
+
+		// Add command to run
+		if config.Run != "" {
+			parts = append(parts, "sh", "-c", config.Run)
+		} else if config.RunAction != "" {
+			parts = append(parts, "buildfab", "action", config.RunAction)
+		} else if config.RunStage != "" {
+			parts = append(parts, "buildfab", "run", config.RunStage)
+		}
+	}
+
+	return strings.Join(parts, " ")
+}
+
 // shouldExecuteStep checks if a step should be executed based on conditions
 func (r *Runner) shouldExecuteStep(ctx context.Context, node *DAGNode) bool {
 	// Check if step should be executed based on its if condition
@@ -2877,13 +2989,44 @@ func (r *Runner) executeCommandWithStreaming(ctx context.Context, cmd *exec.Cmd,
 
 // runContainerAction executes an action inside a container
 func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result, error) {
+	// Interpolate variables in the container configuration
+	interpolatedAction, err := InterpolateAction(action, r.opts.Variables)
+	if err != nil {
+		return Result{
+			Status:  StatusError,
+			Message: fmt.Sprintf("failed to interpolate variables in container action: %v", err),
+		}, fmt.Errorf("failed to interpolate variables in container action %s: %w", action.Name, err)
+	}
+	
+	// Interpolate variables in the container configuration
+	if interpolatedAction.Container != nil {
+		interpolatedContainer, err := InterpolateContainerConfig(interpolatedAction.Container, r.opts.Variables)
+		if err != nil {
+			return Result{
+				Status:  StatusError,
+				Message: fmt.Sprintf("failed to interpolate variables in container config: %v", err),
+			}, fmt.Errorf("failed to interpolate variables in container config %s: %w", action.Name, err)
+		}
+		interpolatedAction.Container = interpolatedContainer
+	}
+	
+	// Show container command if verbose level is 2 or higher
+	if r.opts.VerboseLevel >= 2 {
+		// Create a temporary runner to prepare the configuration for display
+		tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(r.opts.VerboseLevel)
+		if err == nil {
+			preparedConfig := tempRunner.PrepareContainerConfig(*interpolatedAction.Container, r.opts.ConfigPath)
+			containerCmd := r.buildContainerCommandForDisplay(&preparedConfig)
+			fmt.Fprintf(r.opts.ErrorOutput, "  🐳 Running container: %s\n", containerCmd)
+		}
+	}
+
 	// Create container runner with specified engine or default
 	var runner *containerRunner.ContainerRunner
-	var err error
 	
-	if action.Container.Engine != "" {
+	if interpolatedAction.Container.Engine != "" {
 		// Use specified engine
-		runner, err = containerRunner.NewContainerRunnerWithEngine(action.Container.Engine)
+		runner, err = containerRunner.NewContainerRunnerWithEngine(interpolatedAction.Container.Engine)
 		if err == nil {
 			runner.VerbosityLevel = r.opts.VerboseLevel
 		}
@@ -2914,7 +3057,7 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 		}
 		
 			var err error
-			containerResult, err = runner.RunActionWithCallback(ctx, *action.Container, r.opts.ConfigPath, outputCallback)
+			containerResult, err = runner.RunActionWithCallback(ctx, *interpolatedAction.Container, r.opts.ConfigPath, outputCallback)
 			return err
 	}()
 	if err != nil {

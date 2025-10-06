@@ -342,10 +342,7 @@ func (o *OrderedOutputManager) showStepStart(stepName string) {
     if o.verboseLevel > 0 {
         fmt.Fprintf(o.errorOutput, "  💻 %s\n", stepName)
         
-        // Show container command output for container actions if verbosity level is 2 or higher
-        if o.verboseLevel >= 2 {
-            o.showContainerCommand(stepName)
-        }
+        // Container command display is now handled in the actual execution
     } else {
         // In quiet mode, don't show individual step indicators
         // The summary will show the overall results
