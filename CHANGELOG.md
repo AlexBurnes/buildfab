@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.4] - 2025-10-06
+
+### Fixed
+- **Container Build-Only Execution**: Fixed critical bug where buildfab was automatically running Docker containers after building them, even when no run commands were specified in the YAML configuration
+  - **Problem Identified** - Container actions with only `image.build` configuration were being executed with Dockerfile's default `CMD` instruction, causing unwanted container execution and errors
+  - **Root Cause Found** - The `ExecuteAction` method in `container/manager.go` was always calling `RunContainer` after building images, regardless of whether run commands were specified
+  - **Solution Implemented** - Added conditional check to only run containers when `run`, `run_action`, or `run_stage` commands are explicitly specified in the YAML configuration
+  - **Fixed Both Execution Paths** - Updated both `ExecuteAction` and `ExecuteActionWithCallback` methods to check for run commands before attempting container execution
+  - **Perfect User Experience** - Container build actions now only build/pull images without automatically running them, which is the expected behavior when no run commands are defined
+  - **Comprehensive Testing** - Verified fix works correctly with container build examples showing clean build-only execution without unwanted container runs
+
+### Changed
+- **Container Execution Logic**: Container actions now only execute containers when run commands are explicitly specified
+- **Build-Only Behavior**: Container build actions return success after building/pulling images without running containers
+
 ## [0.18.3] - 2025-10-06
 
 ### Fixed

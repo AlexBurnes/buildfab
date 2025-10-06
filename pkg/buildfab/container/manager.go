@@ -79,6 +79,18 @@ func (m *Manager) ExecuteAction(ctx context.Context, config ContainerConfig) (*C
 		}
 	}
 	
+	// Only run container if run commands are specified
+	if config.Run == "" && config.RunAction == "" && config.RunStage == "" {
+		// No run commands specified, just return success after build/pull
+		return &ContainerResult{
+			ContainerID: "build-only",
+			ExitCode:    0,
+			Output:      fmt.Sprintf("Image built/pulled successfully: %s", config.Image.From),
+			Error:       "",
+			Artifacts:   []string{},
+		}, nil
+	}
+	
 	// Run container
 	return m.engine.RunContainer(ctx, config)
 }
@@ -120,6 +132,19 @@ func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config Containe
 				return nil, err
 			}
 		}
+	}
+	
+	// Only run container if run commands are specified
+	if config.Run == "" && config.RunAction == "" && config.RunStage == "" {
+		// No run commands specified, just return success after build/pull
+		result := &ContainerResult{
+			ContainerID: "build-only",
+			ExitCode:    0,
+			Output:      fmt.Sprintf("Image built/pulled successfully: %s", config.Image.From),
+			Error:       "",
+			Artifacts:   []string{},
+		}
+		return result, nil
 	}
 	
 	// Run container with callback

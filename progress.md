@@ -2,6 +2,15 @@
 
 ## What Works
 
+- **Container Build-Only Fix**: Successfully fixed critical bug where buildfab was automatically running Docker containers after building them, even when no run commands were specified in the YAML configuration (100% complete)
+  - **Problem Identified** - Container actions with only `image.build` configuration were being executed with Dockerfile's default `CMD` instruction, causing unwanted container execution and errors
+  - **Root Cause Found** - The `ExecuteAction` method in `container/manager.go` was always calling `RunContainer` after building images, regardless of whether run commands were specified
+  - **Solution Implemented** - Added conditional check to only run containers when `run`, `run_action`, or `run_stage` commands are explicitly specified in the YAML configuration
+  - **Fixed Both Execution Paths** - Updated both `ExecuteAction` and `ExecuteActionWithCallback` methods to check for run commands before attempting container execution
+  - **Perfect User Experience** - Container build actions now only build/pull images without automatically running them, which is the expected behavior when no run commands are defined
+  - **Comprehensive Testing** - Verified fix works correctly with container build examples showing clean build-only execution without unwanted container runs
+  - **VERSION 0.18.4 RELEASED** - Successfully completed container build-only fix with proper conditional execution logic
+
 - **CLI Help Flag Fix and Integration Tests**: Successfully fixed CLI help flag parsing issue and added comprehensive integration tests for all CLI flags (100% complete)
   - **Help Flag Fix** - Fixed "Error: unknown flag: --help" by adding missing `--help` and `-h` flag handling in the `handleRegularFlag` function
   - **Integration Tests Added** - Created comprehensive `TestIntegration_CLIFlags` test covering all CLI flag scenarios: `-h`, `--help`, `--version`, and `-V` flags with proper output validation
