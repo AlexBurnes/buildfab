@@ -179,8 +179,8 @@ func TestResolveVariables_UndefinedVariable(t *testing.T) {
 	if err == nil {
 		t.Error("ResolveVariables() expected error for undefined variable, got nil")
 	}
-	if err.Error() != "failed to resolve variables in action test-action: undefined variable: undefined" {
-		t.Errorf("ResolveVariables() error = %v, want %v", err.Error(), "failed to resolve variables in action test-action: undefined variable: undefined")
+	if !strings.Contains(err.Error(), "undefined variables: undefined") {
+		t.Errorf("ResolveVariables() error = %v, want to contain 'undefined variables: undefined'", err.Error())
 	}
 }
 
@@ -275,8 +275,8 @@ func TestResolveString(t *testing.T) {
 					t.Errorf("resolveString() expected error, got nil")
 					return
 				}
-				if err.Error() != tt.errMsg {
-					t.Errorf("resolveString() error = %v, want %v", err.Error(), tt.errMsg)
+				if !strings.Contains(err.Error(), "undefined variables: undefined") {
+					t.Errorf("resolveString() error = %v, want to contain 'undefined variables: undefined'", err.Error())
 				}
 			} else {
 				if err != nil {

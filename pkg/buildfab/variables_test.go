@@ -10,6 +10,7 @@ func TestInterpolateVariables(t *testing.T) {
 		text      string
 		variables map[string]string
 		expected  string
+		wantErr   bool
 	}{
 		{
 			name:      "simple variable",
@@ -33,7 +34,8 @@ func TestInterpolateVariables(t *testing.T) {
 			name:      "undefined variable",
 			text:      "Hello ${{ undefined }}",
 			variables: map[string]string{"name": "world"},
-			expected:  "Hello ${{ undefined }}",
+			expected:  "",
+			wantErr:   true,
 		},
 		{
 			name:      "whitespace in variable",
@@ -58,6 +60,12 @@ func TestInterpolateVariables(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := InterpolateVariables(tt.text, tt.variables)
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("InterpolateVariables() expected error, got nil")
+				}
+				return
+			}
 			if err != nil {
 				t.Errorf("InterpolateVariables() error = %v", err)
 				return
