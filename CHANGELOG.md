@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.5] - 2025-10-06
+
+### Fixed
+- **Container Pull Streaming**: Fixed container image pull progress to stream in real-time
+  - Added `PullImageWithCallback` method to Engine interface for streaming pull operations
+  - Implemented streaming pull in both Docker and Podman engines using `streamingWriter` helper
+  - Updated container manager to use streaming pull methods when callbacks are enabled
+  - Users now see complete pull progress: "Trying to pull...", "Copying blob" for each layer, etc.
+  - Provides same visibility as manual `podman pull` or `docker pull` commands
+  - Comprehensive testing verified fix works correctly with fresh image pulls
+
 ## [0.18.4] - 2025-10-06
 
 ### Fixed

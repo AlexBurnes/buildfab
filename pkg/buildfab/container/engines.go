@@ -37,6 +37,16 @@ func (d *dockerEngineImpl) PullImage(ctx context.Context, image string) error {
 	return cmd.Run()
 }
 
+func (d *dockerEngineImpl) PullImageWithCallback(ctx context.Context, image string, outputCallback func(string)) error {
+	cmd := exec.CommandContext(ctx, d.binary, "pull", image)
+	
+	// Set up streaming output
+	cmd.Stdout = &streamingWriter{callback: outputCallback}
+	cmd.Stderr = &streamingWriter{callback: outputCallback}
+	
+	return cmd.Run()
+}
+
 func (d *dockerEngineImpl) ImageExists(ctx context.Context, image string) (bool, error) {
 	cmd := exec.CommandContext(ctx, d.binary, "image", "inspect", image)
 	err := cmd.Run()
@@ -609,6 +619,16 @@ func (p *podmanEngineImpl) PullImage(ctx context.Context, image string) error {
 	return cmd.Run()
 }
 
+func (p *podmanEngineImpl) PullImageWithCallback(ctx context.Context, image string, outputCallback func(string)) error {
+	cmd := exec.CommandContext(ctx, p.binary, "pull", image)
+	
+	// Set up streaming output
+	cmd.Stdout = &streamingWriter{callback: outputCallback}
+	cmd.Stderr = &streamingWriter{callback: outputCallback}
+	
+	return cmd.Run()
+}
+
 func (p *podmanEngineImpl) ImageExists(ctx context.Context, image string) (bool, error) {
 	cmd := exec.CommandContext(ctx, p.binary, "image", "exists", image)
 	err := cmd.Run()
@@ -1161,4 +1181,16 @@ func (p *podmanEngineImpl) StopContainer(ctx context.Context, containerID string
 func (p *podmanEngineImpl) RemoveContainer(ctx context.Context, containerID string) error {
 	cmd := exec.CommandContext(ctx, p.binary, "rm", containerID)
 	return cmd.Run()
+}
+
+// streamingWriter is a helper that streams output to a callback function
+type streamingWriter struct {
+	callback func(string)
+}
+
+func (w *streamingWriter) Write(p []byte) (n int, err error) {
+	if w.callback != nil {
+		w.callback(string(p))
+	}
+	return len(p), nil
 }

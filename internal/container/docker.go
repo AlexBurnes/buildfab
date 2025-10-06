@@ -37,6 +37,17 @@ func (d *DockerEngine) PullImage(ctx context.Context, image string) error {
 	return cmd.Run()
 }
 
+// PullImageWithCallback pulls a Docker image with streaming output
+func (d *DockerEngine) PullImageWithCallback(ctx context.Context, image string, outputCallback func(string)) error {
+	cmd := exec.CommandContext(ctx, d.binary, "pull", image)
+	
+	// Set up streaming output
+	cmd.Stdout = &streamingWriter{callback: outputCallback}
+	cmd.Stderr = &streamingWriter{callback: outputCallback}
+	
+	return cmd.Run()
+}
+
 // ImageExists checks if a Docker image exists locally
 func (d *DockerEngine) ImageExists(ctx context.Context, image string) (bool, error) {
 	cmd := exec.CommandContext(ctx, d.binary, "image", "inspect", image)
@@ -149,4 +160,16 @@ func (d *DockerEngine) StopContainer(ctx context.Context, containerID string) er
 func (d *DockerEngine) RemoveContainer(ctx context.Context, containerID string) error {
 	cmd := exec.CommandContext(ctx, d.binary, "rm", containerID)
 	return cmd.Run()
+}
+
+// streamingWriter is a helper that streams output to a callback function
+type streamingWriter struct {
+	callback func(string)
+}
+
+func (w *streamingWriter) Write(p []byte) (n int, err error) {
+	if w.callback != nil {
+		w.callback(string(p))
+	}
+	return len(p), nil
 }

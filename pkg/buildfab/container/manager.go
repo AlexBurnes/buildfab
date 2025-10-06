@@ -128,7 +128,7 @@ func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config Containe
 		config.Image.From = image
 	} else {
 		if exists, _ := m.engine.ImageExists(ctx, config.Image.From); !exists {
-			if err := m.engine.PullImage(ctx, config.Image.From); err != nil {
+			if err := m.engine.PullImageWithCallback(ctx, config.Image.From, outputCallback); err != nil {
 				return nil, err
 			}
 		}

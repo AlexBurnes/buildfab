@@ -8,6 +8,7 @@ import (
 type Engine interface {
 	// Image operations
 	PullImage(ctx context.Context, image string) error
+	PullImageWithCallback(ctx context.Context, image string, outputCallback func(string)) error
 	ImageExists(ctx context.Context, image string) (bool, error)
 	BuildImage(ctx context.Context, config ContainerBuild) (string, error)
 	BuildImageWithCallback(ctx context.Context, config ContainerBuild, outputCallback func(string)) (string, error)

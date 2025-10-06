@@ -2,6 +2,15 @@
 
 ## What Works
 
+- **Container Pull Streaming Fix**: Successfully fixed critical issue where container image pull progress was not being streamed to users, providing real-time visibility into image download operations (100% complete)
+  - **Problem Identified** - When buildfab needed to pull images from registries, users only saw the final result without the "Copying blob" progress messages that are normally shown during `podman pull` or `docker pull` operations
+  - **Root Cause Found** - The `PullImage` methods in both Docker and Podman engines used `cmd.Run()` which doesn't stream output, and the container manager was not using streaming pull methods
+  - **Solution Implemented** - Added `PullImageWithCallback` method to Engine interface and implemented streaming pull operations in both Docker and Podman engines using `streamingWriter` helper
+  - **Updated Container Manager** - Modified `ExecuteActionWithCallback` to use `PullImageWithCallback` instead of `PullImage` when streaming is enabled
+  - **Perfect User Experience** - Users now see complete pull progress in real-time: "Trying to pull...", "Getting image source signatures", "Copying blob" for each layer, "Writing manifest to image destination", and "Storing signatures"
+  - **Comprehensive Testing** - Verified fix works correctly with fresh image pulls showing complete streaming progress
+  - **VERSION 0.18.5 RELEASED** - Successfully completed container pull streaming fix with comprehensive real-time progress visibility
+
 - **Container Build-Only Fix**: Successfully fixed critical bug where buildfab was automatically running Docker containers after building them, even when no run commands were specified in the YAML configuration (100% complete)
   - **Problem Identified** - Container actions with only `image.build` configuration were being executed with Dockerfile's default `CMD` instruction, causing unwanted container execution and errors
   - **Root Cause Found** - The `ExecuteAction` method in `container/manager.go` was always calling `RunContainer` after building images, regardless of whether run commands were specified

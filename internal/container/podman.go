@@ -37,6 +37,17 @@ func (p *PodmanEngine) PullImage(ctx context.Context, image string) error {
 	return cmd.Run()
 }
 
+// PullImageWithCallback pulls a Podman image with streaming output
+func (p *PodmanEngine) PullImageWithCallback(ctx context.Context, image string, outputCallback func(string)) error {
+	cmd := exec.CommandContext(ctx, p.binary, "pull", image)
+	
+	// Set up streaming output
+	cmd.Stdout = &streamingWriter{callback: outputCallback}
+	cmd.Stderr = &streamingWriter{callback: outputCallback}
+	
+	return cmd.Run()
+}
+
 // ImageExists checks if a Podman image exists locally
 func (p *PodmanEngine) ImageExists(ctx context.Context, image string) (bool, error) {
 	cmd := exec.CommandContext(ctx, p.binary, "image", "exists", image)
