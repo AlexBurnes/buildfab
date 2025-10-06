@@ -15,6 +15,34 @@ func InterpolateVariables(text string, variables map[string]string) (string, err
 	// Pattern to match ${{ variable }} syntax
 	pattern := regexp.MustCompile(`\$\{\{\s*([^}]+)\s*\}\}`)
 	
+	// First pass: collect all variable references to validate they exist
+	var missingVars []string
+	allMatches := pattern.FindAllStringSubmatch(text, -1)
+	
+	for _, match := range allMatches {
+		if len(match) >= 2 {
+			varName := strings.TrimSpace(match[1])
+			if _, exists := variables[varName]; !exists {
+				missingVars = append(missingVars, varName)
+			}
+		}
+	}
+	
+	// If any variables are missing, return a comprehensive error
+	if len(missingVars) > 0 {
+		var availableVars []string
+		for varName := range variables {
+			availableVars = append(availableVars, varName)
+		}
+		
+		errorMsg := fmt.Sprintf("undefined variables: %s", strings.Join(missingVars, ", "))
+		if len(availableVars) > 0 {
+			errorMsg += fmt.Sprintf("\navailable variables: %s", strings.Join(availableVars, ", "))
+		}
+		return "", fmt.Errorf(errorMsg)
+	}
+	
+	// Second pass: perform actual interpolation
 	result := pattern.ReplaceAllStringFunc(text, func(match string) string {
 		// Extract variable name from ${{ variable }}
 		submatches := pattern.FindStringSubmatch(match)
@@ -24,12 +52,12 @@ func InterpolateVariables(text string, variables map[string]string) (string, err
 		
 		varName := strings.TrimSpace(submatches[1])
 		
-		// Check if variable exists
+		// Variable should exist at this point since we validated above
 		if value, exists := variables[varName]; exists {
 			return value
 		}
 		
-		// Return original match if variable not found
+		// This should not happen due to validation above, but just in case
 		return match
 	})
 	

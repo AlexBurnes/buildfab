@@ -264,6 +264,24 @@ ${{ os_version }}    # 24.04, 15.0, windows10
 ${{ cpu }}           # Number of CPU cores
 ```
 
+#### Version Variables
+```yaml
+# Available version variables from version-go library
+${{ version.version }}        # Current version (e.g., "v1.2.3")
+${{ version.project }}        # Project name from .project.yml or go.mod
+${{ version.commit }}         # Git commit hash
+${{ version.date }}           # Build date
+${{ version.type }}           # Version type (release, prerelease, etc.)
+${{ version.major }}          # Major version number
+${{ version.minor }}          # Minor version number
+${{ version.patch }}          # Patch version number
+${{ version.build-type }}     # CMake build type (Release, Debug, etc.)
+${{ version.version-type }}   # Semantic version type (release, prerelease, etc.)
+${{ version.modules }}        # Comma-separated list of Go modules
+${{ version.tag }}            # Current Git tag (latest tag on branch)
+${{ version.branch }}         # Current Git branch name
+```
+
 #### Environment Variables
 ```yaml
 ${{ env.VAR_NAME }}  # Environment variable
@@ -364,6 +382,21 @@ if: "semverCompare(os_version, '<22.04')"
 
 Variables can be interpolated in action commands using `${{ }}` syntax:
 
+### Error Handling
+
+When using undefined variables, buildfab provides clear error messages:
+
+```yaml
+# This will produce an error:
+actions:
+  - name: "example"
+    run: echo "Value: ${{ undefined.variable }}"
+
+# Error output:
+# undefined variables: undefined.variable
+# available variables: platform, arch, os, os_version, cpu, version.version, version.project, ...
+```
+
 ### Basic Interpolation
 
 ```yaml
@@ -402,6 +435,50 @@ actions:
       echo "Deploying to ${{ env.ENVIRONMENT }}"
       echo "Using version ${{ env.VERSION }}"
       kubectl set image deployment/web-app web-app=myapp:${{ env.VERSION }}
+```
+
+### Version Variable Interpolation
+
+```yaml
+actions:
+  - name: "build-info"
+    run: |
+      echo "Project: ${{ version.project }}"
+      echo "Version: ${{ version.version }}"
+      echo "Build Type: ${{ version.build-type }}"
+      echo "Version Type: ${{ version.version-type }}"
+      echo "Modules: ${{ version.modules }}"
+      echo "Current Tag: ${{ version.tag }}"
+      echo "Current Branch: ${{ version.branch }}"
+      echo "Commit: ${{ version.commit }}"
+  
+  - name: "build-with-version"
+    run: |
+      echo "Building ${{ version.project }} version ${{ version.version }}"
+      echo "Branch: ${{ version.branch }}, Tag: ${{ version.tag }}"
+      go build -ldflags "-X main.version=${{ version.version }} -X main.buildType=${{ version.build-type }} -X main.branch=${{ version.branch }}"
+  
+  - name: "conditional-build"
+    variants:
+      - when: "${{ version.build-type == 'Release' }}"
+        run: |
+          echo "Building release version ${{ version.version }} on branch ${{ version.branch }}"
+          go build -ldflags "-s -w"
+      - when: "${{ version.build-type == 'Debug' }}"
+        run: |
+          echo "Building debug version ${{ version.version }} on branch ${{ version.branch }}"
+          go build -race -gcflags="all=-N -l"
+  
+  - name: "branch-specific-build"
+    variants:
+      - when: "${{ version.branch == 'master' || version.branch == 'main' }}"
+        run: |
+          echo "Building production version ${{ version.version }}"
+          go build -ldflags "-s -w -X main.environment=production"
+      - when: "${{ version.branch != 'master' && version.branch != 'main' }}"
+        run: |
+          echo "Building development version ${{ version.version }} on branch ${{ version.branch }}"
+          go build -ldflags "-X main.environment=development -X main.branch=${{ version.branch }}"
 ```
 
 ## Built-in Actions

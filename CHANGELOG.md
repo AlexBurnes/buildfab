@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 2025-10-06
+
+### Added
+- **Version Variables Extension**: Extended version variables with Git detection functionality
+  - Added `version.tag` variable for current Git tag using `git describe --tags --abbrev=0`
+  - Added `version.branch` variable for current Git branch with comprehensive fallback handling for detached HEAD state
+  - Implemented robust Git detection in `internal/version/version.go` with multiple fallback strategies
+  - Enhanced `GetVersionVariables()` method to include new Git-related variables
+
+### Enhanced
+- **Variable Interpolation Error Handling**: Comprehensive error handling for undefined variables
+  - Updated `pkg/buildfab/variables.go` and `internal/config/config.go` to perform two-pass validation
+  - First pass collects all missing variables, second pass performs actual interpolation
+  - Clear error messages showing exactly which variables are undefined
+  - Available variables list displayed when errors occur for better debugging experience
+  - Multiple missing variables detected and reported in single error message
+
+### Documentation
+- **YAML Syntax Reference**: Enhanced documentation with new version variables and error handling examples
+  - Added `version.tag` and `version.branch` variables to available variables list
+  - Added comprehensive error handling section with examples
+  - Added branch-specific build examples showing conditional execution
+  - Enhanced version variable interpolation examples with new Git variables
+
 ## [0.17.0] - 2025-10-05
 
 ### Added

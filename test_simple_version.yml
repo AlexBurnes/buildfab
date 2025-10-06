@@ -1,0 +1,15 @@
+project:
+  name: "test-simple-version"
+
+actions:
+  - name: "simple-version"
+    run: |
+      echo "Project: ${{ version.project }}"
+      echo "Version: ${{ version.version }}"
+      echo "Build Type: ${{ version.build-type }}"
+      echo "Version Type: ${{ version.version-type }}"
+
+stages:
+  test:
+    steps:
+      - action: "simple-version"

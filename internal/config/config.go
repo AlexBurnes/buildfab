@@ -127,9 +127,49 @@ func ResolveVariables(config *buildfab.Config, variables map[string]string) erro
 
 // resolveString resolves variable interpolation in a string
 func resolveString(s string, variables map[string]string) (string, error) {
+	// First pass: validate all variables exist before processing
+	var missingVars []string
+	temp := s
+	
+	for {
+		start := strings.Index(temp, "${{")
+		if start == -1 {
+			break
+		}
+		
+		end := strings.Index(temp[start:], "}}")
+		if end == -1 {
+			return "", fmt.Errorf("unclosed variable reference: %s", temp[start:])
+		}
+		
+		end += start + 2 // Adjust for the start position
+		
+		variableName := strings.TrimSpace(temp[start+3 : end-2])
+		
+		if _, exists := variables[variableName]; !exists {
+			missingVars = append(missingVars, variableName)
+		}
+		
+		temp = temp[end:]
+	}
+	
+	// If any variables are missing, return a comprehensive error
+	if len(missingVars) > 0 {
+		var availableVars []string
+		for varName := range variables {
+			availableVars = append(availableVars, varName)
+		}
+		
+		errorMsg := fmt.Sprintf("undefined variables: %s", strings.Join(missingVars, ", "))
+		if len(availableVars) > 0 {
+			errorMsg += fmt.Sprintf("\navailable variables: %s", strings.Join(availableVars, ", "))
+		}
+		return "", fmt.Errorf(errorMsg)
+	}
+	
+	// Second pass: perform actual interpolation
 	result := s
 	
-	// Find all variable references in the format ${{ variable }}
 	for {
 		start := strings.Index(result, "${{")
 		if start == -1 {
@@ -145,6 +185,7 @@ func resolveString(s string, variables map[string]string) (string, error) {
 		
 		variableName := strings.TrimSpace(result[start+3 : end-2])
 		
+		// Variable should exist at this point since we validated above
 		value, exists := variables[variableName]
 		if !exists {
 			return "", fmt.Errorf("undefined variable: %s", variableName)

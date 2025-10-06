@@ -105,6 +105,36 @@ func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, 
 		"version.patch":   fmt.Sprintf("%d", info.Patch),
 	}
 	
+	// Add new variables from version-go v1.4.0
+	if buildType, err := version.GetBuildType(info.Version); err == nil {
+		variables["version.build-type"] = buildType
+	}
+	
+	if versionType, err := version.GetVersionType(info.Version); err == nil {
+		variables["version.version-type"] = versionType
+	}
+	
+	// Try to get project config from .project.yml
+	if config, err := version.GetProjectConfigFromFile(".project.yml"); err == nil {
+		variables["version.project"] = config.Project.Name
+		if len(config.Project.Modules) > 0 {
+			variables["version.modules"] = strings.Join(config.Project.Modules, ",")
+		}
+	}
+	
+	// Add Git tag and branch variables
+	if tag, err := d.detectGitTag(ctx); err == nil && tag != "" {
+		variables["version.tag"] = tag
+	} else {
+		variables["version.tag"] = "unknown"
+	}
+	
+	if branch, err := d.detectGitBranch(ctx); err == nil && branch != "" {
+		variables["version.branch"] = branch
+	} else {
+		variables["version.branch"] = "unknown"
+	}
+	
 	return variables, nil
 }
 
@@ -169,6 +199,45 @@ func (d *Detector) detectGitCommit(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+// detectGitBranch detects the current Git branch
+func (d *Detector) detectGitBranch(ctx context.Context) (string, error) {
+	// Try to get the current branch name
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--abbrev-ref", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	branch := strings.TrimSpace(string(output))
+	
+	// Handle detached HEAD state (when branch shows as "HEAD")
+	if branch == "HEAD" {
+		// Try to get branch from git symbolic-ref
+		cmd = exec.CommandContext(ctx, "git", "symbolic-ref", "--short", "HEAD")
+		output, err = cmd.Output()
+		if err == nil {
+			branch = strings.TrimSpace(string(output))
+		} else {
+			// If still in detached HEAD, try to find the branch that contains this commit
+			cmd = exec.CommandContext(ctx, "git", "branch", "-r", "--contains", "HEAD")
+			output, err = cmd.Output()
+			if err == nil {
+				branches := strings.Split(strings.TrimSpace(string(output)), "\n")
+				if len(branches) > 0 && branches[0] != "" {
+					// Take the first branch and clean it up
+					firstBranch := strings.TrimSpace(branches[0])
+					// Remove origin/ prefix if present
+					if strings.HasPrefix(firstBranch, "origin/") {
+						firstBranch = strings.TrimPrefix(firstBranch, "origin/")
+					}
+					branch = firstBranch
+				}
+			}
+		}
+	}
+	
+	return branch, nil
 }
 
 // detectBuildDate detects the build date

@@ -1,9 +1,11 @@
 package buildfab
 
 import (
+	"context"
 	"fmt"
 	
-	"github.com/AlexBurnes/version-go/pkg/version"
+	"github.com/AlexBurnes/buildfab/internal/version"
+	versiongo "github.com/AlexBurnes/version-go/pkg/version"
 )
 
 // PlatformVariables provides platform detection variables for buildfab
@@ -17,7 +19,7 @@ type PlatformVariables struct {
 
 // GetPlatformVariables returns the current platform variables
 func GetPlatformVariables() *PlatformVariables {
-	info := version.GetPlatformInfo()
+	info := versiongo.GetPlatformInfo()
 	return &PlatformVariables{
 		Platform:  info.Platform,
 		Arch:      info.Arch,
@@ -29,7 +31,7 @@ func GetPlatformVariables() *PlatformVariables {
 
 // GetPlatformVariablesMap returns platform variables as a map for variable interpolation
 func GetPlatformVariablesMap() map[string]string {
-	info := version.GetPlatformInfo()
+	info := versiongo.GetPlatformInfo()
 	return map[string]string{
 		"platform":   info.Platform,
 		"arch":       info.Arch,
@@ -48,6 +50,25 @@ func AddPlatformVariables(variables map[string]string) map[string]string {
 	platformVars := GetPlatformVariablesMap()
 	for k, v := range platformVars {
 		variables[k] = v
+	}
+	
+	return variables
+}
+
+// AddVersionVariables adds version variables to the existing variables map
+func AddVersionVariables(variables map[string]string) map[string]string {
+	if variables == nil {
+		variables = make(map[string]string)
+	}
+	
+	// Create version detector and get variables
+	detector := version.New()
+	ctx := context.Background()
+	
+	if versionVars, err := detector.GetVersionVariables(ctx); err == nil {
+		for k, v := range versionVars {
+			variables[k] = v
+		}
 	}
 	
 	return variables

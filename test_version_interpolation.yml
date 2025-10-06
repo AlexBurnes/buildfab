@@ -1,0 +1,33 @@
+project:
+  name: "test-version-variables"
+
+actions:
+  - name: "version-info"
+    run: |
+      echo "=== Version Variables Test ==="
+      echo "Project: ${{ version.project }}"
+      echo "Version: ${{ version.version }}"
+      echo "Build Type: ${{ version.build-type }}"
+      echo "Version Type: ${{ version.version-type }}"
+      echo "Major: ${{ version.major }}"
+      echo "Minor: ${{ version.minor }}"
+      echo "Patch: ${{ version.patch }}"
+      echo "Modules: ${{ version.modules }}"
+      echo "Commit: ${{ version.commit }}"
+      echo "Date: ${{ version.date }}"
+      echo "Type: ${{ version.type }}"
+  
+  - name: "platform-info"
+    run: |
+      echo "=== Platform Variables Test ==="
+      echo "Platform: ${{ platform }}"
+      echo "Arch: ${{ arch }}"
+      echo "OS: ${{ os }}"
+      echo "OS Version: ${{ os_version }}"
+      echo "CPU: ${{ cpu }}"
+
+stages:
+  test:
+    steps:
+      - action: "version-info"
+      - action: "platform-info"

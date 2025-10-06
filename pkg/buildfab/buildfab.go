@@ -193,6 +193,8 @@ func DefaultRunOptions() *RunOptions {
 	variables := make(map[string]string)
 	// Add platform variables by default
 	variables = AddPlatformVariables(variables)
+	// Add version variables by default
+	variables = AddVersionVariables(variables)
 	
 	return &RunOptions{
 		ConfigPath:  ".project.yml",
