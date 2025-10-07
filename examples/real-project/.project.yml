@@ -1,0 +1,368 @@
+project:
+  name: "roam_imsi-region"
+  modules: ["imsi-region"]
+  bin: "bin"
+
+include:
+  - "config/update-checking-stages.yml"
+  - "config/update-checking-actions.yml"
+
+stages:
+  pre-push:
+    steps:
+      - action: version-check
+      - action: version-greatest
+      - action: version-module
+      - action: rpm-build
+        require: [version-module]
+      - action: git-untracked
+      - action: git-uncommitted
+      - action: git-modified
+        onerror: warn
+      - action: yaml-ci-lint
+      - action: yaml-project-lint
+      - action: yaml-project-validate
+
+  ci-pre-install:
+    steps:
+      - action: install-version
+      - action: install-requirements
+        require: [install-version]
+      - action: install-conan
+        require: [install-requirements]
+
+  config:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: install-conan-deps
+        require: [check-conan, check-cmake]
+      - action: configure-cmake
+        require: [install-conan-deps]
+
+  make:
+    steps:
+      - action: build-binaries
+
+  install:
+    steps:
+      - action: install-binaries
+
+  build:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: install-conan-deps
+        require: [check-conan, check-cmake]
+      - action: configure-cmake
+        require: [install-conan-deps]
+      - action: build-binaries
+        require: [configure-cmake]
+      - action: install-binaries
+        require: [build-binaries]
+      - action: conan-cleanup-cache
+        require: [build-binaries]
+
+  rpm-build:
+    steps:
+      - action: install-requirements
+      - action: rpm-build
+        require: [install-requirements]
+
+  # Run build in docker containers, check ci build locally
+  images-build:
+    steps:
+      - action: image-build
+        matrix:
+          values:
+            image: [
+              "registry.svc/svyazcom/development-env:9",
+              "registry.svc/burnes/build-gcc14:8",
+              "registry.svc/svyazcom/centos7-gcc12"
+            ]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+actions:
+
+  - name: yaml-ci-lint
+    run: |
+      if [ -e $(which yamllint) ]; then
+        yamllint --no-warnings .gitlab-ci.yml
+      else
+        echo -e "⚠️ for validate gitlab ci yml require install yamllint utility"
+      fi
+
+  - name: yaml-project-lint
+    run: |
+      if [ -e $(which yamllint) ]; then
+        yamllint --no-warnings .project.yml
+      else
+        echo -e "⚠️ for validate project yml require install yamllint utility"
+      fi
+  - name: yaml-project-validate
+    run: |
+      buildfab validate
+
+  # Install require packages on host
+  # Centos7 image registry.svc/svyazcom/centos7-gcc12
+  # Almalinux8 image registry.svc/burnes/build-gcc14:8
+  # Almalinux9 image registry.svc/svyazcom/development-env:9
+
+  - name: install-requirements
+    variants:
+      - when: ${{ os == "centos" && os_version == "7" }}
+        run: |
+            if [ ! -f /installed ]; then
+              yum -y install python312opt
+              rm -f /usr/bin/python3
+              ln -s /opt/python312/bin/python3.12 /usr/bin/python3
+              ln -s /opt/python312/bin/pip3.12 /usr/bin/pip3.12
+              mv /usr/bin/cmake /usr/bin/cmake2
+              ln -s /usr/bin/cmake3 /usr/bin/cmake
+              mv /usr/bin/ctest /usr/bin/cmake2
+              ln -s /usr/bin/ctest3 /usr/bin/ctest
+              if [ -f "build/${{os}}${{os_version}}/env" ]; then
+                source "build/${{os}}${{os_version}}/env"
+              fi
+              [ ! -d ${ORACLE_HOME}/include ] && ln -s /usr/include/oracle/19.5/client64 ${ORACLE_HOME}/include
+              touch /installed
+            fi
+            exit 0
+
+      - when: ${{ os == "almalinux" && os_version == "8.10" }}
+        run: |
+            if [ ! -f /installed ]; then
+              yum -y install python3.12 python3.12-pip
+              rm -f /usr/bin/python3
+              ln -s /usr/bin/python3.12 /usr/bin/python3
+              if [ -f "build/${{os}}${{os_version}}/env" ]; then
+                source "build/${{os}}${{os_version}}/env"
+              fi
+              [ ! -d ${ORACLE_HOME}/include ] && ln -s /usr/include/oracle/19.5/client64 ${ORACLE_HOME}/include
+              touch /installed
+            fi
+            exit 0
+
+      - when: ${{ os == "almalinux" && os_version == "9.6" }}
+        run: |
+            if [ ! -f /installed ]; then
+              yum -y install python3.12 python3.12-pip \
+                gcc-toolset-13-{gcc,gcc-c++,lib{a,t,ub}san-devel} ninja-build git \
+                oracle-instantclient19.26-{basic,devel,sqlplus} libnsl \
+                perl-devel perl-FindBin perl-IPC-Cmd perl-Digest-SHA perl-threads perl-Thread-Queue \
+                glibc-devel glibc-static libstdc++-static pcre-devel libev-devel gperftools-devel
+              rm -f /usr/bin/python3 && ln -s /usr/bin/python3.12 /usr/bin/python3
+              [ ! -d /conan-io ] && git clone -v https://github.com/conan-io/conan.git /conan-io
+              if [ -f "build/${{os}}${{os_version}}/env" ]; then
+                source "build/${{os}}${{os_version}}/env"
+              fi
+              [ ! -d ${ORACLE_HOME}/include ] && ln -s /usr/include/oracle/19.26/client64 ${ORACLE_HOME}/include
+              touch /installed
+            fi
+            exit 0
+
+  - name: install-conan
+    variants:
+      - when: ${{ os == "centos" &&  os_version == "7" }}
+        run: |
+            pip3.12 install conan==2.6.0
+            pip3.12 install setuptools
+            if [ -f "build/${{os}}${{os_version}}/env" ]; then
+              source "build/${{os}}${{os_version}}/env"
+            fi
+            conan profile detect --force
+            conan remote add -f conan-local http://188.168.21.136:8081/artifactory/api/conan/conan-local
+            conan remote add -f conan-proxy http://188.168.21.136:8081/artifactory/api/conan/conan-proxy-svc
+            conan remote disable conancenter
+
+      - when: ${{ os == "almalinux" && (os_version == "8.10" || os_version == "9.6") }}
+        run: |
+            if [ -f "build/${{os}}${{os_version}}/env" ]; then
+                source "build/${{os}}${{os_version}}/env"
+            fi
+            cd /conan-io && pip3.12 install -e .
+            conan profile detect --force
+            conan remote add -f conan-local http://188.168.21.136:8081/artifactory/api/conan/conan-local
+            conan remote add -f conan-proxy http://188.168.21.136:8081/artifactory/api/conan/conan-proxy-svc
+            conan remote disable conancenter
+      - when: ${{ platform == "linux" }}
+        run: |
+          if [ ! -f $(which conan) ]; then
+            echo "Installing Conan package manager..."
+            if ! which pip3 >/dev/null 2>&1; then
+              echo "pip3 is not installed. Please install Python and pip3 first"
+              exit 1
+            fi
+            if pip3 install conan --break-system-packages 2>/dev/null; then
+              echo "Conan installed successfully with --break-system-packages"
+            elif pip3 install --user conan 2>/dev/null; then
+              echo "Conan installed successfully in user directory"
+              echo "You may need to add ~/.local/bin to your PATH"
+            elif python3 -m pip install conan --break-system-packages 2>/dev/null; then
+              echo "Conan installed successfully with python3 -m pip"
+            else
+              echo "Failed to install Conan via pip3. Please install manually:"
+              echo "  # Option 1: Use system package manager"
+              echo "  sudo apt install conan  # Ubuntu/Debian"
+              echo "  # Option 2: Use pip3"
+              echo "  pip3 install conan"
+              echo "  # Option 3: Use virtual environment"
+              echo "  python3 -m venv venv && source venv/bin/activate && pip3 install conan"
+              exit 1
+            fi
+            conan --version
+          else
+            echo "✅ conan already installed, $(conan --version)"
+          fi
+
+
+  # Dependency installation actions
+  - name: install-conan-deps
+    variants:
+      - when: ${{ platform == "linux" && (os == "centos" || os == "almalinux" || os == "debian") }}
+        run: |
+            if [ -f "build/${{os}}${{os_version}}/env" ]; then
+              source "build/${{os}}${{os_version}}/env"
+            fi
+            BUILD_TYPE=$(scripts/version build-type)
+            CONAN_PROFILE="build/${{os}}${{os_version}}/conan/$BUILD_TYPE"
+            conan install . -of .build -pr:h $CONAN_PROFILE -pr:b $CONAN_PROFILE \
+              -s build_type=$BUILD_TYPE --build missing
+      - when: ${{ platform == "linux" }}
+        run: |
+            BUILD_TYPE=$(scripts/version build-type)
+            CONAN_PROFILE="g++_$(echo ${BUILD_TYPE} | tr '[:upper:]' '[:lower:]').profile"
+            conan install . -of .build -pr:h $CONAN_PROFILE -pr:b $CONAN_PROFILE \
+              -s build_type=$BUILD_TYPE --build missing
+
+  # Cleanup actions
+  - name: conan-cleanup
+    run: |
+      if [ -f "build/${{os}}${{os_version}}/env" ]; then
+        source "build/${{os}}${{os_version}}/env"
+      fi
+      conan remove -c 'svc-*'
+      conan cache clean
+
+  - name: conan-cleanup-cache
+    run: |
+      if [ -f "build/${{os}}${{os_version}}/env" ]; then
+        source "build/${{os}}${{os_version}}/env"
+      fi
+      conan cache clean -s -b
+
+  - name: build-cleanup
+    run: rm -fr .build
+
+  # Build actions
+  - name: configure-cmake
+    run: |
+      if [ -f "build/${{os}}${{os_version}}/env" ]; then
+        source "build/${{os}}${{os_version}}/env"
+      fi
+      CONAN_PRESET="conan-$(./scripts/version build-type | tr '[:upper:]' '[:lower:]')"
+      cmake --preset $CONAN_PRESET
+
+  - name: build-binaries
+    run: |
+      if [ -f "build/${{os}}${{os_version}}/env" ]; then
+        source "build/${{os}}${{os_version}}/env"
+      fi
+      CONAN_PRESET="conan-$(./scripts/version build-type | tr '[:upper:]' '[:lower:]')"
+      cmake --build --preset $CONAN_PRESET
+
+  - name: install-binaries
+    run: |
+      if [ -f "build/${{os}}${{os_version}}/env" ]; then
+        source "build/${{os}}${{os_version}}/env"
+      fi
+      CONAN_PRESET="conan-$(./scripts/version build-type | tr '[:upper:]' '[:lower:]')"
+      cmake --build --preset $CONAN_PRESET --target install
+
+  # RPM Build and upload actions
+  - name: rpm-build
+    shell: bash
+    run: |
+      if [ -f "build/${{os}}${{os_version}}/env" ]; then
+        source "build/${{os}}${{os_version}}/env"
+      fi
+      PACKAGE_NAME=$(scripts/version project)
+      VERSION=$(scripts/version version)
+      RELEASE=$(scripts/version release)
+      [ -d .rpmbuild ] && rm -fR .rpmbuild
+      mkdir -p .rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+      tar -czf .rpmbuild/SOURCES/$PACKAGE_NAME-$VERSION.tar.gz bin etc
+      if [ -f $PACKAGE_NAME.${{os}}${{os_version}}.spec ]; then
+        cp $PACKAGE_NAME.${{os}}${{os_version}}.spec .rpmbuild/SPECS/$PACKAGE_NAME.spec
+      else
+        cp $PACKAGE_NAME.spec .rpmbuild/SPECS/$PACKAGE_NAME.spec
+      fi
+      #--define "_missing_build_ids_terminate_build 0"
+      #--define "debug_package %{nil}"
+      #--define "_debugsource_template %{nil}"
+      rpmbuild -ba --define "_topdir ${PWD}/.rpmbuild" \
+        --define "_sv_version $VERSION" \
+        --define "_sv_release $RELEASE" \
+        .rpmbuild/SPECS/$PACKAGE_NAME.spec
+
+  - name: rpm-upload
+    run: |
+      BUILD_TYPE=$(scripts/version build-type)
+      if [ "${BUILD_TYPE}" == "Release" ]; then
+        BRANCH=stable
+      else
+        BRANCH=testing
+      fi
+      for pkg_file in $(find .rpmbuild/RPMS -name *.rpm); do
+        pkg=$(basename $pkg_file)
+        echo upload ${pkg_file} to "http://rpm.svc/download/index.php?filename=${pkg}&branch=${BRANCH}"
+        curl --upload-file ${pkg_file} "http://rpm.svc/download/index.php?filename=${pkg}&branch=${BRANCH}"
+      done
+
+  # Build docker container
+  - name: docker-build
+    container:
+      engine: docker
+      image:
+        build:
+          dockerfile: Dockerfile
+          context: .
+          args:
+            VERSION: ${{version}}
+          tags:
+            - ${{project}}:${{version}}
+          network: host
+          progress: plain
+
+  # Make slim version of built docker container
+  - name: docker-slim
+    container:
+      engine: docker
+      image:
+        slim:
+          target: ${{project}}:${{version}}
+          tags:
+            - ${{project}}:${{version}}-slim
+          network: host
+          http_prob: false
+          exec: /usr/local/bin/${{module}} -v
+
+  # Run build in docker containers, check ci build locally
+  - name: image-build
+    container:
+      engine: podman
+      image:
+        from: ${{ matrix.image }}
+      workdir: /src
+      cache:
+        conan: ./.cache
+      cpu: 2
+      memory: 4G
+      network: host
+      env_file: docker_config.sh
+      run_stage: build
+

@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.7] - 2025-10-07
+
+### Added
+- **Container Feature Architecture Enhancement**: Implemented comprehensive container feature enhancements with conditional `-w` option and optimized command execution
+  - Added conditional `-w /tmp/buildfab-workspace` option that only applies when bind mount with `target=/tmp/buildfab-workspace` exists
+  - Implemented `cd <workdir>` command integration before other run commands when `workdir` is defined
+  - Centralized all command preparation in `PrepareContainerConfig` function for better maintainability
+  - Optimized command strings by shortening `exec /tmp/buildfab-bin/buildfab` to `buildfab` due to alias being set
+  - Corrected environment file path from `. .docker-env` to `. ./.docker-env` for proper sourcing
+
+### Changed
+- **Container Engine Simplification**: Simplified container engines (Docker and Podman) to focus on execution only
+  - Removed complex command construction logic from engines
+  - Engines now simply execute prepared commands from `PrepareContainerConfig`
+  - Eliminated command construction duplication between engines and preparation logic
+  - Improved architecture with single responsibility principle
+
+### Fixed
+- **Display Consistency**: Fixed `buildContainerCommandForDisplay` function to accurately reflect actual executed commands
+  - Display string now matches real execution command exactly
+  - Added conditional `-w` option logic to display function
+  - Applied `cd workdir` logic to display function for consistency
+  - Users now see exactly what command will be executed
+
 ## [0.18.6] - 2025-10-06
 
 ### Added

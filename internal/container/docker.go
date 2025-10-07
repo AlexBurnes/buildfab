@@ -67,9 +67,18 @@ func (d *DockerEngine) RunContainer(ctx context.Context, config container.Contai
 	// Build docker run command
 	args := []string{"run", "--rm"}
 	
-	// Add working directory if specified
-	if config.Workdir != "" {
-		args = append(args, "-w", config.Workdir)
+	// Check if there's a bind mount with target /tmp/buildfab-workspace and add -w accordingly
+	hasWorkspaceMount := false
+	for _, mount := range config.Mounts {
+		if mount.Type == "bind" && mount.Target == "/tmp/buildfab-workspace" {
+			hasWorkspaceMount = true
+			break
+		}
+	}
+	
+	// Add working directory only if workspace mount exists
+	if hasWorkspaceMount {
+		args = append(args, "-w", "/tmp/buildfab-workspace")
 	}
 	
 	// Add environment variables
@@ -123,11 +132,15 @@ func (d *DockerEngine) RunContainer(ctx context.Context, config container.Contai
 	
 	// Add command to run
 	if config.Run != "" {
-		args = append(args, "sh", "-c", config.Run)
+		runCommand := config.Run
+		if config.Workdir != "" {
+			runCommand = fmt.Sprintf("cd %s && %s", config.Workdir, config.Run)
+		}
+		args = append(args, "sh", "-c", runCommand)
 	} else if config.RunAction != "" {
-		args = append(args, "buildfab", "action", config.RunAction)
+		args = append(args, "sh", "-c", config.RunAction)
 	} else if config.RunStage != "" {
-		args = append(args, "buildfab", "run", config.RunStage)
+		args = append(args, "sh", "-c", config.RunStage)
 	}
 	
 	// Execute docker run command

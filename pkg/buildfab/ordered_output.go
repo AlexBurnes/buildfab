@@ -7,7 +7,7 @@ import (
     "strings"
     "sync"
     "time"
-    
+
     "github.com/AlexBurnes/buildfab/pkg/buildfab/container"
     containerRunner "github.com/AlexBurnes/buildfab/internal/container"
 )
@@ -149,60 +149,60 @@ func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName stri
 
 // OnStepOutput handles step output events from executor
 func (o *OrderedOutputManager) OnStepOutput(ctx context.Context, stepName string, output string) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
+    o.mu.Lock()
+    defer o.mu.Unlock()
 
-	// For matrix steps, show output immediately if it's the current step
-	// This enables real-time streaming for matrix execution
-	if o.shouldStreamOutput(stepName) {
-		lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
-		for _, line := range lines {
-			if line != "" {
-				fmt.Fprintf(o.errorOutput, "    %s\n", line)
-			}
-		}
-		// Don't buffer output when streaming - it's already displayed
-		return
-	}
+    // For matrix steps, show output immediately if it's the current step
+    // This enables real-time streaming for matrix execution
+    if o.shouldStreamOutput(stepName) {
+        lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+        for _, line := range lines {
+            if line != "" {
+                fmt.Fprintf(o.errorOutput, "    %s\n", line)
+            }
+        }
+        // Don't buffer output when streaming - it's already displayed
+        return
+    }
 
-	// Otherwise, buffer output for later display when step completes
-	if data, exists := o.stepData[stepName]; exists {
-		data.Output = append(data.Output, output)
-		if o.debug {
-			fmt.Fprintf(o.errorOutput, "[DEBUG] Buffered output for %s: %s\n", stepName, output)
-		}
-	}
+    // Otherwise, buffer output for later display when step completes
+    if data, exists := o.stepData[stepName]; exists {
+        data.Output = append(data.Output, output)
+        if o.debug {
+            fmt.Fprintf(o.errorOutput, "[DEBUG] Buffered output for %s: %s\n", stepName, output)
+        }
+    }
 }
 
 // shouldStreamOutput checks if the given step should have its output streamed
 func (o *OrderedOutputManager) shouldStreamOutput(stepName string) bool {
-	// Find the step in declaration order
-	stepIndex := -1
-	for i, step := range o.steps {
-		if step.Action == stepName {
-			stepIndex = i
-			break
-		}
-	}
-	
-	if stepIndex == -1 {
-		return false
-	}
-	
-	// Only allow streaming for the first step in declaration order that hasn't been completed yet
-	// Check if all previous steps in declaration order have been completed
-	for i := 0; i < stepIndex; i++ {
-		if data, exists := o.stepData[o.steps[i].Action]; !exists || !data.Completed {
-			return false
-		}
-	}
-	
-	// Check if this step itself has been completed - if so, don't stream
-	if data, exists := o.stepData[stepName]; exists && data.Completed {
-		return false
-	}
-	
-	return true
+    // Find the step in declaration order
+    stepIndex := -1
+    for i, step := range o.steps {
+        if step.Action == stepName {
+            stepIndex = i
+            break
+        }
+    }
+
+    if stepIndex == -1 {
+        return false
+    }
+
+    // Only allow streaming for the first step in declaration order that hasn't been completed yet
+    // Check if all previous steps in declaration order have been completed
+    for i := 0; i < stepIndex; i++ {
+        if data, exists := o.stepData[o.steps[i].Action]; !exists || !data.Completed {
+            return false
+        }
+    }
+
+    // Check if this step itself has been completed - if so, don't stream
+    if data, exists := o.stepData[stepName]; exists && data.Completed {
+        return false
+    }
+
+    return true
 }
 
 // OnStepError handles step error events from executor
@@ -341,7 +341,7 @@ func (o *OrderedOutputManager) checkAndShowNextStep() {
 func (o *OrderedOutputManager) showStepStart(stepName string) {
     if o.verboseLevel > 0 {
         fmt.Fprintf(o.errorOutput, "  💻 %s\n", stepName)
-        
+
         // Container command display is now handled in the actual execution
     } else {
         // In quiet mode, don't show individual step indicators
@@ -366,7 +366,7 @@ func (o *OrderedOutputManager) showContainerCommand(stepName string) {
         }
         action = &actionValue
     }
-    
+
     if action.Container != nil {
         // Create a temporary runner to prepare the configuration for display
         tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(o.verboseLevel)
@@ -403,32 +403,32 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
     if config.Image.Build != nil {
         // For build operations, we run docker/podman build command
         parts = append(parts, "build")
-        
+
         // Add build args
         for key, value := range config.Image.Build.Args {
             parts = append(parts, "--build-arg", fmt.Sprintf("%s=%s", key, value))
         }
-        
+
         // Add tags
         for _, tag := range config.Image.Build.Tags {
             parts = append(parts, "--tag", tag)
         }
-        
+
         // Add network if specified
         if config.Image.Build.Network != "" {
             parts = append(parts, "--network", config.Image.Build.Network)
         }
-        
+
         // Add progress if specified
         if config.Image.Build.Progress != "" {
             parts = append(parts, "--progress", config.Image.Build.Progress)
         }
-        
+
         // Add dockerfile if specified
         if config.Image.Build.Dockerfile != "" {
             parts = append(parts, "-f", config.Image.Build.Dockerfile)
         }
-        
+
         // Add context (default to current directory)
         context := config.Image.Build.Context
         if context == "" {
@@ -442,24 +442,24 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
         } else if engineName == "podman" {
             parts = append(parts, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
         }
-        
+
         // For slim operations, we run the dslim/slim container with specific arguments
         parts = append(parts, "dslim/slim:latest")
         parts = append(parts, "slim", "build")
-        
+
         // Add slim-specific flags
         if !config.Image.Slim.HttpProbe {
             parts = append(parts, "--http-probe=false")
             parts = append(parts, "--continue-after=exit")
         }
-        
+
         parts = append(parts, config.Image.Slim.Target)
-        
+
         // Add exec command if specified
         if config.Image.Slim.Exec != "" {
             parts = append(parts, "--exec", config.Image.Slim.Exec)
         }
-        
+
         // Add tags for the slim image
         for _, tag := range config.Image.Slim.Tags {
             parts = append(parts, "--tag", tag)
@@ -467,7 +467,7 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
     } else {
         // Regular container execution
         parts = append(parts, "run", "--rm")
-        
+
         // Add mount arguments
         for _, mount := range config.Mounts {
             mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
@@ -476,18 +476,18 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
             }
             parts = append(parts, mountArg)
         }
-        
+
         // Add cache mounts
         for cacheName, cachePath := range config.Cache {
             targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
             cacheMountArg := fmt.Sprintf("--mount=type=bind,source=%s,target=%s", cachePath, targetPath)
             parts = append(parts, cacheMountArg)
         }
-        
+
         // Add CPU and memory limits
         if config.CPU > 0 {
             parts = append(parts, "--cpus", fmt.Sprintf("%d.0", config.CPU))
-            
+
             // Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
             cpuSet := ""
             for i := 0; i < config.CPU; i++ {
@@ -498,21 +498,21 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
             }
             parts = append(parts, "--cpuset-cpus", cpuSet)
         }
-        
+
         if config.Memory != "" {
             parts = append(parts, "-m", config.Memory)
         }
-        
+
         // Add user if specified
         if config.User != "" {
             parts = append(parts, "-u", config.User)
         }
-        
+
         // Add network if specified
         if config.Network != "" {
             parts = append(parts, "--network", config.Network)
         }
-        
+
         // Add image
         parts = append(parts, config.Image.From)
 
@@ -649,10 +649,10 @@ func NewOrderedStepCallback(steps []Step, verboseLevel int, debug bool, errorOut
 // NewOrderedStepCallbackWithActions creates a new ordered step callback with interpolated actions
 func NewOrderedStepCallbackWithActions(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config, configPath string, interpolatedActions map[string]*Action) *OrderedStepCallback {
     manager := NewOrderedOutputManager(steps, verboseLevel, debug, errorOutput, config)
-    
+
     // Set config path
     manager.SetConfigPath(configPath)
-    
+
     // Set interpolated actions
     for stepName, action := range interpolatedActions {
         manager.SetInterpolatedAction(stepName, action)

@@ -1553,6 +1553,20 @@ func (r *Runner) buildContainerCommandForDisplay(config *container.ContainerConf
 		// Regular container execution
 		parts = append(parts, "run", "--rm")
 		
+		// Check if there's a bind mount with target /tmp/buildfab-workspace and add -w accordingly
+		hasWorkspaceMount := false
+		for _, mount := range config.Mounts {
+			if mount.Type == "bind" && mount.Target == "/tmp/buildfab-workspace" {
+				hasWorkspaceMount = true
+				break
+			}
+		}
+		
+		// Add working directory option only if workspace mount exists
+		if hasWorkspaceMount {
+			parts = append(parts, "-w", "/tmp/buildfab-workspace")
+		}
+		
 		// Add mount arguments
 		for _, mount := range config.Mounts {
 			mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
@@ -1572,11 +1586,23 @@ func (r *Runner) buildContainerCommandForDisplay(config *container.ContainerConf
 
 		// Add command to run
 		if config.Run != "" {
-			parts = append(parts, "sh", "-c", config.Run)
+			runCommand := config.Run
+			if config.Workdir != "" {
+				runCommand = fmt.Sprintf("cd %s && %s", config.Workdir, config.Run)
+			}
+			parts = append(parts, "sh", "-c", runCommand)
 		} else if config.RunAction != "" {
-			parts = append(parts, "buildfab", "action", config.RunAction)
+			runCommand := fmt.Sprintf("buildfab action %s", config.RunAction)
+			if config.Workdir != "" {
+				runCommand = fmt.Sprintf("cd %s && %s", config.Workdir, runCommand)
+			}
+			parts = append(parts, "sh", "-c", runCommand)
 		} else if config.RunStage != "" {
-			parts = append(parts, "buildfab", "run", config.RunStage)
+			runCommand := fmt.Sprintf("buildfab run %s", config.RunStage)
+			if config.Workdir != "" {
+				runCommand = fmt.Sprintf("cd %s && %s", config.Workdir, runCommand)
+			}
+			parts = append(parts, "sh", "-c", runCommand)
 		}
 	}
 

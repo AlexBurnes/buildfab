@@ -158,17 +158,17 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 			verbosityFlags = "-v" // Use -v for basic verbosity
 		}
 		if r.VerbosityLevel >= 2 {
-			verbosityFlags = "-v" // Keep -v to avoid duplicate output
+			verbosityFlags = "-vv" // Keep -v to avoid duplicate output
 		}
 		if r.VerbosityLevel >= 3 {
-			verbosityFlags = "-v" // Keep -v to avoid duplicate output
+			verbosityFlags = "-vvv" // Keep -v to avoid duplicate output
 		}
 		
 		var command string
 		if config.RunAction != "" {
-			command = fmt.Sprintf(`exec /tmp/%s/buildfab -c %s action %s %s`, tempBinDirName, configFilePath, config.RunAction, verbosityFlags)
+			command = fmt.Sprintf(`buildfab -c %s action %s %s`, configFilePath, config.RunAction, verbosityFlags)
 		} else if config.RunStage != "" {
-			command = fmt.Sprintf(`exec /tmp/%s/buildfab -c %s run %s %s`, tempBinDirName, configFilePath, config.RunStage, verbosityFlags)
+			command = fmt.Sprintf(`buildfab -c %s run %s %s`, configFilePath, config.RunStage, verbosityFlags)
 		}
 		
 		// Build the complete command in the correct order:
@@ -181,12 +181,14 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 		finalCommand := fmt.Sprintf("alias buildfab='/tmp/%s/buildfab' && ", tempBinDirName)
 		
 		// Add environment file loading (creates /buildfab directory)
+		// Use relative path since we're in the workspace directory
 		if config.EnvFile != "" {
-			envFileCommand := fmt.Sprintf(". /tmp/%s/%s && ", tempDirName, config.EnvFile)
+			envFileCommand := fmt.Sprintf(". ./%s && ", config.EnvFile)
 			finalCommand += envFileCommand
 		}
 		
 		// Add working directory change (AFTER environment is loaded and directories created)
+		// Use the original workdir from config, not the workspace mount
 		if config.Workdir != "" {
 			workdirCommand := fmt.Sprintf("cd %s && ", config.Workdir)
 			finalCommand += workdirCommand
@@ -204,6 +206,9 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 		// Clear the original fields
 		preparedConfig.RunAction = ""
 		preparedConfig.RunStage = ""
+		
+		// Clear workdir since we've already handled it in the command
+		preparedConfig.Workdir = ""
 	}
 	
 	return preparedConfig, nil

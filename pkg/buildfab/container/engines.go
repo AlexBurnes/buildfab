@@ -1,1196 +1,1219 @@
 package container
 
 import (
-	"bufio"
-	"context"
-	"fmt"
-	"os/exec"
-	"strings"
+    "bufio"
+    "context"
+    "fmt"
+    "os/exec"
+    "strings"
 )
 
 // NewDockerEngine creates a new Docker engine
 func NewDockerEngine() Engine {
-	return &dockerEngineImpl{binary: "docker"}
+    return &dockerEngineImpl{binary: "docker"}
 }
 
 // NewPodmanEngine creates a new Podman engine
 func NewPodmanEngine() Engine {
-	return &podmanEngineImpl{binary: "podman"}
+    return &podmanEngineImpl{binary: "podman"}
 }
 
 // Internal engine implementations
 type dockerEngineImpl struct {
-	binary string
+    binary string
 }
 
 func (d *dockerEngineImpl) DetectEngine() bool {
-	cmd := exec.Command(d.binary, "version")
-	return cmd.Run() == nil
+    cmd := exec.Command(d.binary, "version")
+    return cmd.Run() == nil
 }
 
 func (d *dockerEngineImpl) GetEngineName() string {
-	return "docker"
+    return "docker"
 }
 
 func (d *dockerEngineImpl) PullImage(ctx context.Context, image string) error {
-	cmd := exec.CommandContext(ctx, d.binary, "pull", image)
-	return cmd.Run()
+    cmd := exec.CommandContext(ctx, d.binary, "pull", image)
+    return cmd.Run()
 }
 
 func (d *dockerEngineImpl) PullImageWithCallback(ctx context.Context, image string, outputCallback func(string)) error {
-	cmd := exec.CommandContext(ctx, d.binary, "pull", image)
-	
-	// Set up streaming output
-	cmd.Stdout = &streamingWriter{callback: outputCallback}
-	cmd.Stderr = &streamingWriter{callback: outputCallback}
-	
-	return cmd.Run()
+    cmd := exec.CommandContext(ctx, d.binary, "pull", image)
+
+    // Set up streaming output
+    cmd.Stdout = &streamingWriter{callback: outputCallback}
+    cmd.Stderr = &streamingWriter{callback: outputCallback}
+
+    return cmd.Run()
 }
 
 func (d *dockerEngineImpl) ImageExists(ctx context.Context, image string) (bool, error) {
-	cmd := exec.CommandContext(ctx, d.binary, "image", "inspect", image)
-	err := cmd.Run()
-	return err == nil, nil
+    cmd := exec.CommandContext(ctx, d.binary, "image", "inspect", image)
+    err := cmd.Run()
+    return err == nil, nil
 }
 
 func (d *dockerEngineImpl) BuildImage(ctx context.Context, config ContainerBuild) (string, error) {
-	// Build docker build command
-	args := []string{"build"}
-	
-	// Add build args
-	for key, value := range config.Args {
-		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
-	}
-	
-	// Add tags
-	for _, tag := range config.Tags {
-		args = append(args, "--tag", tag)
-	}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add progress if specified
-	if config.Progress != "" {
-		args = append(args, "--progress", config.Progress)
-	}
-	
-	// Add dockerfile if specified
-	if config.Dockerfile != "" {
-		args = append(args, "-f", config.Dockerfile)
-	}
-	
-	// Add context (default to current directory)
-	context := config.Context
-	if context == "" {
-		context = "."
-	}
-	args = append(args, context)
-	
-	// Execute docker build command
-	cmd := exec.CommandContext(ctx, d.binary, args...)
-	output, err := cmd.CombinedOutput()
-	
-	if err != nil {
-		return "", fmt.Errorf("docker build failed: %w, output: %s", err, string(output))
-	}
-	
-	// Return the first tag as the image name
-	if len(config.Tags) > 0 {
-		return config.Tags[0], nil
-	}
-	
-	return "", fmt.Errorf("no tags specified")
+    // Build docker build command
+    args := []string{"build"}
+
+    // Add build args
+    for key, value := range config.Args {
+        args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+    }
+
+    // Add tags
+    for _, tag := range config.Tags {
+        args = append(args, "--tag", tag)
+    }
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add progress if specified
+    if config.Progress != "" {
+        args = append(args, "--progress", config.Progress)
+    }
+
+    // Add dockerfile if specified
+    if config.Dockerfile != "" {
+        args = append(args, "-f", config.Dockerfile)
+    }
+
+    // Add context (default to current directory)
+    context := config.Context
+    if context == "" {
+        context = "."
+    }
+    args = append(args, context)
+
+    // Execute docker build command
+    cmd := exec.CommandContext(ctx, d.binary, args...)
+    output, err := cmd.CombinedOutput()
+
+    if err != nil {
+        return "", fmt.Errorf("docker build failed: %w, output: %s", err, string(output))
+    }
+
+    // Return the first tag as the image name
+    if len(config.Tags) > 0 {
+        return config.Tags[0], nil
+    }
+
+    return "", fmt.Errorf("no tags specified")
 }
 
 func (d *dockerEngineImpl) BuildImageWithCallback(ctx context.Context, config ContainerBuild, outputCallback func(string)) (string, error) {
-	// Build docker build command
-	args := []string{"build"}
-	
-	// Add build args
-	for key, value := range config.Args {
-		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
-	}
-	
-	// Add tags
-	for _, tag := range config.Tags {
-		args = append(args, "--tag", tag)
-	}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add progress if specified
-	if config.Progress != "" {
-		args = append(args, "--progress", config.Progress)
-	}
-	
-	// Add dockerfile if specified
-	if config.Dockerfile != "" {
-		args = append(args, "-f", config.Dockerfile)
-	}
-	
-	// Add context (default to current directory)
-	context := config.Context
-	if context == "" {
-		context = "."
-	}
-	args = append(args, context)
-	
-	// Execute docker build command with streaming output
-	cmd := exec.CommandContext(ctx, d.binary, args...)
-	
-	// Create a pipe for stdout
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	
-	// Create a pipe for stderr
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-	
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("failed to start docker build: %w", err)
-	}
-	
-	// Stream output in real-time
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			if outputCallback != nil {
-				outputCallback(scanner.Text())
-			}
-		}
-	}()
-	
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			if outputCallback != nil {
-				outputCallback(scanner.Text())
-			}
-		}
-	}()
-	
-	// Wait for command to complete
-	err = cmd.Wait()
-	
-	if err != nil {
-		return "", fmt.Errorf("docker build failed: %w", err)
-	}
-	
-	// Return the first tag as the image name
-	if len(config.Tags) > 0 {
-		return config.Tags[0], nil
-	}
-	
-	return "", fmt.Errorf("no tags specified")
+    // Build docker build command
+    args := []string{"build"}
+
+    // Add build args
+    for key, value := range config.Args {
+        args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+    }
+
+    // Add tags
+    for _, tag := range config.Tags {
+        args = append(args, "--tag", tag)
+    }
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add progress if specified
+    if config.Progress != "" {
+        args = append(args, "--progress", config.Progress)
+    }
+
+    // Add dockerfile if specified
+    if config.Dockerfile != "" {
+        args = append(args, "-f", config.Dockerfile)
+    }
+
+    // Add context (default to current directory)
+    context := config.Context
+    if context == "" {
+        context = "."
+    }
+    args = append(args, context)
+
+    // Execute docker build command with streaming output
+    cmd := exec.CommandContext(ctx, d.binary, args...)
+
+    // Create a pipe for stdout
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+    }
+
+    // Create a pipe for stderr
+    stderr, err := cmd.StderrPipe()
+    if err != nil {
+        return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+    }
+
+    // Start the command
+    if err := cmd.Start(); err != nil {
+        return "", fmt.Errorf("failed to start docker build: %w", err)
+    }
+
+    // Stream output in real-time
+    go func() {
+        scanner := bufio.NewScanner(stdout)
+        for scanner.Scan() {
+            if outputCallback != nil {
+                outputCallback(scanner.Text())
+            }
+        }
+    }()
+
+    go func() {
+        scanner := bufio.NewScanner(stderr)
+        for scanner.Scan() {
+            if outputCallback != nil {
+                outputCallback(scanner.Text())
+            }
+        }
+    }()
+
+    // Wait for command to complete
+    err = cmd.Wait()
+
+    if err != nil {
+        return "", fmt.Errorf("docker build failed: %w", err)
+    }
+
+    // Return the first tag as the image name
+    if len(config.Tags) > 0 {
+        return config.Tags[0], nil
+    }
+
+    return "", fmt.Errorf("no tags specified")
 }
 
 func (d *dockerEngineImpl) SlimImage(ctx context.Context, config ContainerSlim) (string, error) {
-	// Build docker slim command using dslim/slim container
-	args := []string{"run", "--rm"}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add volume mount for Docker socket (required for slim to work)
-	args = append(args, "-v", "/var/run/docker.sock:/var/run/docker.sock")
-	
-	// Add the slim image
-	args = append(args, "dslim/slim:latest")
-	
-	// Add slim command
-	args = append(args, "slim")
-	
-	// Add target image
-	args = append(args, "build")
-	
-	// Add http probe setting (after build command)
-	if !config.HttpProbe {
-		args = append(args, "--http-probe=false")
-		// When http-probe is false, we need to specify continue-after to make it non-interactive
-		args = append(args, "--continue-after=exit")
-	}
-	
-	args = append(args, config.Target)
-	
-	// Add exec command if specified
-	if config.Exec != "" {
-		args = append(args, "--exec", config.Exec)
-	}
-	
-	// Add tags for the slim image
-	for _, tag := range config.Tags {
-		args = append(args, "--tag", tag)
-	}
-	
-	// Execute docker slim command
-	cmd := exec.CommandContext(ctx, d.binary, args...)
-	output, err := cmd.CombinedOutput()
-	
-	if err != nil {
-		return "", fmt.Errorf("docker slim failed: %w, output: %s", err, string(output))
-	}
-	
-	// Return the first tag as the slim image name
-	if len(config.Tags) > 0 {
-		return config.Tags[0], nil
-	}
-	
-	// If no tags specified, return the target with -slim suffix
-	return config.Target + "-slim", nil
+    // Build docker slim command using dslim/slim container
+    args := []string{"run", "--rm"}
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add volume mount for Docker socket (required for slim to work)
+    args = append(args, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+
+    // Add the slim image
+    args = append(args, "dslim/slim:latest")
+
+    // Add slim command
+    args = append(args, "slim")
+
+    // Add target image
+    args = append(args, "build")
+
+    // Add http probe setting (after build command)
+    if !config.HttpProbe {
+        args = append(args, "--http-probe=false")
+        // When http-probe is false, we need to specify continue-after to make it non-interactive
+        args = append(args, "--continue-after=exit")
+    }
+
+    args = append(args, config.Target)
+
+    // Add exec command if specified
+    if config.Exec != "" {
+        args = append(args, "--exec", config.Exec)
+    }
+
+    // Add tags for the slim image
+    for _, tag := range config.Tags {
+        args = append(args, "--tag", tag)
+    }
+
+    // Execute docker slim command
+    cmd := exec.CommandContext(ctx, d.binary, args...)
+    output, err := cmd.CombinedOutput()
+
+    if err != nil {
+        return "", fmt.Errorf("docker slim failed: %w, output: %s", err, string(output))
+    }
+
+    // Return the first tag as the slim image name
+    if len(config.Tags) > 0 {
+        return config.Tags[0], nil
+    }
+
+    // If no tags specified, return the target with -slim suffix
+    return config.Target + "-slim", nil
 }
 
 func (d *dockerEngineImpl) SlimImageWithCallback(ctx context.Context, config ContainerSlim, outputCallback func(string)) (string, error) {
-	// Build docker slim command using dslim/slim container
-	args := []string{"run", "--rm"}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add volume mount for Docker socket (required for slim to work)
-	args = append(args, "-v", "/var/run/docker.sock:/var/run/docker.sock")
-	
-	// Add the slim image
-	args = append(args, "dslim/slim:latest")
-	
-	// Add slim command
-	args = append(args, "slim")
-	
-	// Add target image
-	args = append(args, "build")
-	
-	// Add http probe setting (after build command)
-	if !config.HttpProbe {
-		args = append(args, "--http-probe=false")
-		// When http-probe is false, we need to specify continue-after to make it non-interactive
-		args = append(args, "--continue-after=exit")
-	}
-	
-	args = append(args, config.Target)
-	
-	// Add exec command if specified
-	if config.Exec != "" {
-		args = append(args, "--exec", config.Exec)
-	}
-	
-	// Add tags for the slim image
-	for _, tag := range config.Tags {
-		args = append(args, "--tag", tag)
-	}
-	
-	// Execute docker slim command with streaming output
-	cmd := exec.CommandContext(ctx, d.binary, args...)
-	
-	// Create a pipe for stdout
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	
-	// Create a pipe for stderr
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-	
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("failed to start docker slim: %w", err)
-	}
-	
-	// Stream output in real-time
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			if outputCallback != nil {
-				outputCallback(scanner.Text())
-			}
-		}
-	}()
-	
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			if outputCallback != nil {
-				outputCallback(scanner.Text())
-			}
-		}
-	}()
-	
-	// Wait for command to complete
-	err = cmd.Wait()
-	
-	if err != nil {
-		return "", fmt.Errorf("docker slim failed: %w", err)
-	}
-	
-	// Return the first tag as the slim image name
-	if len(config.Tags) > 0 {
-		return config.Tags[0], nil
-	}
-	
-	// If no tags specified, return the target with -slim suffix
-	return config.Target + "-slim", nil
+    // Build docker slim command using dslim/slim container
+    args := []string{"run", "--rm"}
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add volume mount for Docker socket (required for slim to work)
+    args = append(args, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+
+    // Add the slim image
+    args = append(args, "dslim/slim:latest")
+
+    // Add slim command
+    args = append(args, "slim")
+
+    // Add target image
+    args = append(args, "build")
+
+    // Add http probe setting (after build command)
+    if !config.HttpProbe {
+        args = append(args, "--http-probe=false")
+        // When http-probe is false, we need to specify continue-after to make it non-interactive
+        args = append(args, "--continue-after=exit")
+    }
+
+    args = append(args, config.Target)
+
+    // Add exec command if specified
+    if config.Exec != "" {
+        args = append(args, "--exec", config.Exec)
+    }
+
+    // Add tags for the slim image
+    for _, tag := range config.Tags {
+        args = append(args, "--tag", tag)
+    }
+
+    // Execute docker slim command with streaming output
+    cmd := exec.CommandContext(ctx, d.binary, args...)
+
+    // Create a pipe for stdout
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+    }
+
+    // Create a pipe for stderr
+    stderr, err := cmd.StderrPipe()
+    if err != nil {
+        return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+    }
+
+    // Start the command
+    if err := cmd.Start(); err != nil {
+        return "", fmt.Errorf("failed to start docker slim: %w", err)
+    }
+
+    // Stream output in real-time
+    go func() {
+        scanner := bufio.NewScanner(stdout)
+        for scanner.Scan() {
+            if outputCallback != nil {
+                outputCallback(scanner.Text())
+            }
+        }
+    }()
+
+    go func() {
+        scanner := bufio.NewScanner(stderr)
+        for scanner.Scan() {
+            if outputCallback != nil {
+                outputCallback(scanner.Text())
+            }
+        }
+    }()
+
+    // Wait for command to complete
+    err = cmd.Wait()
+
+    if err != nil {
+        return "", fmt.Errorf("docker slim failed: %w", err)
+    }
+
+    // Return the first tag as the slim image name
+    if len(config.Tags) > 0 {
+        return config.Tags[0], nil
+    }
+
+    // If no tags specified, return the target with -slim suffix
+    return config.Target + "-slim", nil
 }
 
 func (d *dockerEngineImpl) RunContainer(ctx context.Context, config ContainerConfig) (*ContainerResult, error) {
-	// Build docker run command
-	args := []string{"run", "--rm"}
-	
-	// Working directory is handled via cd command in the shell, not via -w option
-	
-	// Add environment variables
-	for key, value := range config.Env {
-		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
-	}
-	
-	// Add mounts
-	for _, mount := range config.Mounts {
-		if mount.Type == "bind" {
-			mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
-			if mount.RO {
-				mountArg += ":ro"
-			}
-			args = append(args, "-v", mountArg)
-		}
-	}
-	
-	// Add cache mounts
-	for cacheName, cachePath := range config.Cache {
-		// Mount cache to standard buildfab cache location
-		targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
-		cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
-		args = append(args, "--mount", cacheMountArg)
-	}
-	
-	// Add CPU and memory limits
-	if config.CPU > 0 {
-		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
-		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
-		
-		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
-		cpuSet := ""
-		for i := 0; i < config.CPU; i++ {
-			if i > 0 {
-				cpuSet += ","
-			}
-			cpuSet += fmt.Sprintf("%d", i)
-		}
-		args = append(args, "--cpuset-cpus", cpuSet)
-	}
-	
-	if config.Memory != "" {
-		args = append(args, "-m", config.Memory)
-	}
-	
-	// Add user if specified
-	if config.User != "" {
-		args = append(args, "-u", config.User)
-	}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add image
-	args = append(args, config.Image.From)
-	
-	// Add command to run
-	if config.Run != "" {
-		args = append(args, "sh", "-c", config.Run)
-	} else if config.RunAction != "" {
-		args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
-	} else if config.RunStage != "" {
-		args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
-	}
-	
-	// Execute docker run command
-	cmd := exec.CommandContext(ctx, d.binary, args...)
-	output, err := cmd.CombinedOutput()
-	
-	result := &ContainerResult{
-		ContainerID: "docker-container", // Placeholder
-		ExitCode:    0,
-		Output:      string(output),
-		Error:       "",
-		Artifacts:   []string{},
-	}
-	
-	if err != nil {
-		result.ExitCode = 1
-		result.Error = err.Error()
-	}
-	
-	return result, nil
+    // Build docker run command
+    args := []string{"run", "--rm"}
+
+    // Working directory is handled via cd command in the shell, not via -w option
+
+    // Add environment variables
+    for key, value := range config.Env {
+        args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
+    }
+
+    // Add mounts
+    for _, mount := range config.Mounts {
+        if mount.Type == "bind" {
+            mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
+            if mount.RO {
+                mountArg += ":ro"
+            }
+            args = append(args, "-v", mountArg)
+        }
+    }
+
+    // Add cache mounts
+    for cacheName, cachePath := range config.Cache {
+        // Mount cache to standard buildfab cache location
+        targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+        cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
+        args = append(args, "--mount", cacheMountArg)
+    }
+
+    // Add CPU and memory limits
+    if config.CPU > 0 {
+        // Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+        args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+
+        // Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
+        cpuSet := ""
+        for i := 0; i < config.CPU; i++ {
+            if i > 0 {
+                cpuSet += ","
+            }
+            cpuSet += fmt.Sprintf("%d", i)
+        }
+        args = append(args, "--cpuset-cpus", cpuSet)
+    }
+
+    if config.Memory != "" {
+        args = append(args, "-m", config.Memory)
+    }
+
+    // Add user if specified
+    if config.User != "" {
+        args = append(args, "-u", config.User)
+    }
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add image
+    args = append(args, config.Image.From)
+
+    // Add command to run
+    if config.Run != "" {
+        args = append(args, "sh", "-c", config.Run)
+    } else if config.RunAction != "" {
+        args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
+    } else if config.RunStage != "" {
+        args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
+    }
+
+    // Execute docker run command
+    cmd := exec.CommandContext(ctx, d.binary, args...)
+    output, err := cmd.CombinedOutput()
+
+    result := &ContainerResult{
+        ContainerID: "docker-container", // Placeholder
+        ExitCode:    0,
+        Output:      string(output),
+        Error:       "",
+        Artifacts:   []string{},
+    }
+
+    if err != nil {
+        result.ExitCode = 1
+        result.Error = err.Error()
+    }
+
+    return result, nil
 }
 
 // RunContainerWithCallback runs a Docker container with streaming output callback
 func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string)) (*ContainerResult, error) {
-	// Build docker run command (same as RunContainer)
-	args := []string{"run", "--rm"}
-	
-	// Working directory is handled via cd command in the shell, not via -w option
-	
-	// Add environment variables
-	for key, value := range config.Env {
-		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
-	}
-	
-	// Add mounts
-	for _, mount := range config.Mounts {
-		if mount.Type == "bind" {
-			mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
-			if mount.RO {
-				mountArg += ":ro"
-			}
-			args = append(args, "-v", mountArg)
-		}
-	}
-	
-	// Add cache mounts
-	for cacheName, cachePath := range config.Cache {
-		// Mount cache to standard buildfab cache location
-		targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
-		cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
-		args = append(args, "--mount", cacheMountArg)
-	}
-	
-	// Add CPU and memory limits
-	if config.CPU > 0 {
-		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
-		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
-		
-		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
-		cpuSet := ""
-		for i := 0; i < config.CPU; i++ {
-			if i > 0 {
-				cpuSet += ","
-			}
-			cpuSet += fmt.Sprintf("%d", i)
-		}
-		args = append(args, "--cpuset-cpus", cpuSet)
-	}
-	
-	if config.Memory != "" {
-		args = append(args, "-m", config.Memory)
-	}
-	
-	// Add user if specified
-	if config.User != "" {
-		args = append(args, "-u", config.User)
-	}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add image
-	args = append(args, config.Image.From)
-	
-	// Add command to run
-	if config.Run != "" {
-		args = append(args, "sh", "-c", config.Run)
-	} else if config.RunAction != "" {
-		args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
-	} else if config.RunStage != "" {
-		args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
-	}
-	
-	// Execute docker run command with streaming
-	cmd := exec.CommandContext(ctx, d.binary, args...)
-	
-	// Set up streaming pipes
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-	
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start command: %w", err)
-	}
-	
-	// Stream output in real-time
-	var output strings.Builder
-	var errorOutput strings.Builder
-	
-	// Channel to signal when streaming is complete
-	done := make(chan struct{})
-	
-	// Stream stdout
-	go func() {
-		defer func() { done <- struct{}{} }()
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			output.WriteString(line + "\n")
-			// Send to callback for real-time display
-			if outputCallback != nil {
-				outputCallback(line)
-			}
-		}
-	}()
-	
-	// Stream stderr
-	go func() {
-		defer func() { done <- struct{}{} }()
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			errorOutput.WriteString(line + "\n")
-			// Send to callback for real-time display
-			if outputCallback != nil {
-				outputCallback(line)
-			}
-		}
-	}()
-	
-	// Wait for command to complete
-	err = cmd.Wait()
-	
-	// Wait for both goroutines to finish
-	<-done
-	<-done
-	
-	result := &ContainerResult{
-		ContainerID: "docker-container", // Placeholder
-		ExitCode:    0,
-		Output:      output.String(),
-		Error:       errorOutput.String(),
-		Artifacts:   []string{},
-	}
-	
-	if err != nil {
-		result.ExitCode = 1
-		if result.Error == "" {
-			result.Error = err.Error()
-		}
-	}
-	
-	return result, nil
+    // Build docker run command (same as RunContainer)
+    args := []string{"run", "--rm"}
+
+    // Working directory is handled via cd command in the shell, not via -w option
+
+    // Add environment variables
+    for key, value := range config.Env {
+        args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
+    }
+
+    hasWorkspaceMount := false
+
+    // Add mounts
+    for _, mount := range config.Mounts {
+        if mount.Type == "bind" {
+            if mount.Target == "/tmp/buildfab-workspace" {
+                hasWorkspaceMount = true
+
+            }
+            mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
+            if mount.RO {
+                mountArg += ":ro"
+            }
+            args = append(args, "-v", mountArg)
+        }
+    }
+
+    if hasWorkspaceMount {
+        args = append(args, "-w", "/tmp/buildfab-workspace")
+    }
+
+    // Add cache mounts
+    for cacheName, cachePath := range config.Cache {
+        // Mount cache to standard buildfab cache location
+        targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+        cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
+        args = append(args, "--mount", cacheMountArg)
+    }
+
+    // Add CPU and memory limits
+    if config.CPU > 0 {
+        // Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+        args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+
+        // Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
+        cpuSet := ""
+        for i := 0; i < config.CPU; i++ {
+            if i > 0 {
+                cpuSet += ","
+            }
+            cpuSet += fmt.Sprintf("%d", i)
+        }
+        args = append(args, "--cpuset-cpus", cpuSet)
+    }
+
+    if config.Memory != "" {
+        args = append(args, "-m", config.Memory)
+    }
+
+    // Add user if specified
+    if config.User != "" {
+        args = append(args, "-u", config.User)
+    }
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add image
+    args = append(args, config.Image.From)
+
+    // Add command to run
+    if config.Run != "" {
+        runCommand := config.Run
+        if config.Workdir != "" {
+            runCommand = fmt.Sprintf("cd %s && %s", config.Workdir, config.Run)
+        }
+        args = append(args, "sh", "-c", runCommand)
+    } else if config.RunAction != "" {
+        args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
+    } else if config.RunStage != "" {
+        args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
+    }
+
+    // Execute docker run command with streaming
+    cmd := exec.CommandContext(ctx, d.binary, args...)
+
+    // Set up streaming pipes
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+    }
+
+    stderr, err := cmd.StderrPipe()
+    if err != nil {
+        return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+    }
+
+    // Start the command
+    if err := cmd.Start(); err != nil {
+        return nil, fmt.Errorf("failed to start command: %w", err)
+    }
+
+    // Stream output in real-time
+    var output strings.Builder
+    var errorOutput strings.Builder
+
+    // Channel to signal when streaming is complete
+    done := make(chan struct{})
+
+    // Stream stdout
+    go func() {
+        defer func() { done <- struct{}{} }()
+        scanner := bufio.NewScanner(stdout)
+        for scanner.Scan() {
+            line := scanner.Text()
+            output.WriteString(line + "\n")
+            // Send to callback for real-time display
+            if outputCallback != nil {
+                outputCallback(line)
+            }
+        }
+    }()
+
+    // Stream stderr
+    go func() {
+        defer func() { done <- struct{}{} }()
+        scanner := bufio.NewScanner(stderr)
+        for scanner.Scan() {
+            line := scanner.Text()
+            errorOutput.WriteString(line + "\n")
+            // Send to callback for real-time display
+            if outputCallback != nil {
+                outputCallback(line)
+            }
+        }
+    }()
+
+    // Wait for command to complete
+    err = cmd.Wait()
+
+    // Wait for both goroutines to finish
+    <-done
+    <-done
+
+    result := &ContainerResult{
+        ContainerID: "docker-container", // Placeholder
+        ExitCode:    0,
+        Output:      output.String(),
+        Error:       errorOutput.String(),
+        Artifacts:   []string{},
+    }
+
+    if err != nil {
+        result.ExitCode = 1
+        if result.Error == "" {
+            result.Error = err.Error()
+        }
+    }
+
+    return result, nil
 }
 
 func (d *dockerEngineImpl) StopContainer(ctx context.Context, containerID string) error {
-	cmd := exec.CommandContext(ctx, d.binary, "stop", containerID)
-	return cmd.Run()
+    cmd := exec.CommandContext(ctx, d.binary, "stop", containerID)
+    return cmd.Run()
 }
 
 func (d *dockerEngineImpl) RemoveContainer(ctx context.Context, containerID string) error {
-	cmd := exec.CommandContext(ctx, d.binary, "rm", containerID)
-	return cmd.Run()
+    cmd := exec.CommandContext(ctx, d.binary, "rm", containerID)
+    return cmd.Run()
 }
 
 type podmanEngineImpl struct {
-	binary string
+    binary string
 }
 
 func (p *podmanEngineImpl) DetectEngine() bool {
-	cmd := exec.Command(p.binary, "version")
-	return cmd.Run() == nil
+    cmd := exec.Command(p.binary, "version")
+    return cmd.Run() == nil
 }
 
 func (p *podmanEngineImpl) GetEngineName() string {
-	return "podman"
+    return "podman"
 }
 
 func (p *podmanEngineImpl) PullImage(ctx context.Context, image string) error {
-	cmd := exec.CommandContext(ctx, p.binary, "pull", image)
-	return cmd.Run()
+    cmd := exec.CommandContext(ctx, p.binary, "pull", image)
+    return cmd.Run()
 }
 
 func (p *podmanEngineImpl) PullImageWithCallback(ctx context.Context, image string, outputCallback func(string)) error {
-	cmd := exec.CommandContext(ctx, p.binary, "pull", image)
-	
-	// Set up streaming output
-	cmd.Stdout = &streamingWriter{callback: outputCallback}
-	cmd.Stderr = &streamingWriter{callback: outputCallback}
-	
-	return cmd.Run()
+    cmd := exec.CommandContext(ctx, p.binary, "pull", image)
+
+    // Set up streaming output
+    cmd.Stdout = &streamingWriter{callback: outputCallback}
+    cmd.Stderr = &streamingWriter{callback: outputCallback}
+
+    return cmd.Run()
 }
 
 func (p *podmanEngineImpl) ImageExists(ctx context.Context, image string) (bool, error) {
-	cmd := exec.CommandContext(ctx, p.binary, "image", "exists", image)
-	err := cmd.Run()
-	return err == nil, nil
+    cmd := exec.CommandContext(ctx, p.binary, "image", "exists", image)
+    err := cmd.Run()
+    return err == nil, nil
 }
 
 func (p *podmanEngineImpl) BuildImage(ctx context.Context, config ContainerBuild) (string, error) {
-	// Build podman build command
-	args := []string{"build"}
-	
-	// Add build args
-	for key, value := range config.Args {
-		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
-	}
-	
-	// Add tags
-	for _, tag := range config.Tags {
-		args = append(args, "--tag", tag)
-	}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add progress if specified
-	if config.Progress != "" {
-		args = append(args, "--progress", config.Progress)
-	}
-	
-	// Add dockerfile if specified
-	if config.Dockerfile != "" {
-		args = append(args, "-f", config.Dockerfile)
-	}
-	
-	// Add context (default to current directory)
-	context := config.Context
-	if context == "" {
-		context = "."
-	}
-	args = append(args, context)
-	
-	// Execute podman build command
-	cmd := exec.CommandContext(ctx, p.binary, args...)
-	output, err := cmd.CombinedOutput()
-	
-	if err != nil {
-		return "", fmt.Errorf("podman build failed: %w, output: %s", err, string(output))
-	}
-	
-	// Return the first tag as the image name
-	if len(config.Tags) > 0 {
-		return config.Tags[0], nil
-	}
-	
-	return "", fmt.Errorf("no tags specified")
+    // Build podman build command
+    args := []string{"build"}
+
+    // Add build args
+    for key, value := range config.Args {
+        args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+    }
+
+    // Add tags
+    for _, tag := range config.Tags {
+        args = append(args, "--tag", tag)
+    }
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add progress if specified
+    if config.Progress != "" {
+        args = append(args, "--progress", config.Progress)
+    }
+
+    // Add dockerfile if specified
+    if config.Dockerfile != "" {
+        args = append(args, "-f", config.Dockerfile)
+    }
+
+    // Add context (default to current directory)
+    context := config.Context
+    if context == "" {
+        context = "."
+    }
+    args = append(args, context)
+
+    // Execute podman build command
+    cmd := exec.CommandContext(ctx, p.binary, args...)
+    output, err := cmd.CombinedOutput()
+
+    if err != nil {
+        return "", fmt.Errorf("podman build failed: %w, output: %s", err, string(output))
+    }
+
+    // Return the first tag as the image name
+    if len(config.Tags) > 0 {
+        return config.Tags[0], nil
+    }
+
+    return "", fmt.Errorf("no tags specified")
 }
 
 func (p *podmanEngineImpl) BuildImageWithCallback(ctx context.Context, config ContainerBuild, outputCallback func(string)) (string, error) {
-	// Build podman build command
-	args := []string{"build"}
-	
-	// Add build args
-	for key, value := range config.Args {
-		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
-	}
-	
-	// Add tags
-	for _, tag := range config.Tags {
-		args = append(args, "--tag", tag)
-	}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add progress if specified
-	if config.Progress != "" {
-		args = append(args, "--progress", config.Progress)
-	}
-	
-	// Add dockerfile if specified
-	if config.Dockerfile != "" {
-		args = append(args, "-f", config.Dockerfile)
-	}
-	
-	// Add context (default to current directory)
-	context := config.Context
-	if context == "" {
-		context = "."
-	}
-	args = append(args, context)
-	
-	// Execute podman build command with streaming output
-	cmd := exec.CommandContext(ctx, p.binary, args...)
-	
-	// Create a pipe for stdout
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	
-	// Create a pipe for stderr
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-	
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("failed to start podman build: %w", err)
-	}
-	
-	// Stream output in real-time
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			if outputCallback != nil {
-				outputCallback(scanner.Text())
-			}
-		}
-	}()
-	
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			if outputCallback != nil {
-				outputCallback(scanner.Text())
-			}
-		}
-	}()
-	
-	// Wait for command to complete
-	err = cmd.Wait()
-	
-	if err != nil {
-		return "", fmt.Errorf("podman build failed: %w", err)
-	}
-	
-	// Return the first tag as the image name
-	if len(config.Tags) > 0 {
-		return config.Tags[0], nil
-	}
-	
-	return "", fmt.Errorf("no tags specified")
+    // Build podman build command
+    args := []string{"build"}
+
+    // Add build args
+    for key, value := range config.Args {
+        args = append(args, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+    }
+
+    // Add tags
+    for _, tag := range config.Tags {
+        args = append(args, "--tag", tag)
+    }
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add progress if specified
+    if config.Progress != "" {
+        args = append(args, "--progress", config.Progress)
+    }
+
+    // Add dockerfile if specified
+    if config.Dockerfile != "" {
+        args = append(args, "-f", config.Dockerfile)
+    }
+
+    // Add context (default to current directory)
+    context := config.Context
+    if context == "" {
+        context = "."
+    }
+    args = append(args, context)
+
+    // Execute podman build command with streaming output
+    cmd := exec.CommandContext(ctx, p.binary, args...)
+
+    // Create a pipe for stdout
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+    }
+
+    // Create a pipe for stderr
+    stderr, err := cmd.StderrPipe()
+    if err != nil {
+        return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+    }
+
+    // Start the command
+    if err := cmd.Start(); err != nil {
+        return "", fmt.Errorf("failed to start podman build: %w", err)
+    }
+
+    // Stream output in real-time
+    go func() {
+        scanner := bufio.NewScanner(stdout)
+        for scanner.Scan() {
+            if outputCallback != nil {
+                outputCallback(scanner.Text())
+            }
+        }
+    }()
+
+    go func() {
+        scanner := bufio.NewScanner(stderr)
+        for scanner.Scan() {
+            if outputCallback != nil {
+                outputCallback(scanner.Text())
+            }
+        }
+    }()
+
+    // Wait for command to complete
+    err = cmd.Wait()
+
+    if err != nil {
+        return "", fmt.Errorf("podman build failed: %w", err)
+    }
+
+    // Return the first tag as the image name
+    if len(config.Tags) > 0 {
+        return config.Tags[0], nil
+    }
+
+    return "", fmt.Errorf("no tags specified")
 }
 
 func (p *podmanEngineImpl) SlimImage(ctx context.Context, config ContainerSlim) (string, error) {
-	// Build podman slim command using dslim/slim container
-	args := []string{"run", "--rm"}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add volume mount for Podman socket (required for slim to work with Podman)
-	args = append(args, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
-	
-	// Add the slim image
-	args = append(args, "dslim/slim:latest")
-	
-	// Add slim command
-	args = append(args, "slim")
-	
-	// Add target image
-	args = append(args, "build")
-	
-	// Add http probe setting (after build command)
-	if !config.HttpProbe {
-		args = append(args, "--http-probe=false")
-		// When http-probe is false, we need to specify continue-after to make it non-interactive
-		args = append(args, "--continue-after=exit")
-	}
-	
-	args = append(args, config.Target)
-	
-	// Add exec command if specified
-	if config.Exec != "" {
-		args = append(args, "--exec", config.Exec)
-	}
-	
-	// Add tags for the slim image
-	for _, tag := range config.Tags {
-		args = append(args, "--tag", tag)
-	}
-	
-	// Execute podman slim command
-	cmd := exec.CommandContext(ctx, p.binary, args...)
-	output, err := cmd.CombinedOutput()
-	
-	if err != nil {
-		return "", fmt.Errorf("podman slim failed: %w, output: %s", err, string(output))
-	}
-	
-	// Return the first tag as the slim image name
-	if len(config.Tags) > 0 {
-		return config.Tags[0], nil
-	}
-	
-	// If no tags specified, return the target with -slim suffix
-	return config.Target + "-slim", nil
+    // Build podman slim command using dslim/slim container
+    args := []string{"run", "--rm"}
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add volume mount for Podman socket (required for slim to work with Podman)
+    args = append(args, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
+
+    // Add the slim image
+    args = append(args, "dslim/slim:latest")
+
+    // Add slim command
+    args = append(args, "slim")
+
+    // Add target image
+    args = append(args, "build")
+
+    // Add http probe setting (after build command)
+    if !config.HttpProbe {
+        args = append(args, "--http-probe=false")
+        // When http-probe is false, we need to specify continue-after to make it non-interactive
+        args = append(args, "--continue-after=exit")
+    }
+
+    args = append(args, config.Target)
+
+    // Add exec command if specified
+    if config.Exec != "" {
+        args = append(args, "--exec", config.Exec)
+    }
+
+    // Add tags for the slim image
+    for _, tag := range config.Tags {
+        args = append(args, "--tag", tag)
+    }
+
+    // Execute podman slim command
+    cmd := exec.CommandContext(ctx, p.binary, args...)
+    output, err := cmd.CombinedOutput()
+
+    if err != nil {
+        return "", fmt.Errorf("podman slim failed: %w, output: %s", err, string(output))
+    }
+
+    // Return the first tag as the slim image name
+    if len(config.Tags) > 0 {
+        return config.Tags[0], nil
+    }
+
+    // If no tags specified, return the target with -slim suffix
+    return config.Target + "-slim", nil
 }
 
 func (p *podmanEngineImpl) SlimImageWithCallback(ctx context.Context, config ContainerSlim, outputCallback func(string)) (string, error) {
-	// Build podman slim command using dslim/slim container
-	args := []string{"run", "--rm"}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add volume mount for Podman socket (required for slim to work with Podman)
-	args = append(args, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
-	
-	// Add the slim image
-	args = append(args, "dslim/slim:latest")
-	
-	// Add slim command
-	args = append(args, "slim")
-	
-	// Add target image
-	args = append(args, "build")
-	
-	// Add http probe setting (after build command)
-	if !config.HttpProbe {
-		args = append(args, "--http-probe=false")
-		// When http-probe is false, we need to specify continue-after to make it non-interactive
-		args = append(args, "--continue-after=exit")
-	}
-	
-	args = append(args, config.Target)
-	
-	// Add exec command if specified
-	if config.Exec != "" {
-		args = append(args, "--exec", config.Exec)
-	}
-	
-	// Add tags for the slim image
-	for _, tag := range config.Tags {
-		args = append(args, "--tag", tag)
-	}
-	
-	// Execute podman slim command with streaming output
-	cmd := exec.CommandContext(ctx, p.binary, args...)
-	
-	// Create a pipe for stdout
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	
-	// Create a pipe for stderr
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-	
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return "", fmt.Errorf("failed to start podman slim: %w", err)
-	}
-	
-	// Stream output in real-time
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			if outputCallback != nil {
-				outputCallback(scanner.Text())
-			}
-		}
-	}()
-	
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			if outputCallback != nil {
-				outputCallback(scanner.Text())
-			}
-		}
-	}()
-	
-	// Wait for command to complete
-	err = cmd.Wait()
-	
-	if err != nil {
-		return "", fmt.Errorf("podman slim failed: %w", err)
-	}
-	
-	// Return the first tag as the slim image name
-	if len(config.Tags) > 0 {
-		return config.Tags[0], nil
-	}
-	
-	// If no tags specified, return the target with -slim suffix
-	return config.Target + "-slim", nil
+    // Build podman slim command using dslim/slim container
+    args := []string{"run", "--rm"}
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add volume mount for Podman socket (required for slim to work with Podman)
+    args = append(args, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
+
+    // Add the slim image
+    args = append(args, "dslim/slim:latest")
+
+    // Add slim command
+    args = append(args, "slim")
+
+    // Add target image
+    args = append(args, "build")
+
+    // Add http probe setting (after build command)
+    if !config.HttpProbe {
+        args = append(args, "--http-probe=false")
+        // When http-probe is false, we need to specify continue-after to make it non-interactive
+        args = append(args, "--continue-after=exit")
+    }
+
+    args = append(args, config.Target)
+
+    // Add exec command if specified
+    if config.Exec != "" {
+        args = append(args, "--exec", config.Exec)
+    }
+
+    // Add tags for the slim image
+    for _, tag := range config.Tags {
+        args = append(args, "--tag", tag)
+    }
+
+    // Execute podman slim command with streaming output
+    cmd := exec.CommandContext(ctx, p.binary, args...)
+
+    // Create a pipe for stdout
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        return "", fmt.Errorf("failed to create stdout pipe: %w", err)
+    }
+
+    // Create a pipe for stderr
+    stderr, err := cmd.StderrPipe()
+    if err != nil {
+        return "", fmt.Errorf("failed to create stderr pipe: %w", err)
+    }
+
+    // Start the command
+    if err := cmd.Start(); err != nil {
+        return "", fmt.Errorf("failed to start podman slim: %w", err)
+    }
+
+    // Stream output in real-time
+    go func() {
+        scanner := bufio.NewScanner(stdout)
+        for scanner.Scan() {
+            if outputCallback != nil {
+                outputCallback(scanner.Text())
+            }
+        }
+    }()
+
+    go func() {
+        scanner := bufio.NewScanner(stderr)
+        for scanner.Scan() {
+            if outputCallback != nil {
+                outputCallback(scanner.Text())
+            }
+        }
+    }()
+
+    // Wait for command to complete
+    err = cmd.Wait()
+
+    if err != nil {
+        return "", fmt.Errorf("podman slim failed: %w", err)
+    }
+
+    // Return the first tag as the slim image name
+    if len(config.Tags) > 0 {
+        return config.Tags[0], nil
+    }
+
+    // If no tags specified, return the target with -slim suffix
+    return config.Target + "-slim", nil
 }
 
 func (p *podmanEngineImpl) RunContainer(ctx context.Context, config ContainerConfig) (*ContainerResult, error) {
-	// Build podman run command
-	args := []string{"run", "--rm"}
-	
-	// Working directory is handled via cd command in the shell, not via -w option
-	
-	// Add environment variables
-	for key, value := range config.Env {
-		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
-	}
-	
-	// Add mounts
-	for _, mount := range config.Mounts {
-		if mount.Type == "bind" {
-			mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
-			if mount.RO {
-				mountArg += ":ro"
-			}
-			args = append(args, "-v", mountArg)
-		}
-	}
-	
-	// Add cache mounts
-	for cacheName, cachePath := range config.Cache {
-		// Mount cache to standard buildfab cache location
-		targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
-		cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
-		args = append(args, "--mount", cacheMountArg)
-	}
-	
-	// Add CPU and memory limits
-	if config.CPU > 0 {
-		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
-		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
-		
-		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
-		cpuSet := ""
-		for i := 0; i < config.CPU; i++ {
-			if i > 0 {
-				cpuSet += ","
-			}
-			cpuSet += fmt.Sprintf("%d", i)
-		}
-		args = append(args, "--cpuset-cpus", cpuSet)
-	}
-	
-	if config.Memory != "" {
-		args = append(args, "-m", config.Memory)
-	}
-	
-	// Add user if specified
-	if config.User != "" {
-		args = append(args, "-u", config.User)
-	}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add image
-	args = append(args, config.Image.From)
-	
-	// Add command to run
-	if config.Run != "" {
-		args = append(args, "sh", "-c", config.Run)
-	} else if config.RunAction != "" {
-		args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
-	} else if config.RunStage != "" {
-		args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
-	}
-	
-	// Execute podman run command
-	cmd := exec.CommandContext(ctx, p.binary, args...)
-	output, err := cmd.CombinedOutput()
-	
-	result := &ContainerResult{
-		ContainerID: "podman-container", // Placeholder
-		ExitCode:    0,
-		Output:      string(output),
-		Error:       "",
-		Artifacts:   []string{},
-	}
-	
-	if err != nil {
-		result.ExitCode = 1
-		result.Error = err.Error()
-	}
-	
-	return result, nil
+    // Build podman run command
+    args := []string{"run", "--rm"}
+
+    // Working directory is handled via cd command in the shell, not via -w option
+
+    // Add environment variables
+    for key, value := range config.Env {
+        args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
+    }
+
+    // Add mounts
+    for _, mount := range config.Mounts {
+        if mount.Type == "bind" {
+            mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
+            if mount.RO {
+                mountArg += ":ro"
+            }
+            args = append(args, "-v", mountArg)
+        }
+    }
+
+    // Add cache mounts
+    for cacheName, cachePath := range config.Cache {
+        // Mount cache to standard buildfab cache location
+        targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+        cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
+        args = append(args, "--mount", cacheMountArg)
+    }
+
+    // Add CPU and memory limits
+    if config.CPU > 0 {
+        // Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+        args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+
+        // Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
+        cpuSet := ""
+        for i := 0; i < config.CPU; i++ {
+            if i > 0 {
+                cpuSet += ","
+            }
+            cpuSet += fmt.Sprintf("%d", i)
+        }
+        args = append(args, "--cpuset-cpus", cpuSet)
+    }
+
+    if config.Memory != "" {
+        args = append(args, "-m", config.Memory)
+    }
+
+    // Add user if specified
+    if config.User != "" {
+        args = append(args, "-u", config.User)
+    }
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add image
+    args = append(args, config.Image.From)
+
+    // Add command to run
+    if config.Run != "" {
+        args = append(args, "sh", "-c", config.Run)
+    } else if config.RunAction != "" {
+        args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
+    } else if config.RunStage != "" {
+        args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
+    }
+
+    // Execute podman run command
+    cmd := exec.CommandContext(ctx, p.binary, args...)
+    output, err := cmd.CombinedOutput()
+
+    result := &ContainerResult{
+        ContainerID: "podman-container", // Placeholder
+        ExitCode:    0,
+        Output:      string(output),
+        Error:       "",
+        Artifacts:   []string{},
+    }
+
+    if err != nil {
+        result.ExitCode = 1
+        result.Error = err.Error()
+    }
+
+    return result, nil
 }
 
 // RunContainerWithCallback runs a Podman container with streaming output callback
 func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string)) (*ContainerResult, error) {
-	// Build podman run command (same as RunContainer)
-	args := []string{"run", "--rm"}
-	
-	// Working directory is handled via cd command in the shell, not via -w option
-	
-	// Add environment variables
-	for key, value := range config.Env {
-		args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
-	}
-	
-	// Add mounts
-	for _, mount := range config.Mounts {
-		if mount.Type == "bind" {
-			mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
-			if mount.RO {
-				mountArg += ":ro"
-			}
-			args = append(args, "-v", mountArg)
-		}
-	}
-	
-	// Add cache mounts
-	for cacheName, cachePath := range config.Cache {
-		// Mount cache to standard buildfab cache location
-		targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
-		cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
-		args = append(args, "--mount", cacheMountArg)
-	}
-	
-	// Add CPU and memory limits
-	if config.CPU > 0 {
-		// Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
-		args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
-		
-		// Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
-		cpuSet := ""
-		for i := 0; i < config.CPU; i++ {
-			if i > 0 {
-				cpuSet += ","
-			}
-			cpuSet += fmt.Sprintf("%d", i)
-		}
-		args = append(args, "--cpuset-cpus", cpuSet)
-	}
-	
-	if config.Memory != "" {
-		args = append(args, "-m", config.Memory)
-	}
-	
-	// Add user if specified
-	if config.User != "" {
-		args = append(args, "-u", config.User)
-	}
-	
-	// Add network if specified
-	if config.Network != "" {
-		args = append(args, "--network", config.Network)
-	}
-	
-	// Add image
-	args = append(args, config.Image.From)
-	
-	// Add command to run
-	if config.Run != "" {
-		args = append(args, "sh", "-c", config.Run)
-	} else if config.RunAction != "" {
-		args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
-	} else if config.RunStage != "" {
-		args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
-	}
-	
-	// Execute podman run command with streaming
-	cmd := exec.CommandContext(ctx, p.binary, args...)
-	
-	// Set up streaming pipes
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-	
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-	
-	// Start the command
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start command: %w", err)
-	}
-	
-	// Stream output in real-time
-	var output strings.Builder
-	var errorOutput strings.Builder
-	
-	// Channel to signal when streaming is complete
-	done := make(chan struct{})
-	
-	// Stream stdout
-	go func() {
-		defer func() { done <- struct{}{} }()
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			output.WriteString(line + "\n")
-			// Send to callback for real-time display
-			if outputCallback != nil {
-				outputCallback(line)
-			}
-		}
-	}()
-	
-	// Stream stderr
-	go func() {
-		defer func() { done <- struct{}{} }()
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			line := scanner.Text()
-			errorOutput.WriteString(line + "\n")
-			// Send to callback for real-time display
-			if outputCallback != nil {
-				outputCallback(line)
-			}
-		}
-	}()
-	
-	// Wait for command to complete
-	err = cmd.Wait()
-	
-	// Wait for both goroutines to finish
-	<-done
-	<-done
-	
-	result := &ContainerResult{
-		ContainerID: "podman-container", // Placeholder
-		ExitCode:    0,
-		Output:      output.String(),
-		Error:       errorOutput.String(),
-		Artifacts:   []string{},
-	}
-	
-	if err != nil {
-		result.ExitCode = 1
-		if result.Error == "" {
-			result.Error = err.Error()
-		}
-	}
-	
-	return result, nil
+    // Build podman run command (same as RunContainer)
+    args := []string{"run", "--rm"}
+
+    // Working directory is handled via cd command in the shell, not via -w option
+
+    // Add environment variables
+    for key, value := range config.Env {
+        args = append(args, "-e", fmt.Sprintf("%s=%s", key, value))
+    }
+
+    hasWorkspaceMount := false
+    // Add mounts
+    for _, mount := range config.Mounts {
+        if mount.Type == "bind" {
+            if mount.Target == "/tmp/buildfab-workspace" {
+                hasWorkspaceMount = true
+
+            }
+            mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
+            if mount.RO {
+                mountArg += ":ro"
+            }
+            args = append(args, "-v", mountArg)
+        }
+    }
+
+    if hasWorkspaceMount {
+        args = append(args, "-w", "/tmp/buildfab-workspace")
+    }
+
+    // Add cache mounts
+    for cacheName, cachePath := range config.Cache {
+        // Mount cache to standard buildfab cache location
+        targetPath := fmt.Sprintf("/tmp/buildfab-cache-%s", cacheName)
+        cacheMountArg := fmt.Sprintf("type=bind,source=%s,target=%s", cachePath, targetPath)
+        args = append(args, "--mount", cacheMountArg)
+    }
+
+    // Add CPU and memory limits
+    if config.CPU > 0 {
+        // Simple CPU count: 2 -> --cpus 2.0 --cpuset-cpus "0,1"
+        args = append(args, "--cpus", fmt.Sprintf("%d.0", config.CPU))
+
+        // Generate CPU set: 2 -> "0,1", 3 -> "0,1,2", etc.
+        cpuSet := ""
+        for i := 0; i < config.CPU; i++ {
+            if i > 0 {
+                cpuSet += ","
+            }
+            cpuSet += fmt.Sprintf("%d", i)
+        }
+        args = append(args, "--cpuset-cpus", cpuSet)
+    }
+
+    if config.Memory != "" {
+        args = append(args, "-m", config.Memory)
+    }
+
+    // Add user if specified
+    if config.User != "" {
+        args = append(args, "-u", config.User)
+    }
+
+    // Add network if specified
+    if config.Network != "" {
+        args = append(args, "--network", config.Network)
+    }
+
+    // Add image
+    args = append(args, config.Image.From)
+
+    // Add command to run
+    if config.Run != "" {
+        args = append(args, "sh", "-c", config.Run)
+    } else if config.RunAction != "" {
+        args = append(args, "sh", "-c", fmt.Sprintf("buildfab action %s", config.RunAction))
+    } else if config.RunStage != "" {
+        args = append(args, "sh", "-c", fmt.Sprintf("buildfab run %s", config.RunStage))
+    }
+
+    // Execute podman run command with streaming
+    cmd := exec.CommandContext(ctx, p.binary, args...)
+
+    // Set up streaming pipes
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
+    }
+
+    stderr, err := cmd.StderrPipe()
+    if err != nil {
+        return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
+    }
+
+    // Start the command
+    if err := cmd.Start(); err != nil {
+        return nil, fmt.Errorf("failed to start command: %w", err)
+    }
+
+    // Stream output in real-time
+    var output strings.Builder
+    var errorOutput strings.Builder
+
+    // Channel to signal when streaming is complete
+    done := make(chan struct{})
+
+    // Stream stdout
+    go func() {
+        defer func() { done <- struct{}{} }()
+        scanner := bufio.NewScanner(stdout)
+        for scanner.Scan() {
+            line := scanner.Text()
+            output.WriteString(line + "\n")
+            // Send to callback for real-time display
+            if outputCallback != nil {
+                outputCallback(line)
+            }
+        }
+    }()
+
+    // Stream stderr
+    go func() {
+        defer func() { done <- struct{}{} }()
+        scanner := bufio.NewScanner(stderr)
+        for scanner.Scan() {
+            line := scanner.Text()
+            errorOutput.WriteString(line + "\n")
+            // Send to callback for real-time display
+            if outputCallback != nil {
+                outputCallback(line)
+            }
+        }
+    }()
+
+    // Wait for command to complete
+    err = cmd.Wait()
+
+    // Wait for both goroutines to finish
+    <-done
+    <-done
+
+    result := &ContainerResult{
+        ContainerID: "podman-container", // Placeholder
+        ExitCode:    0,
+        Output:      output.String(),
+        Error:       errorOutput.String(),
+        Artifacts:   []string{},
+    }
+
+    if err != nil {
+        result.ExitCode = 1
+        if result.Error == "" {
+            result.Error = err.Error()
+        }
+    }
+
+    return result, nil
 }
 
 func (p *podmanEngineImpl) StopContainer(ctx context.Context, containerID string) error {
-	cmd := exec.CommandContext(ctx, p.binary, "stop", containerID)
-	return cmd.Run()
+    cmd := exec.CommandContext(ctx, p.binary, "stop", containerID)
+    return cmd.Run()
 }
 
 func (p *podmanEngineImpl) RemoveContainer(ctx context.Context, containerID string) error {
-	cmd := exec.CommandContext(ctx, p.binary, "rm", containerID)
-	return cmd.Run()
+    cmd := exec.CommandContext(ctx, p.binary, "rm", containerID)
+    return cmd.Run()
 }
 
 // streamingWriter is a helper that streams output to a callback function
 type streamingWriter struct {
-	callback func(string)
+    callback func(string)
 }
 
 func (w *streamingWriter) Write(p []byte) (n int, err error) {
-	if w.callback != nil {
-		w.callback(string(p))
-	}
-	return len(p), nil
+    if w.callback != nil {
+        w.callback(string(p))
+    }
+    return len(p), nil
 }

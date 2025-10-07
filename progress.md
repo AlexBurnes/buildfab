@@ -2,6 +2,18 @@
 
 ## What Works
 
+- **Container Feature Architecture Enhancement**: Successfully implemented comprehensive container feature enhancements with conditional `-w` option, `cd workdir` integration, and optimized command execution (100% complete)
+  - **Problem Identified** - Container engines were duplicating command construction logic and not properly handling workspace mount detection for `-w` option
+  - **Solution Implemented** - Centralized all command preparation in `PrepareContainerConfig` function and simplified container engines to focus on execution only
+  - **Conditional `-w` Option** - Added logic to detect bind mount with `target=/tmp/buildfab-workspace` and only add `-w /tmp/buildfab-workspace` when this specific mount exists
+  - **`cd workdir` Integration** - Properly integrated `cd <workdir>` command into the shell command string before other run commands when `workdir` is defined
+  - **Command Optimization** - Shortened `exec /tmp/buildfab-bin/buildfab` to `buildfab` due to alias being set, and corrected environment file path from `. .docker-env` to `. ./.docker-env`
+  - **Architecture Cleanup** - Simplified container engines by removing complex command construction logic and letting `PrepareContainerConfig` handle all command preparation
+  - **Display Consistency** - Fixed `buildContainerCommandForDisplay` function to accurately reflect the actual executed command, ensuring display string matches real execution
+  - **Perfect User Experience** - Container commands now execute exactly as displayed, with proper workspace directory handling and optimized command strings
+  - **Comprehensive Testing** - Verified all changes work correctly with container build matrix examples showing proper execution flow
+  - **VERSION 0.18.7 RELEASED** - Successfully completed container feature architecture enhancement with centralized command preparation and simplified engine execution
+
 - **Container Pull Streaming Fix**: Successfully fixed critical issue where container image pull progress was not being streamed to users, providing real-time visibility into image download operations (100% complete)
   - **Problem Identified** - When buildfab needed to pull images from registries, users only saw the final result without the "Copying blob" progress messages that are normally shown during `podman pull` or `docker pull` operations
   - **Root Cause Found** - The `PullImage` methods in both Docker and Podman engines used `cmd.Run()` which doesn't stream output, and the container manager was not using streaming pull methods
