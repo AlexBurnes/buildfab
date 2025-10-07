@@ -1,0 +1,43 @@
+version: 0.3
+
+project:
+  name: test-parallel-pool
+  max_parallel: 8  # Global limit
+
+actions:
+  - name: matrix-action
+    run: |
+      echo "Running matrix job: ${{ matrix.job }}"
+      sleep 2
+      echo "Completed matrix job: ${{ matrix.job }}"
+
+stages:
+  # Test 1: Matrix with max_parallel=2 (should run 2 at a time)
+  test-matrix-limit-2:
+    steps:
+      - action: matrix-action
+        matrix:
+          values:
+            job: ["job1", "job2", "job3", "job4"]
+          strategy:
+            max_parallel: 2  # Only 2 jobs run concurrently
+
+  # Test 2: Matrix with max_parallel=1 (sequential execution)
+  test-matrix-sequential:
+    steps:
+      - action: matrix-action
+        matrix:
+          values:
+            job: ["seqA", "seqB", "seqC"]
+          strategy:
+            max_parallel: 1  # Sequential execution
+
+  # Test 3: Matrix without max_parallel (uses global pool)
+  test-matrix-global:
+    steps:
+      - action: matrix-action
+        matrix:
+          values:
+            job: ["globalA", "globalB", "globalC", "globalD"]
+          # NO max_parallel - should use global pool limit (8)
+

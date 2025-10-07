@@ -128,6 +128,30 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     if err != nil {
         return fmt.Errorf("failed to expand matrix steps: %w", err)
     }
+    
+    // Collect pool configurations from expanded steps
+    poolConfigs := make(map[string]int)
+    for _, origStep := range stage.Steps {
+        if origStep.Matrix != nil && origStep.Matrix.Strategy.MaxParallel > 0 {
+            poolID := fmt.Sprintf("matrix-%s", origStep.Action)
+            
+            // Apply min() strategy: effective = min(global, matrix)
+            globalMax := r.opts.MaxParallel
+            if globalMax <= 0 && r.config.Project.MaxParallel > 0 {
+                globalMax = r.config.Project.MaxParallel
+            }
+            if globalMax <= 0 {
+                globalMax = GetDefaultMaxParallel()
+            }
+            
+            effectiveMax := origStep.Matrix.Strategy.MaxParallel
+            if globalMax > 0 && globalMax < effectiveMax {
+                effectiveMax = globalMax // Global limit wins
+            }
+            
+            poolConfigs[poolID] = effectiveMax
+        }
+    }
 
     // Create ordered step callback to collect results with proper ordering
     stepCallback := NewOrderedStepCallback(expandedSteps, r.opts.VerboseLevel, r.opts.Debug, r.opts.ErrorOutput, r.config)
@@ -168,6 +192,15 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     }
 
     runner := NewRunner(r.config, complexOpts)
+    
+    // Create matrix pools based on poolConfigs
+    for poolID, poolMaxParallel := range poolConfigs {
+        runner.poolManager.GetOrCreateMatrixPool(poolID, poolMaxParallel)
+        if r.opts.Debug {
+            fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Created matrix pool: %s (max_parallel=%d)\n", poolID, poolMaxParallel)
+        }
+    }
+    
     err = runner.RunStageWithSteps(ctx, stageName, expandedSteps)
 
     // Calculate stage execution duration
@@ -1140,10 +1173,27 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
                 return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
             }
 
+            // Assign pool ID if max_parallel is specified
+            strategy := step.Matrix.Strategy
+            if strategy.MaxParallel > 0 {
+                poolID := fmt.Sprintf("matrix-%s", step.Action)
+                
+                // Assign pool ID to all expanded steps
+                for i := range matrixSteps {
+                    matrixSteps[i].PoolID = poolID
+                }
+                
+                if r.opts.Debug {
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Assigned %d matrix steps to pool %s (max_parallel=%d)\n",
+                        len(matrixSteps), poolID, strategy.MaxParallel)
+                }
+            }
+            
             if r.opts.Debug {
                 fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanded into %d steps\n", len(matrixSteps))
                 for j, matrixStep := range matrixSteps {
-                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix step %d: Action=%s, Description=%s\n", j, matrixStep.Action, matrixStep.Description)
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix step %d: Action=%s, PoolID=%s, Description=%s\n", 
+                        j, matrixStep.Action, matrixStep.PoolID, matrixStep.Description)
                 }
             }
 
