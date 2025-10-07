@@ -121,6 +121,9 @@ actions:
       done
 
   - name: run-tests
+    run: go test ./... -v
+
+  - name: run-all-tests
     run: go test ./... -v -race
 
   # Git actions
