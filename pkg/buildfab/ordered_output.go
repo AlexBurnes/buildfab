@@ -347,8 +347,8 @@ func (o *OrderedOutputManager) showStepStart(stepName string) {
             o.showContainerCommand(stepName)
         }
     } else {
-        // In quiet mode, don't show individual step indicators
-        // The summary will show the overall results
+        // In quiet mode, show a simple running indicator that will be overwritten by completion message
+        fmt.Fprintf(o.errorOutput, "  %s◯%s %s (running...)\r", colorCyan, colorReset, stepName)
     }
 }
 
@@ -555,7 +555,8 @@ func (o *OrderedOutputManager) showStepCompletion(stepName string) {
                 icon = "!"
                 color = colorYellow
             }
-            fmt.Fprintf(o.errorOutput, "\r  %s%s%s %s execute failure\n", color, icon, colorReset, stepName)
+            // Clear the running indicator line before showing failure message
+            fmt.Fprintf(o.errorOutput, "\033[2K\r  %s%s%s %s execute failure\n", color, icon, colorReset, stepName)
 
             // Display the buffered output (which contains stdout/stderr)
             lines := strings.Split(strings.TrimRight(data.BufferedOutput, "\n"), "\n")
@@ -630,8 +631,9 @@ func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus
         // In verbose mode, just print the result
         fmt.Fprintf(o.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
     } else {
-        // In quiet mode, show step completion results but not step start messages
-        fmt.Fprintf(o.errorOutput, "  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
+        // In quiet mode, clear the running indicator line and show completion
+        // Use ANSI escape code to clear line, then carriage return to start of line
+        fmt.Fprintf(o.errorOutput, "\033[2K\r  %s%s%s %s %s\n", color, icon, colorReset, stepName, enhancedMessage)
     }
 }
 
