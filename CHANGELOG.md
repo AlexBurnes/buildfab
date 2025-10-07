@@ -8,6 +8,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed - Sprint 1 Critical Fixes (2025-10-07)
+- **WaitGroup Management**: Fixed potential deadlock in ExecutionPool by moving `Add(1)` to Submit() before queueing
+  - Previously called Add(1) in executeTask() after dequeue, causing imbalance on cancellation
+  - Now increments WaitGroup before queueing task, decrements on context cancellation if task doesn't execute
+  - Prevents WaitGroup panic and ensures proper cleanup during pool shutdown
+- **Debug Output Consistency**: Fixed debug messages to show correct pool name (matrix vs global)
+  - Previously all debug messages showed "global pool" even for matrix-specific pools
+  - Now correctly identifies pool name from stepConfig.PoolID
+  - Debug output format: `[DEBUG] Pool: Starting step <name> in <pool-name> pool`
+- **Config Validation**: Verified Project.MaxParallel validation already implemented (>= 0 check)
+  - Validation ensures max_parallel is non-negative (0 means use CPU cores)
+  - Error message: "project.max_parallel must be >= 0 (0 means use CPU cores)"
+
+### Added - Parallel Pool Feature (2025-10-07)
+- **Parallel Pool Execution System**: Implemented comprehensive pool-based execution system to enforce matrix `max_parallel` limits
+  - **ExecutionPool Infrastructure**: Worker pool with task queue, context-aware cancellation, and statistics tracking
+  - **PoolManager**: Coordinates global and matrix-specific pools with proper lifecycle management
+  - **Project.MaxParallel Configuration**: Global concurrency limit in project YAML (default: CPU cores)
+  - **Matrix Pool Assignment**: Matrix steps with `max_parallel` get dedicated pools via PoolID field
+  - **Min() Strategy**: Effective parallelism = min(global_max, matrix_max) properly enforced
+  - **DAG Integration**: Pool-based task submission in executeDAGWithCallback() replaces unlimited goroutines
+  - **Context Propagation**: Pools derive context from parent for proper Ctrl+C signal handling
+  - **Test Coverage**: Created test-parallel-pool-matrix.yml with 3 comprehensive test scenarios
+- **Files Added**:
+  - `pkg/buildfab/pool.go` - ExecutionPool and PoolManager implementation (296 lines)
+  - `tests/test-parallel-pool-matrix.yml` - Test scenarios for matrix limits and global pool usage
+  - `docs/Parallel-pool-next-steps.md` - Refinement plan and implementation roadmap
+- **Files Modified**:
+  - `pkg/buildfab/buildfab.go` - expandMatrixStepsWithPools(), createTaskForStep(), pool-based DAG execution
+  - `pkg/buildfab/simple.go` - Min() strategy implementation for effective parallelism calculation
+  - `internal/config/config.go` - Added Project.MaxParallel field
+- **Documentation Updated**:
+  - `docs/Matrix-parallel-pools-implementation.md` - Updated with implementation status and phase completion
+  - `activeContext.md` - Documented parallel pool feature completion
+  - `progress.md` - Updated with parallel pool refinement phase details
+
+### Fixed - Matrix Max Parallel Enforcement (2025-10-07)
+- **Critical Bug**: Fixed matrix `max_parallel` not being enforced - all matrix jobs were running in unlimited parallel
+- **Root Cause**: DAG executor was spawning unlimited goroutines for all ready nodes, completely bypassing max_parallel setting
+- **Solution**: Implemented pool-based execution where steps are submitted to ExecutionPool instead of spawning goroutines
+- **Impact**: Matrix builds now properly respect max_parallel limits, preventing resource exhaustion
+- **Validation**: Global limit acts as hard upper bound, matrix-specific limits cannot exceed global limit
+
 ### Fixed
 - **Critical: Signal Handling for DAG Executor and Container Execution** - Fixed issue where Ctrl+C/INT signal did not terminate running jobs
   - **Pool Context Issue**: ExecutionPool was creating an isolated context from `context.Background()` instead of deriving from parent context

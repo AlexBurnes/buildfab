@@ -98,7 +98,7 @@ func (p *ExecutionPool) executeTask(task Task) {
 	p.stats.TasksRunning++
 	p.mu.Unlock()
 	
-	p.activeJobs.Add(1)
+	// WaitGroup Add(1) is now called in Submit() before queueing
 	defer p.activeJobs.Done()
 	
 	if task.OnStart != nil {
@@ -130,6 +130,9 @@ func (p *ExecutionPool) Submit(task Task) error {
 	}
 	p.mu.RUnlock()
 	
+	// Add to WaitGroup BEFORE queueing to prevent imbalance on cancellation
+	p.activeJobs.Add(1)
+	
 	p.mu.Lock()
 	p.stats.TasksQueued++
 	p.mu.Unlock()
@@ -138,6 +141,8 @@ func (p *ExecutionPool) Submit(task Task) error {
 	case p.taskQueue <- task:
 		return nil
 	case <-p.ctx.Done():
+		// Context cancelled - decrement WaitGroup since task won't execute
+		p.activeJobs.Done()
 		return fmt.Errorf("pool %s is shutting down", p.name)
 	}
 }

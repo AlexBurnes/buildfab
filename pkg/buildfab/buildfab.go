@@ -1560,19 +1560,27 @@ func (r *Runner) createTaskForStep(ctx context.Context, nodeName string, node *D
 			return err
 		},
 		OnStart: func() {
-			// Optional: Add debug logging for pool task start
+			// Add debug logging for pool task start with correct pool name
 			if r.opts.Debug {
-				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Pool: Starting step %s in global pool\n", nodeName)
+				poolName := "global"
+				if stepConfig != nil && stepConfig.PoolID != "" {
+					poolName = stepConfig.PoolID
+				}
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Pool: Starting step %s in %s pool\n", nodeName, poolName)
 			}
 		},
 		OnComplete: func(err error) {
-			// Optional: Add debug logging for pool task completion
+			// Add debug logging for pool task completion with correct pool name
 			if r.opts.Debug {
 				status := "OK"
 				if err != nil {
 					status = "ERROR"
 				}
-				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Pool: Completed step %s: %s\n", nodeName, status)
+				poolName := "global"
+				if stepConfig != nil && stepConfig.PoolID != "" {
+					poolName = stepConfig.PoolID
+				}
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Pool: Completed step %s in %s pool: %s\n", nodeName, poolName, status)
 			}
 		},
 	}
