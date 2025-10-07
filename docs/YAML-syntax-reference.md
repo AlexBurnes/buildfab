@@ -58,6 +58,70 @@ project:
     - "my-app"
     - "my-library"
   bin: "bin"                      # Optional: Binary directory (default: "bin")
+  max_parallel: 4                 # Optional: Global concurrency limit (default: CPU count)
+```
+
+### max_parallel Field
+
+The `max_parallel` field controls global concurrency for all step execution:
+
+```yaml
+project:
+  name: "my-project"
+  max_parallel: 4                 # Maximum 4 concurrent tasks
+```
+
+**Behavior**:
+- **Default**: Number of CPU cores if not specified
+- **Value = 0**: Uses CPU core count
+- **Value > 0**: Creates global execution pool with specified size
+- **Validation**: Must be >= 0
+
+**Interaction with Matrix**:
+- Steps without matrix `max_parallel` use global pool
+- Steps with matrix `max_parallel` get dedicated pool
+- **Effective parallelism** = `min(global_max_parallel, matrix_max_parallel)`
+
+**Examples**:
+
+```yaml
+# Example 1: Limit total concurrency to 2
+project:
+  max_parallel: 2
+
+stages:
+  test:
+    - action: build      # Uses global pool (max 2)
+    - action: test       # Uses global pool (max 2)
+    # Both steps compete for same 2 slots
+
+# Example 2: Global + Matrix limits
+project:
+  max_parallel: 4       # Global limit
+
+stages:
+  test:
+    - action: matrix-test
+      matrix:
+        values:
+          platform: ["linux", "windows", "macos", "freebsd"]
+        strategy:
+          max_parallel: 2  # Matrix wants 2 concurrent
+    # Effective = min(4, 2) = 2 concurrent jobs
+
+# Example 3: High global, matrix self-limits
+project:
+  max_parallel: 10      # High global limit
+
+stages:
+  test:
+    - action: matrix-test
+      matrix:
+        values:
+          item: ["1", "2", "3"]
+        strategy:
+          max_parallel: 2  # Matrix restricts to 2
+    # Effective = min(10, 2) = 2 concurrent jobs
 ```
 
 ## Include System

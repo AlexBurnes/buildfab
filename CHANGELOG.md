@@ -8,6 +8,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2025-10-07
+
+### Added - Sprint 3 Documentation & Release (2025-10-07)
+- **Comprehensive Documentation Updates**: Updated all user documentation with parallel pool feature details
+  - **Matrix-feature.md**: Added parallel pool execution section with detailed explanations
+    - How matrix parallelism works with pool-based execution
+    - Global concurrency control with `project.max_parallel`
+    - Matrix-specific pools with dedicated `max_parallel` settings
+    - Interaction between limits using min() strategy
+    - Performance metrics showing ~0.75μs overhead (1000x better than requirement)
+    - Troubleshooting guide with debug output examples
+    - Pool statistics for advanced monitoring
+  - **Features-and-examples.md**: Added pool configuration examples
+    - Global and matrix parallelism control section
+    - Min() strategy examples showing limit interactions
+    - Three practical scenarios: global restricts matrix, matrix self-limits, no matrix limit
+  - **YAML-syntax-reference.md**: Added `project.max_parallel` field documentation
+    - Complete field reference with behavior explanation
+    - Validation rules (must be >= 0)
+    - Interaction with matrix pools
+    - Three detailed configuration examples
+  - **README.md**: Updated with parallel pool feature
+    - Added pool-based concurrency control to feature list
+    - Updated Quick Start with `max_parallel` example
+    - Enhanced execution control documentation
+    - Added note on parallelism CLI flag behavior
+- **Release Preparation**: Final testing and version bump
+  - All tests pass with `-race` flag
+  - Cross-platform compatibility verified
+  - Version bumped to v0.20.0
+  - Release notes prepared with feature highlights
+- **Feature Highlights**:
+  - Fixed critical bug where matrix `max_parallel` was not enforced
+  - Implemented pool-based execution system with exceptional performance
+  - 26 comprehensive tests (20 unit + 6 integration) with 100% pass rate
+  - Performance: 1.3M tasks/sec, ~0.75μs overhead, < 10MB for 1000 tasks
+  - Thread-safe operations with no goroutine leaks
+
+### Documentation
+- **Matrix-feature.md**: Added 150+ lines of parallel pool documentation
+- **Features-and-examples.md**: Added 90+ lines of pool configuration examples
+- **YAML-syntax-reference.md**: Added 60+ lines of `max_parallel` field documentation
+- **README.md**: Updated feature list and CLI usage with parallelism notes
+
 ### Added - Sprint 2 Testing & Benchmarks (2025-10-07)
 - **Comprehensive Unit Tests**: Added 20 unit tests for pool system with 100% coverage of core functionality
   - ExecutionPool tests: basic execution, max parallel limit, context cancellation, task errors, callbacks, concurrent submit
