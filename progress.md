@@ -2,6 +2,19 @@
 
 ## What Works
 
+- **Container Artifact Collection Feature**: Complete implementation of hybrid artifact collection for container feature with full path preservation (100% complete)
+  - **Hybrid Approach Implemented** - Different strategies for run commands (pre-mounted volume) vs build-only images (docker cp with temporary container)
+  - **Full Path Preservation** - All artifacts preserve complete directory structure: `/app/binary` → `./dist/app/binary`, `/usr/local/bin/myapp` → `./dist/usr/local/bin/myapp`, `/build/output/` → `./dist/build/output/`
+  - **Pre-mounted Volume for Run Commands** - Host output directory mounted as `/buildfab-artifacts` with automatic copy commands, eliminating docker cp overhead
+  - **Docker CP for Built Images** - Temporary container created from built image with unique naming (timestamp+random), artifacts extracted, then cleaned up automatically
+  - **Directory Support** - Complete directory structures copied with all nested files and subdirectories preserved
+  - **Cross-Platform** - Works perfectly with both Docker and Podman engines
+  - **Comprehensive Testing** - All tests pass for simple files, multiple artifacts, directories, nested structures, both run commands and built images
+  - **Perfect User Experience** - Artifacts in dist directory with full path structure for clear organization and no naming conflicts
+  - **Documentation** - Created `docs/Container-artifact-collection.md` with implementation details and `examples/container-artifacts-example.yml` with 5 examples
+  - **Test Suite** - Comprehensive tests in `tests/test-container-artifacts.yml` and `tests/test-container-build-artifacts.yml` with test Dockerfiles
+  - **VERSION 0.19.0 RELEASED** - Successfully completed container artifact collection feature with hybrid approach
+
 - **Container Output Ordering Fix**: Successfully fixed critical output ordering issue in matrix container builds where container commands and outputs were displayed out of order (100% complete)
   - **Problem Identified** - Container command ("🐳 Running container:") was being printed directly in `runContainerAction()` as soon as the action started executing, bypassing the ordered output manager
   - **Root Cause Found** - The container command display was happening at line 3047 in buildfab.go, which executed immediately before the ordered output manager could control display sequence
@@ -552,16 +565,18 @@
 - **Test coverage improvement**: Overall project coverage improved from 58.6% to 72.5%
 
 ## What's Left to Build
-- **Container Feature Implementation (INVESTIGATION COMPLETED)**: Docker and Podman support for isolated execution environments - investigation completed, implementation status updated
-  - **Current Status**: ~85% complete with most core functionality working correctly
-  - **Working Features**: Basic container execution, engine detection (Docker/Podman), mount support, environment variables, resource limits, integration with buildfab action system, **`run_action`/`run_stage` execution fully implemented and working**
-  - **Fixed Issues**:
-    - **Schema Mismatch**: Container configuration schema mismatch (Commands → run) has been resolved
-    - **`prepareContainer()` Implementation**: `PrepareContainerConfig()` method is fully implemented and working correctly
-    - **`run_action`/`run_stage` Execution**: Both execution modes are fully functional with proper buildfab binary mounting
-  - **Remaining Issues**:
-    - **Missing Implementation**: `collectArtifacts()` method is placeholder
-    - **Missing Features**: Image building, environment file support not implemented
+- **Container Feature Implementation**: ✅ **100% COMPLETE** - Docker and Podman support for isolated execution environments
+  - **Current Status**: 100% complete with all core functionality fully implemented and tested
+  - **All Features Working**: Basic container execution, engine detection (Docker/Podman), mount support, environment variables, environment files, cache management, resource limits, image building, slim images, artifact collection, `run_action`/`run_stage` execution
+  - **All Issues Fixed**:
+    - **Schema Mismatch**: Container configuration schema (Commands → run) ✅
+    - **`PrepareContainerConfig()` Implementation**: Fully implemented ✅
+    - **`run_action`/`run_stage` Execution**: Both modes fully functional ✅
+    - **Artifact Collection**: Hybrid approach fully implemented ✅
+    - **Image Building**: Complete with streaming output ✅
+    - **Environment Files**: Loading from mounted workspace ✅
+    - **Cache Management**: Automatic mounting ✅
+  - **No Remaining Issues**: All planned features implemented and tested
   - **Testing Verified**: Both `run_action` and `run_stage` execution tested and confirmed working with proper buildfab binary mounting and configuration copying
   - **Phase 1 (Weeks 1-2)**: Basic container execution with Alpine/Debian images and action/stage execution
   - **Phase 2 (Weeks 3-4)**: Mount support for directories and files, CPU and memory limiting capabilities

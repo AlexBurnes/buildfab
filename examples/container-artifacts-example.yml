@@ -1,0 +1,145 @@
+project:
+  name: container-artifacts-example
+
+# Example demonstrating container artifact collection with full path preservation
+
+actions:
+  # Example 1: Build Go binary and collect artifact
+  - name: build-go-app
+    description: Build Go application in container and collect binary
+    container:
+      image:
+        from: golang:1.23-alpine
+      workdir: /build
+      env:
+        CGO_ENABLED: "0"
+        GOOS: linux
+      mounts:
+        - type: bind
+          source: .
+          target: /build
+          ro: true
+      run: |
+        echo "Building Go application..."
+        mkdir -p /usr/local/bin
+        go build -o /usr/local/bin/myapp ./cmd/myapp
+        echo "Build complete"
+      artifacts:
+        output: ./dist
+        path:
+          - /usr/local/bin/myapp
+    # Result: ./dist/usr/local/bin/myapp
+
+  # Example 2: Build from Dockerfile and extract artifacts
+  - name: build-from-dockerfile
+    description: Build image from Dockerfile and extract artifacts
+    container:
+      image:
+        build:
+          dockerfile: Dockerfile
+          context: .
+          tags:
+            - myapp:v1.0
+      artifacts:
+        output: ./build-artifacts
+        path:
+          - /app/binary
+          - /app/config.yaml
+          - /app/docs/
+    # Result: ./build-artifacts/app/binary
+    #         ./build-artifacts/app/config.yaml
+    #         ./build-artifacts/app/docs/ (entire directory)
+
+  # Example 3: Compile C application and collect multiple artifacts
+  - name: compile-c-app
+    description: Compile C application and collect binaries and libraries
+    container:
+      image:
+        from: gcc:latest
+      workdir: /src
+      mounts:
+        - type: bind
+          source: ./src
+          target: /src
+          ro: true
+      run: |
+        echo "Compiling C application..."
+        mkdir -p /build/bin /build/lib /build/include
+        gcc -o /build/bin/myapp main.c
+        gcc -shared -o /build/lib/libmylib.so mylib.c
+        cp mylib.h /build/include/
+        echo "Compilation complete"
+      artifacts:
+        output: ./release
+        path:
+          - /build/bin/myapp
+          - /build/lib/libmylib.so
+          - /build/include/mylib.h
+    # Result: ./release/build/bin/myapp
+    #         ./release/build/lib/libmylib.so
+    #         ./release/build/include/mylib.h
+
+  # Example 4: Build documentation and collect PDF files
+  - name: build-docs
+    description: Build documentation in container and collect PDF files
+    container:
+      image:
+        from: pandoc/latex:latest
+      workdir: /docs
+      mounts:
+        - type: bind
+          source: ./docs
+          target: /docs
+          ro: true
+      run: |
+        echo "Building documentation..."
+        mkdir -p /output/pdf /output/html
+        pandoc manual.md -o /output/pdf/manual.pdf
+        pandoc guide.md -o /output/pdf/guide.pdf
+        pandoc README.md -o /output/html/readme.html
+        echo "Documentation built"
+      artifacts:
+        output: ./documentation
+        path:
+          - /output/pdf/
+          - /output/html/readme.html
+    # Result: ./documentation/output/pdf/ (all PDF files)
+    #         ./documentation/output/html/readme.html
+
+  # Example 5: Create archive and collect
+  - name: create-archive
+    description: Create tar archive in container and collect it
+    container:
+      image:
+        from: alpine:latest
+      workdir: /workspace
+      mounts:
+        - type: bind
+          source: .
+          target: /workspace
+          ro: true
+      run: |
+        echo "Creating archive..."
+        mkdir -p /archives
+        tar -czf /archives/project-backup.tar.gz -C /workspace .
+        echo "Archive created: /archives/project-backup.tar.gz"
+      artifacts:
+        output: ./backups
+        path:
+          - /archives/project-backup.tar.gz
+    # Result: ./backups/archives/project-backup.tar.gz
+
+stages:
+  # Stage to build all artifacts
+  build-all:
+    steps:
+      - action: build-go-app
+      - action: compile-c-app
+      - action: build-docs
+
+  # Stage to create release package
+  release:
+    steps:
+      - action: build-from-dockerfile
+      - action: create-archive
+

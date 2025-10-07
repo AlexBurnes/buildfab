@@ -1,0 +1,13 @@
+FROM alpine:latest
+
+# Create multiple artifacts in different locations
+RUN mkdir -p /usr/local/bin /etc/app /var/data && \
+    echo "binary-content" > /usr/local/bin/myapp && \
+    chmod +x /usr/local/bin/myapp && \
+    echo '{"version": "1.0", "name": "myapp"}' > /etc/app/config.json && \
+    echo "result-data" > /var/data/results.dat && \
+    echo "Artifacts created:" && \
+    ls -la /usr/local/bin/myapp /etc/app/config.json /var/data/results.dat
+
+# Multiple artifacts will be extracted after build
+

@@ -1,0 +1,65 @@
+project:
+  name: test-container-build-artifacts
+
+# Test artifact collection from built images (docker cp approach)
+
+actions:
+  # Test 1: Build simple image and extract artifact
+  - name: test-build-simple-artifact
+    description: Build image with artifact and extract it
+    container:
+      image:
+        build:
+          dockerfile: tests/dockerfiles/Dockerfile.simple-artifact
+          context: .
+          tags:
+            - test-simple-artifact:latest
+      artifacts:
+        output: ./build-artifacts/simple
+        path:
+          - /app/output.txt
+    # Expected: ./build-artifacts/simple/app/output.txt
+
+  # Test 2: Build image with multiple artifacts
+  - name: test-build-multiple-artifacts
+    description: Build image with multiple artifacts and extract them
+    container:
+      image:
+        build:
+          dockerfile: tests/dockerfiles/Dockerfile.multiple-artifacts
+          context: .
+          tags:
+            - test-multiple-artifacts:latest
+      artifacts:
+        output: ./build-artifacts/multiple
+        path:
+          - /usr/local/bin/myapp
+          - /etc/app/config.json
+          - /var/data/results.dat
+    # Expected: ./build-artifacts/multiple/usr/local/bin/myapp
+    #           ./build-artifacts/multiple/etc/app/config.json
+    #           ./build-artifacts/multiple/var/data/results.dat
+
+  # Test 3: Build image with directory artifact
+  - name: test-build-directory-artifact
+    description: Build image with directory artifact and extract it
+    container:
+      image:
+        build:
+          dockerfile: tests/dockerfiles/Dockerfile.directory-artifact
+          context: .
+          tags:
+            - test-directory-artifact:latest
+      artifacts:
+        output: ./build-artifacts/directory
+        path:
+          - /build/dist/
+    # Expected: ./build-artifacts/directory/build/dist/ (entire directory)
+
+stages:
+  test-all-build-artifacts:
+    steps:
+      - action: test-build-simple-artifact
+      - action: test-build-multiple-artifacts
+      - action: test-build-directory-artifact
+

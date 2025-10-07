@@ -1,0 +1,102 @@
+project:
+  name: test-container-artifacts
+
+# Test container artifact collection with full path preservation
+
+actions:
+  # Test 1: Simple file artifact from run command
+  - name: test-simple-artifact
+    description: Test collecting a simple file artifact
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Creating test artifact..."
+        mkdir -p /app/bin
+        echo "Hello from container!" > /app/bin/test.txt
+        cat /app/bin/test.txt
+      artifacts:
+        output: ./test-artifacts/simple
+        path:
+          - /app/bin/test.txt
+    # Expected: ./test-artifacts/simple/app/bin/test.txt
+
+  # Test 2: Multiple artifacts from different paths
+  - name: test-multiple-artifacts
+    description: Test collecting multiple artifacts from different paths
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Creating multiple artifacts..."
+        mkdir -p /usr/local/bin /etc/config /var/data
+        echo "Binary content" > /usr/local/bin/myapp
+        echo "Config content" > /etc/config/app.conf
+        echo "Data content" > /var/data/output.dat
+        echo "Artifacts created in:"
+        echo "  - /usr/local/bin/myapp"
+        echo "  - /etc/config/app.conf"
+        echo "  - /var/data/output.dat"
+      artifacts:
+        output: ./test-artifacts/multiple
+        path:
+          - /usr/local/bin/myapp
+          - /etc/config/app.conf
+          - /var/data/output.dat
+    # Expected: ./test-artifacts/multiple/usr/local/bin/myapp
+    #           ./test-artifacts/multiple/etc/config/app.conf
+    #           ./test-artifacts/multiple/var/data/output.dat
+
+  # Test 3: Directory artifact
+  - name: test-directory-artifact
+    description: Test collecting an entire directory
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Creating directory with multiple files..."
+        mkdir -p /build/output
+        echo "File 1" > /build/output/file1.txt
+        echo "File 2" > /build/output/file2.txt
+        echo "File 3" > /build/output/file3.txt
+        ls -la /build/output/
+      artifacts:
+        output: ./test-artifacts/directory
+        path:
+          - /build/output/
+    # Expected: ./test-artifacts/directory/build/output/file1.txt
+    #           ./test-artifacts/directory/build/output/file2.txt
+    #           ./test-artifacts/directory/build/output/file3.txt
+
+  # Test 4: Nested directory structure
+  - name: test-nested-artifacts
+    description: Test collecting artifacts with nested directory structure
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Creating nested directory structure..."
+        mkdir -p /project/src/main /project/src/lib /project/dist
+        echo "main.c" > /project/src/main/main.c
+        echo "lib.c" > /project/src/lib/lib.c
+        echo "app" > /project/dist/app
+        tree /project || find /project -type f
+      artifacts:
+        output: ./test-artifacts/nested
+        path:
+          - /project/src/
+          - /project/dist/app
+    # Expected: ./test-artifacts/nested/project/src/main/main.c
+    #           ./test-artifacts/nested/project/src/lib/lib.c
+    #           ./test-artifacts/nested/project/dist/app
+
+
+stages:
+  # Test all artifacts
+  test-all-artifacts:
+    steps:
+      - action: test-simple-artifact
+      - action: test-multiple-artifacts
+      - action: test-directory-artifact
+      - action: test-nested-artifacts
+

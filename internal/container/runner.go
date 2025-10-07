@@ -3,9 +3,12 @@ package container
 import (
     "context"
     "fmt"
+    "math/rand"
     "os"
     "os/exec"
     "path/filepath"
+    "strings"
+    "time"
 
     "github.com/AlexBurnes/buildfab/pkg/buildfab/container"
 )
@@ -100,6 +103,17 @@ func (r *ContainerRunner) GetManager() *container.Manager {
 func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfig, configFile string) (container.ContainerConfig, error) {
     // Create a copy of the config
     preparedConfig := config
+
+    // Handle artifact collection for run commands by pre-mounting volume
+    if config.Run != "" && len(config.Artifacts.Path) > 0 {
+        // Add artifact mount for direct run commands
+        if err := r.addArtifactMount(&preparedConfig); err != nil {
+            return preparedConfig, err
+        }
+        
+        // Add artifact copy commands to the run script
+        r.addArtifactCopyCommands(&preparedConfig)
+    }
 
     // If this is a run_action or run_stage, we need to mount the current directory and buildfab binary
     if config.RunStage != "" || config.RunAction != "" {
@@ -278,31 +292,80 @@ func (r *ContainerRunner) getCurrentExecutablePath() (string, error) {
     return resolvedPath, nil
 }
 
-// collectArtifacts collects artifacts from the container
+// collectArtifacts collects artifacts from the container using the hybrid approach:
+// - For run commands: artifacts are collected via pre-mounted volume (already on host, no copy needed)
+// - For build-only images: use docker/podman cp from temporary container
 func (r *ContainerRunner) collectArtifacts(result *container.ContainerResult, config container.ContainerConfig) error {
     // Only collect artifacts if there are any specified
     if len(config.Artifacts.Path) == 0 {
         return nil
     }
 
-    // Create output directory if it doesn't exist
-    if config.Artifacts.Output != "" {
-        if err := os.MkdirAll(config.Artifacts.Output, 0755); err != nil {
-            return fmt.Errorf("failed to create output directory %s: %w", config.Artifacts.Output, err)
-        }
+    // Set default output directory
+    if config.Artifacts.Output == "" {
+        config.Artifacts.Output = "./artifacts"
+    }
+    
+    // Create output directory
+    if err := os.MkdirAll(config.Artifacts.Output, 0755); err != nil {
+        return fmt.Errorf("failed to create output directory %s: %w", config.Artifacts.Output, err)
     }
 
-    // Collect artifacts from container to host
-    for _, artifact := range config.Artifacts.Path {
-        if err := r.copyArtifactFromContainer(result.ContainerID, artifact, config.Artifacts.Output); err != nil {
-            return fmt.Errorf("failed to copy artifact %s: %w", artifact, err)
+    // Check if this is a build-only scenario (no run commands)
+    // In this case, we need to extract artifacts from the built image
+    if config.Run == "" && config.RunAction == "" && config.RunStage == "" && config.Image.Build != nil {
+        // Build-only: create temporary container and copy artifacts
+        // Use the image tag from config (manager sets this after build)
+        imageTag := config.Image.From
+        if imageTag == "" && len(config.Image.Build.Tags) > 0 {
+            // Fallback to first build tag
+            imageTag = config.Image.Build.Tags[0]
+        }
+        return r.collectArtifactsFromImage(imageTag, config)
+    }
+    
+    // For run commands with artifacts:
+    // Artifacts were already collected via pre-mounted volume during execution
+    // The files are already on the host filesystem in the output directory
+    // No need to copy - just verify they exist
+    if config.Run != "" || config.RunAction != "" || config.RunStage != "" {
+        // Artifacts were collected via pre-mounted volume - nothing more to do
+        // The addArtifactMount and addArtifactCopyCommands already handled the collection
+        return nil
+    }
+    
+    return nil
+}
+
+// collectArtifactsFromImage extracts artifacts from a built image by creating a temporary container
+func (r *ContainerRunner) collectArtifactsFromImage(imageTag string, config container.ContainerConfig) error {
+    engineName := r.manager.GetEngineName()
+    
+    // Create a unique temporary container name using timestamp and random component
+    containerName := fmt.Sprintf("buildfab-artifact-extract-%d-%d", time.Now().UnixNano(), rand.Intn(10000))
+    
+    createCmd := exec.Command(engineName, "create", "--name", containerName, imageTag)
+    if err := createCmd.Run(); err != nil {
+        return fmt.Errorf("failed to create temporary container for artifact extraction: %w", err)
+    }
+    
+    // Ensure cleanup
+    defer func() {
+        exec.Command(engineName, "rm", containerName).Run()
+    }()
+    
+    // Copy artifacts from the container
+    for _, artifactPath := range config.Artifacts.Path {
+        if err := r.copyArtifactFromContainer(containerName, artifactPath, config.Artifacts.Output); err != nil {
+            return fmt.Errorf("failed to extract artifact %s from image: %w", artifactPath, err)
         }
     }
-
+    
     return nil
 }
 
 // copyArtifactFromContainer copies an artifact from the container to the host
+// Preserves full path structure: /app/binary -> ./dist/app/binary
 func (r *ContainerRunner) copyArtifactFromContainer(containerID, artifactPath, outputDir string) error {
     if containerID == "" {
         return fmt.Errorf("container ID is empty, cannot copy artifacts")
@@ -311,18 +374,88 @@ func (r *ContainerRunner) copyArtifactFromContainer(containerID, artifactPath, o
     // Get the container engine name
     engineName := r.manager.GetEngineName()
 
-    // Build the copy command
-    var cmd *exec.Cmd
-    if outputDir != "" {
-        cmd = exec.Command(engineName, "cp", fmt.Sprintf("%s:%s", containerID, artifactPath), outputDir)
-    } else {
-        cmd = exec.Command(engineName, "cp", fmt.Sprintf("%s:%s", containerID, artifactPath), ".")
+    // For absolute paths like /app/binary or /usr/local/bin/myapp
+    // We want to preserve the full path structure in the output directory
+    // /app/binary -> ./dist/app/binary
+    // /usr/local/bin/myapp -> ./dist/usr/local/bin/myapp
+    
+    // Clean the artifact path to remove any leading slashes for destination
+    relPath := filepath.Clean(strings.TrimPrefix(artifactPath, "/"))
+    destPath := filepath.Join(outputDir, relPath)
+    
+    // Create the destination directory structure
+    destDir := filepath.Dir(destPath)
+    if err := os.MkdirAll(destDir, 0755); err != nil {
+        return fmt.Errorf("failed to create destination directory %s: %w", destDir, err)
     }
 
-    // Execute the copy command
-    if err := cmd.Run(); err != nil {
-        return fmt.Errorf("failed to execute %s cp command: %w", engineName, err)
+    // Use docker/podman cp to copy the artifact
+    // Format: docker cp <container>:<src_path> <dest_path>
+    cmd := exec.Command(engineName, "cp", 
+        fmt.Sprintf("%s:%s", containerID, artifactPath),
+        destPath)
+
+    output, err := cmd.CombinedOutput()
+    if err != nil {
+        return fmt.Errorf("failed to copy artifact from container: %w, output: %s", err, string(output))
     }
 
     return nil
+}
+
+// addArtifactMount adds a mount point for artifact collection
+func (r *ContainerRunner) addArtifactMount(config *container.ContainerConfig) error {
+    // Get absolute path for output directory
+    absOutput, err := filepath.Abs(config.Artifacts.Output)
+    if err != nil {
+        return fmt.Errorf("failed to get absolute path for artifacts output: %w", err)
+    }
+    
+    // Create output directory on host
+    if err := os.MkdirAll(absOutput, 0755); err != nil {
+        return fmt.Errorf("failed to create artifacts output directory: %w", err)
+    }
+    
+    // Add mount for artifacts
+    artifactMount := container.ContainerMount{
+        Type:   "bind",
+        Source: absOutput,
+        Target: "/buildfab-artifacts",
+        RO:     false,
+    }
+    config.Mounts = append(config.Mounts, artifactMount)
+    
+    return nil
+}
+
+// addArtifactCopyCommands adds commands to copy artifacts to the mounted volume
+// Preserves full path structure: /app/binary -> /buildfab-artifacts/app/binary
+func (r *ContainerRunner) addArtifactCopyCommands(config *container.ContainerConfig) {
+    if config.Run == "" {
+        return
+    }
+    
+    // Build artifact copy commands
+    var copyCommands []string
+    for _, artifactPath := range config.Artifacts.Path {
+        // For each artifact, preserve its full path structure
+        // Remove leading slash to make it relative
+        relPath := strings.TrimPrefix(artifactPath, "/")
+        destPath := filepath.Join("/buildfab-artifacts", relPath)
+        destDir := filepath.Dir(destPath)
+        
+        // Create destination directory and copy with full path preservation
+        // Use (command || true) to prevent failures from stopping execution
+        copyCmd := fmt.Sprintf("(mkdir -p %s && cp -r %s %s || true)", 
+            destDir, 
+            artifactPath, 
+            destPath)
+        copyCommands = append(copyCommands, copyCmd)
+    }
+    
+    // Append copy commands to run script
+    if len(copyCommands) > 0 {
+        // Add a separator and then the copy commands
+        config.Run = config.Run + "\n" + strings.Join(copyCommands, "\n")
+    }
 }

@@ -1,0 +1,14 @@
+FROM alpine:latest
+
+# Create a directory with multiple files
+RUN mkdir -p /build/dist && \
+    echo "file1 content" > /build/dist/file1.txt && \
+    echo "file2 content" > /build/dist/file2.txt && \
+    echo "file3 content" > /build/dist/file3.txt && \
+    mkdir -p /build/dist/subdir && \
+    echo "nested file" > /build/dist/subdir/nested.txt && \
+    echo "Directory structure:" && \
+    ls -laR /build/dist
+
+# Directory artifact will be extracted after build
+

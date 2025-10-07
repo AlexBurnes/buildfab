@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 2025-10-07
+
+### Added
+- **Container Artifact Collection**: Complete implementation of hybrid artifact collection for container feature
+  - **Hybrid Approach**: Different strategies for run commands vs build-only images
+    - Run commands: Pre-mounted volume approach with automatic copy inside container
+    - Build-only images: Docker/Podman cp approach with temporary container creation
+  - **Full Path Preservation**: All artifacts preserve complete directory structure
+    - `/app/binary` → `./dist/app/binary`
+    - `/usr/local/bin/myapp` → `./dist/usr/local/bin/myapp`
+    - `/build/output/` → `./dist/build/output/` (directories)
+  - **Pre-mounted Volume for Run Commands**: Host output directory mounted as `/buildfab-artifacts`
+  - **Automatic Copy Commands**: Artifact copy commands automatically added to run scripts
+  - **Docker CP for Built Images**: Temporary container created from built image for artifact extraction
+  - **Unique Container Naming**: Timestamp + random component prevents parallel execution conflicts
+  - **Directory Support**: Complete directory structures copied with nested files
+  - **Cross-Platform**: Works with both Docker and Podman engines
+  - **No Overhead for Run Commands**: Artifacts written directly to host via mount (no docker cp needed)
+
+### Changed
+- **Artifact Collection Functions**: Implemented `collectArtifacts()`, `collectArtifactsFromImage()`, `copyArtifactFromContainer()`
+- **Container Configuration Preparation**: Added `addArtifactMount()` and `addArtifactCopyCommands()` helpers
+- **Path Handling**: Full path structure preservation using `strings.TrimPrefix()` and `filepath.Join()`
+
+### Documentation
+- **Container Artifact Collection Guide**: Created comprehensive `docs/Container-artifact-collection.md` with implementation details
+- **Artifact Examples**: Created `examples/container-artifacts-example.yml` with 5 real-world usage examples
+- **Test Suite**: Added comprehensive tests in `tests/test-container-artifacts.yml` and `tests/test-container-build-artifacts.yml`
+- **Dockerfiles**: Created test Dockerfiles demonstrating artifact creation in images
+
 ## [0.18.8] - 2025-10-07
 
 ### Fixed

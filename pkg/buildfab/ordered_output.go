@@ -373,19 +373,27 @@ func (o *OrderedOutputManager) showContainerCommand(stepName string) {
     if action.Container != nil {
         // Create a temporary runner to prepare the configuration for display
         tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(o.verboseLevel)
-        if err == nil {
-            // Use the actual config path
-            configPath := o.configPath
-            if configPath == "" {
-                configPath = ".project.yml" // Fallback
-            }
-            // Use the interpolated container configuration with matrix variables already substituted
-            preparedConfig, prepErr := tempRunner.PrepareContainerConfig(*action.Container, configPath)
-            if prepErr == nil {
-                containerCmd := o.buildContainerCommand(&preparedConfig)
-                fmt.Fprintf(o.errorOutput, "  🐳 Running container: %s\n", containerCmd)
-            }
+        if err != nil {
+            // Silently ignore runner creation errors for display purposes
+            return
         }
+        
+        // Use the actual config path
+        configPath := o.configPath
+        if configPath == "" {
+            configPath = ".project.yml" // Fallback
+        }
+        
+        // Use the interpolated container configuration with matrix variables already substituted
+        preparedConfig, prepErr := tempRunner.PrepareContainerConfig(*action.Container, configPath)
+        if prepErr != nil {
+            // Silently ignore preparation errors for display purposes
+            // (artifacts might not be mounted yet, which is OK for display)
+            return
+        }
+        
+        containerCmd := o.buildContainerCommand(&preparedConfig)
+        fmt.Fprintf(o.errorOutput, "  🐳 Running container: %s\n", containerCmd)
     }
 }
 

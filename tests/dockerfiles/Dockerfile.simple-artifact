@@ -1,0 +1,9 @@
+FROM alpine:latest
+
+# Create a simple artifact
+RUN mkdir -p /app && \
+    echo "This is a built artifact from Dockerfile!" > /app/output.txt && \
+    cat /app/output.txt
+
+# The artifact will be extracted after build (no run needed)
+
