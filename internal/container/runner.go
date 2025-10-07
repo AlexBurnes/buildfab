@@ -178,7 +178,7 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
         // 4. exec buildfab command
 
         // Start with alias
-        finalCommand := fmt.Sprintf("export PATH=/tmp/%s:${PATH} && ", tempBinDirName)
+        finalCommand := fmt.Sprintf("export PATH=${PATH}:/tmp/%s && ", tempBinDirName)
 
         // Add environment file loading (creates /buildfab directory)
         // Use relative path since we're in the workspace directory
