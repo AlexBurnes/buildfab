@@ -81,11 +81,7 @@ func (m *MockStepCallback) Reset() {
 func TestStepCallbackIntegration(t *testing.T) {
 	// Create a test configuration
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -189,11 +185,7 @@ func TestStepCallbackIntegration(t *testing.T) {
 
 func TestRunActionWithCallbacks(t *testing.T) {
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -251,11 +243,7 @@ func TestRunActionWithCallbacks(t *testing.T) {
 
 func TestRunStageStepWithCallbacks(t *testing.T) {
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -322,11 +310,7 @@ func TestRunStageStepWithCallbacks(t *testing.T) {
 
 func TestStepCallbackWithoutVerbose(t *testing.T) {
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -374,11 +358,7 @@ func TestStepCallbackWithoutVerbose(t *testing.T) {
 
 func TestStepCallbackNil(t *testing.T) {
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -429,11 +409,7 @@ func TestStepStatusString(t *testing.T) {
 // Test callback with built-in actions
 func TestStepCallbackWithBuiltInActions(t *testing.T) {
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -495,11 +471,7 @@ func TestStepCallbackWithBuiltInActions(t *testing.T) {
 // Test callback output with verbose mode
 func TestStepCallbackOutput(t *testing.T) {
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{

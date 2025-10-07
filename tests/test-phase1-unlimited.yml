@@ -1,0 +1,39 @@
+version: 0.3
+
+project:
+  name: test-unlimited-pool
+  max_parallel: 0  # Unlimited (use CPU cores)
+
+actions:
+  - name: fast-action-1
+    run: |
+      echo "Starting fast action 1"
+      sleep 2
+      echo "Completed fast action 1"
+  
+  - name: fast-action-2
+    run: |
+      echo "Starting fast action 2"
+      sleep 2
+      echo "Completed fast action 2"
+  
+  - name: fast-action-3
+    run: |
+      echo "Starting fast action 3"
+      sleep 2
+      echo "Completed fast action 3"
+  
+  - name: fast-action-4
+    run: |
+      echo "Starting fast action 4"
+      sleep 2
+      echo "Completed fast action 4"
+
+stages:
+  test-unlimited:
+    steps:
+      - action: fast-action-1
+      - action: fast-action-2
+      - action: fast-action-3
+      - action: fast-action-4
+

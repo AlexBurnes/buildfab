@@ -295,10 +295,95 @@ actions:
 
 ### Matrix Strategy Options
 
-- **`max_parallel`**: Maximum concurrent jobs (default: all)
+- **`max_parallel`**: Maximum concurrent jobs. Creates a dedicated execution pool for the matrix. If not specified, matrix jobs use the global pool. **Note**: Effective parallelism = `min(global_max_parallel, matrix_max_parallel)` when both are set.
 - **`fail_fast`**: Stop all jobs on first failure (default: false)
 - **`continue_on_error`**: Stage succeeds even if some jobs fail (default: false)
 - **`order`**: Job scheduling order - "fifo" or "random" (default: "fifo")
+
+### Global and Matrix Parallelism Control
+
+buildfab provides two levels of concurrency control:
+
+#### Global Concurrency Control
+
+Set project-wide parallel execution limit:
+
+```yaml
+project:
+  name: "my-project"
+  max_parallel: 4  # Global limit for all concurrent execution
+```
+
+This creates a global execution pool that limits total concurrent tasks across the entire DAG execution.
+
+#### Matrix-Specific Pools
+
+Matrix steps with `max_parallel` get dedicated execution pools:
+
+```yaml
+project:
+  max_parallel: 8  # Global pool size
+
+stages:
+  test:
+    - action: matrix-test
+      matrix:
+        values:
+          platform: ["linux", "windows", "macos", "freebsd"]
+        strategy:
+          max_parallel: 2  # Dedicated matrix pool with 2 workers
+```
+
+#### Min() Strategy - How Limits Interact
+
+When both global and matrix limits are set, they interact using the min() strategy:
+
+**Example 1: Global Restricts Matrix**
+```yaml
+project:
+  max_parallel: 1  # Low global limit
+
+stages:
+  test:
+    - action: matrix-action
+      matrix:
+        values:
+          item: ["1", "2", "3", "4"]
+        strategy:
+          max_parallel: 2  # Matrix wants 2 concurrent
+```
+**Result**: Jobs run **one at a time** (effective = min(1, 2) = 1)
+
+**Example 2: Matrix Self-Limits**
+```yaml
+project:
+  max_parallel: 10  # High global limit
+
+stages:
+  test:
+    - action: matrix-action
+      matrix:
+        values:
+          item: ["1", "2", "3", "4"]
+        strategy:
+          max_parallel: 2  # Matrix restricts itself
+```
+**Result**: Jobs run **2 at a time** (effective = min(10, 2) = 2)
+
+**Example 3: No Matrix Limit - Uses Global Pool**
+```yaml
+project:
+  max_parallel: 4  # Global limit
+
+stages:
+  test:
+    - action: matrix-action
+      matrix:
+        values:
+          platform: ["linux", "windows", "macos", "freebsd"]
+        # NO max_parallel - uses global pool
+```
+**Result**: All 4 jobs run in parallel using the global pool
 
 For detailed matrix feature documentation, see [Matrix Feature Documentation](Matrix-feature.md).
 

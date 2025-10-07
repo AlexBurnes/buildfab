@@ -211,11 +211,7 @@ func TestIsNumeric(t *testing.T) {
 
 func TestRunner_ListBuiltInActions(t *testing.T) {
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 	}

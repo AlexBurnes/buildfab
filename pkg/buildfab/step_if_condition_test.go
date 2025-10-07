@@ -8,11 +8,7 @@ import (
 func TestStepIfCondition(t *testing.T) {
 	// Test configuration with step if conditions
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -81,11 +77,7 @@ func TestStepIfCondition(t *testing.T) {
 func TestStepIfConditionComplex(t *testing.T) {
 	// Test configuration with complex step if conditions
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -145,11 +137,7 @@ func TestStepIfConditionComplex(t *testing.T) {
 func TestStepIfConditionWithFunctions(t *testing.T) {
 	// Test configuration with step if conditions using functions
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{

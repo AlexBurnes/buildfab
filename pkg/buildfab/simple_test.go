@@ -11,11 +11,7 @@ import (
 func TestSimpleRunner_RunStage(t *testing.T) {
 	// Create a test configuration
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -49,11 +45,7 @@ func TestSimpleRunner_RunStage(t *testing.T) {
 func TestSimpleRunner_RunAction(t *testing.T) {
 	// Create a test configuration
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -81,11 +73,7 @@ func TestSimpleRunner_RunAction(t *testing.T) {
 func TestSimpleRunner_RunStageStep(t *testing.T) {
 	// Create a test configuration
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{
@@ -119,11 +107,7 @@ func TestSimpleRunner_RunStageStep(t *testing.T) {
 func TestSimpleRunner_ErrorHandling(t *testing.T) {
 	// Create a test configuration
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{},

@@ -4,7 +4,7 @@ A Go-based CLI utility and library for executing project automation stages and a
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.18.10-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.20.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Features
 
@@ -13,6 +13,7 @@ buildfab provides a comprehensive automation framework with powerful features fo
 - **YAML-driven configuration** with intuitive syntax and modular organization
 - **DAG-based execution** with parallel processing and dependency management
 - **Matrix feature** for parallel execution across multiple configurations
+- **Pool-based concurrency control** with global and matrix-specific limits
 - **Built-in actions** for common tasks (git checks, version validation)
 - **Action variants** for platform-specific execution
 - **Conditional execution** with powerful expression language
@@ -35,6 +36,7 @@ See the [Installation and Git Hook Setup](#installation-and-git-hook-setup) sect
 ```yaml
 project:
   name: "my-project"
+  max_parallel: 4  # Global concurrency limit (optional)
 
 actions:
   - name: test
@@ -84,10 +86,12 @@ buildfab provides several command-line options to control execution behavior:
 #### Execution Control
 - **`-c, --config`**: Path to configuration file (default: `.project.yml`)
 - **`-w, --working-dir`**: Working directory for execution (default: current directory)
-- **`--max-parallel`**: Maximum parallel execution (default: CPU count)
+- **`--max-parallel`**: Override global parallel execution limit (default: from config or CPU count)
 - **`--only`**: Only run steps matching these labels
 - **`--with-requires`**: Include required dependencies when running single step
 - **`--dry-run`**: Show what would be executed without running commands
+
+**Note on Parallelism**: The `--max-parallel` CLI flag overrides the `project.max_parallel` configuration. Matrix steps with their own `max_parallel` setting create dedicated pools with effective limit = `min(global, matrix)`.
 
 #### Environment
 - **`--env`**: Export environment variables to actions

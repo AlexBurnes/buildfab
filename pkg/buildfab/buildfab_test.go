@@ -69,11 +69,7 @@ func TestDefaultRunOptions(t *testing.T) {
 
 func TestNewRunner(t *testing.T) {
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 	}
@@ -162,12 +158,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "valid config",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1", Run: "echo hello"},
@@ -195,12 +187,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "no actions",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 			},
 			wantErr: true,
@@ -209,12 +197,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "action without name",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Run: "echo hello"},
@@ -226,12 +210,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "action without run or uses",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1"},
@@ -243,12 +223,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "action with both run and uses",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1", Run: "echo hello", Uses: "git@untracked"},
@@ -260,12 +236,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "duplicate action name",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1", Run: "echo hello"},
@@ -278,12 +250,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "stage without steps",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1", Run: "echo hello"},
@@ -298,12 +266,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "step without action",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1", Run: "echo hello"},
@@ -322,12 +286,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "step with unknown action",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1", Run: "echo hello"},
@@ -346,12 +306,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "step with invalid onerror",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1", Run: "echo hello"},
@@ -370,12 +326,8 @@ func TestConfig_Validate(t *testing.T) {
 		{
 			name: "step with invalid only value",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{Name: "action1", Run: "echo hello"},
