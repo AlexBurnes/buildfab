@@ -126,6 +126,10 @@ func (p *ExecutionPool) Submit(task Task) error {
 	p.mu.RLock()
 	if !p.running {
 		p.mu.RUnlock()
+		// Call OnComplete to notify that task wasn't submitted
+		if task.OnComplete != nil {
+			task.OnComplete(fmt.Errorf("pool %s is not running", p.name))
+		}
 		return fmt.Errorf("pool %s is not running", p.name)
 	}
 	p.mu.RUnlock()
@@ -143,6 +147,10 @@ func (p *ExecutionPool) Submit(task Task) error {
 	case <-p.ctx.Done():
 		// Context cancelled - decrement WaitGroup since task won't execute
 		p.activeJobs.Done()
+		// Call OnComplete to notify that task was cancelled before execution
+		if task.OnComplete != nil {
+			task.OnComplete(fmt.Errorf("pool %s is shutting down", p.name))
+		}
 		return fmt.Errorf("pool %s is shutting down", p.name)
 	}
 }
