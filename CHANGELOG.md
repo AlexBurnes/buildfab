@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.8] - 2025-10-07
+
+### Fixed
+- **Container Output Ordering**: Fixed critical output ordering issue in matrix container builds where container commands and outputs were displayed out of order
+  - Moved container command display from `runContainerAction()` to ordered output manager's `showStepStart()` function
+  - Container commands now display in proper sequence: step start → container command → output → completion
+  - Fixed output for matrix builds to show each container's output sequentially instead of all commands first then mixed outputs
+  - Modified `showStepStart()` in `ordered_output.go` to call `showContainerCommand()` when verbosity >= 2
+  - Removed direct container command printing from `runContainerAction()` in buildfab.go that bypassed ordered output manager
+
+### Changed
+- **Container Command Display**: Enhanced container command display for better accuracy and copy-paste usability
+  - Added workspace mount detection and working directory `-w` option to display command
+  - Changed from `alias buildfab=...` to `export PATH=...` in container commands for non-interactive shell compatibility
+  - Added proper shell command quoting in display to make commands ready for copy-paste execution
+  - Updated `buildContainerCommand()` to show accurate working directory when workspace is mounted
+
 ## [0.18.7] - 2025-10-07
 
 ### Added

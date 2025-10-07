@@ -342,7 +342,10 @@ func (o *OrderedOutputManager) showStepStart(stepName string) {
     if o.verboseLevel > 0 {
         fmt.Fprintf(o.errorOutput, "  💻 %s\n", stepName)
 
-        // Container command display is now handled in the actual execution
+        // Show container command for container actions (verbose level 2+)
+        if o.verboseLevel >= 2 {
+            o.showContainerCommand(stepName)
+        }
     } else {
         // In quiet mode, don't show individual step indicators
         // The summary will show the overall results
@@ -468,13 +471,22 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
         // Regular container execution
         parts = append(parts, "run", "--rm")
 
+        hasWorkspaceMount := false
+
         // Add mount arguments
         for _, mount := range config.Mounts {
+            if mount.Target == "/tmp/buildfab-workspace" {
+                hasWorkspaceMount = true
+            }
             mountArg := fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target)
             if mount.RO {
                 mountArg += ",readonly"
             }
             parts = append(parts, mountArg)
+        }
+
+        if hasWorkspaceMount {
+            parts = append(parts, "-w", "/tmp/buildfab-workspace")
         }
 
         // Add cache mounts
@@ -518,7 +530,7 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
 
         // Add command to run
         if config.Run != "" {
-            parts = append(parts, "sh", "-c", config.Run)
+            parts = append(parts, "sh", "-c", "'", config.Run, "'")
         } else if config.RunAction != "" {
             parts = append(parts, "buildfab", "action", config.RunAction)
         } else if config.RunStage != "" {

@@ -3036,18 +3036,8 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 		interpolatedAction.Container = interpolatedContainer
 	}
 	
-	// Show container command if verbose level is 2 or higher
-	if r.opts.VerboseLevel >= 2 {
-		// Create a temporary runner to prepare the configuration for display
-		tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(r.opts.VerboseLevel)
-		if err == nil {
-			preparedConfig, prepErr := tempRunner.PrepareContainerConfig(*interpolatedAction.Container, r.opts.ConfigPath)
-			if prepErr == nil {
-				containerCmd := r.buildContainerCommandForDisplay(&preparedConfig)
-				fmt.Fprintf(r.opts.ErrorOutput, "  🐳 Running container: %s\n", containerCmd)
-			}
-		}
-	}
+	// Container command display is now handled by the ordered output manager in showStepStart
+	// This ensures proper ordering of output for matrix steps that run sequentially
 
 	// Create container runner with specified engine or default
 	var runner *containerRunner.ContainerRunner

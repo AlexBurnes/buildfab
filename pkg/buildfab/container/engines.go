@@ -1053,7 +1053,6 @@ func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config 
         if mount.Type == "bind" {
             if mount.Target == "/tmp/buildfab-workspace" {
                 hasWorkspaceMount = true
-
             }
             mountArg := fmt.Sprintf("%s:%s", mount.Source, mount.Target)
             if mount.RO {

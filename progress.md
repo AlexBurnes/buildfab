@@ -2,6 +2,18 @@
 
 ## What Works
 
+- **Container Output Ordering Fix**: Successfully fixed critical output ordering issue in matrix container builds where container commands and outputs were displayed out of order (100% complete)
+  - **Problem Identified** - Container command ("🐳 Running container:") was being printed directly in `runContainerAction()` as soon as the action started executing, bypassing the ordered output manager
+  - **Root Cause Found** - The container command display was happening at line 3047 in buildfab.go, which executed immediately before the ordered output manager could control display sequence
+  - **Solution Implemented** - Moved container command display to ordered output manager's `showStepStart()` function, which respects proper sequential order for matrix steps
+  - **Key Changes** - Modified `showStepStart()` in `ordered_output.go` to call `showContainerCommand()` when verbosity >= 2, removed direct printing from `runContainerAction()`
+  - **Perfect Sequential Output** - Matrix container builds now display in correct order: step start → container command → container output → step completion
+  - **Enhanced Display Command** - Added workspace mount detection and working directory display to make container commands more accurate for copy-paste usage
+  - **Export PATH Instead of Alias** - Changed from `alias buildfab=...` to `export PATH=...` in container commands for non-interactive shell compatibility
+  - **Copy-Paste Ready** - Container command display includes proper quoting for shell commands, allowing users to copy-paste and run directly
+  - **Comprehensive Testing** - Verified fix works correctly with matrix builds showing proper sequential output for all container jobs
+  - **VERSION 0.18.8 RELEASED** - Successfully completed container output ordering fix with proper sequential display for matrix builds
+
 - **Container Feature Architecture Enhancement**: Successfully implemented comprehensive container feature enhancements with conditional `-w` option, `cd workdir` integration, and optimized command execution (100% complete)
   - **Problem Identified** - Container engines were duplicating command construction logic and not properly handling workspace mount detection for `-w` option
   - **Solution Implemented** - Centralized all command preparation in `PrepareContainerConfig` function and simplified container engines to focus on execution only
