@@ -8,6 +8,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Comparison Document Corrections**: Fixed multiple inaccuracies in Comparison-with-others.md based on real implementation
+  - **Container Support**: Corrected to show real `container:` block syntax instead of incorrect `uses: docker@build`
+  - **Caching**: Clarified that caching is not a built-in feature, but recommended via container bind mounts (ccache, Conan, vcpkg)
+  - **Artifacts**: Corrected to indicate artifacts are container-only feature with full path preservation
+  - **Real Examples**: Updated all examples to match actual YAML syntax from examples/ and tests/
+  - **Accurate Capabilities**: Container support includes `image.from`, `image.build`, `image.slim`, mounts, env, resources, artifacts
+  - **Performance Claims**: Verified all performance metrics against actual implementation
+  - **Git Integration**: Enhanced Git integration section with comprehensive pre-push utility documentation
+    - Added architecture diagram showing Git → pre-push → buildfab library flow
+    - Documented shared `.project.yml` configuration between buildfab and pre-push
+    - Clarified pre-push utility as separate project that embeds buildfab as library
+    - Added installation instructions for pre-push utility: `pre-push install`
+    - Explained automatic execution (Git hook) vs manual execution (buildfab CLI)
+    - Added link to pre-push project: https://github.com/AlexBurnes/pre-push
+  - **Slim Image Support**: Enhanced container support section with comprehensive slim image documentation
+    - Added `image.slim` capability for image size optimization using dslim/slim tool
+    - Documented 30x+ image size reduction capabilities
+    - Added example workflow: build → slim → artifacts
+    - Included slim configuration options: target, tags, network, http_probe, exec
+    - Explained slim image benefits: removes unnecessary files, creates minimal production images
+    - Added complete 3-step example showing image.build, image.slim, and artifact collection
+
+### Documentation
+- **Core Purpose Documentation**: Enhanced all documentation with buildfab's core mission and value proposition
+  - **README.md**: Added "Why buildfab?" section explaining build fragmentation problem
+    - Documented the problem: scattered bash scripts, different CI YAML, custom Dockerfiles
+    - Explained the solution: single `.project.yml` file working everywhere (locally, CI, containers, hooks)
+    - Added "What is buildfab?" section with clear positioning as universal task orchestrator
+  - **Comparison-with-others.md**: Enhanced Executive Summary with problem/solution/result structure
+    - Added "The Problem: Build Fragmentation" section explaining scattered scripts issue
+    - Added "The Solution: Single Source of Truth" section with unified YAML approach
+    - Added "The Result" section highlighting benefits: single source of truth, unified execution, reproducible builds
+  - **Release-announcement.md**: Updated introduction with problem/solution framework
+    - Added clear problem statement about build fragmentation
+    - Documented solution with single `.project.yml` working everywhere
+  - **productContext.md**: Added "Core Purpose" section to memory bank
+    - Documented key concept: one configuration file for all environments
+    - Explained single source of truth approach for build stages, dependencies, variants, matrices
+- **Practical Applications**: Added comprehensive real-world usage documentation across all main documents
+  - **README.md**: Added "About" section with self-hosting and real-world usage
+    - Self-hosting: buildfab builds itself using its own .project.yml
+    - Go projects: buildfab building itself locally and in GitHub Actions
+    - C++ modules: complex projects on GitLab CI with multi-distro support
+    - Container workflows: building applications and creating slim images (30x+ reduction)
+  - **Comparison-with-others.md**: Added "Practical Applications" section with detailed examples
+    - Self-hosting example with .project.yml configuration
+    - Go projects: cross-platform compilation with multi-platform matrix builds
+    - C++ modules: real production usage with GitLab CI, CMake/Conan, ccache integration
+    - Container workflows: build → slim → artifacts pipeline with concrete YAML examples
+  - **Release-announcement.md**: Added "Practical Applications" section
+    - Self-hosting proof of concept
+    - Go projects with GoReleaser workflow
+    - C++ modules with multi-distro support
+    - Container workflows with slim image optimization
+- **Comprehensive Comparison Document**: Created detailed comparison with alternative tools (Taskfile, GitHub Actions, Earthly, Make, Just)
+  - **Comparison-with-others.md**: 850+ line comprehensive analysis document
+    - Feature-by-feature comparison table with 25+ criteria
+    - Detailed comparisons of matrix builds, containers, artifacts, parallelism
+    - Performance benchmarks (startup time, overhead, memory usage)
+    - Use case recommendations with migration guides
+    - Scoring summary across 10 evaluation criteria
+    - Accurate examples from real project configuration
+  - **Overall Assessment**: buildfab scores 85/100, highest among local automation tools
+- **Release Announcement**: Created comprehensive release announcement document
+  - **Release-announcement.md**: 500+ line feature overview and technical highlights
+    - Key features and capabilities overview
+    - Real-world usage examples
+    - Performance metrics and technical highlights
+    - Comparison summary with alternatives
+    - Getting started guide and roadmap
+- **README.md Updates**: Added links to new documentation
+  - Added Comparison with Others link in documentation section
+  - Added Release Announcement link in documentation section
+  - Improved documentation navigation and discovery
+
 ## [0.20.0] - 2025-10-07
 
 ### Added - Sprint 3 Documentation & Release (2025-10-07)

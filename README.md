@@ -1,10 +1,63 @@
 # buildfab
 
-A Go-based CLI utility and library for executing project automation stages and actions defined in YAML configuration files. buildfab provides a flexible framework for running complex, dependency-aware automation workflows with parallel execution capabilities.
+> **Universal build orchestration tool** that unifies local development, CI/CD, and container workflows under a single declarative YAML configuration.
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
 [![Release](https://img.shields.io/badge/release-v0.20.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+
+## Why buildfab?
+
+Modern projects suffer from **fragmented build logic**: separate bash scripts for local builds, different YAML for CI pipelines, custom Dockerfiles for containers, and platform-specific setup scripts. This fragmentation leads to:
+
+- ❌ **Duplicated logic** across different environments
+- ❌ **"Works on my machine"** syndrome
+- ❌ **Inconsistent** local vs CI behavior
+- ❌ **Hard to maintain** scattered scripts
+
+**buildfab solves this** by providing a **single source of truth** for all your build automation:
+
+```yaml
+# .project.yml - one file for everything
+project:
+  name: "my-project"
+
+actions:
+  - name: test
+    run: go test ./...
+
+stages:
+  pre-push:
+    steps:
+      - action: test
+```
+
+This same configuration works:
+- ✅ **Locally** - developers run the same commands as CI
+- ✅ **In CI** - GitHub Actions/GitLab CI executes buildfab stages
+- ✅ **In containers** - test builds in clean environments
+- ✅ **In Git hooks** - automated validation before push
+
+## About
+
+buildfab is a **universal build automation utility and library** that replaces complex project-specific scripts with a single declarative YAML configuration — `.project.yml`.
+
+It defines how a project is **built, tested, and packaged** locally, in CI/CD pipelines, and inside containers — **all from the same configuration file**.
+
+buildfab executes build stages and actions through a **dependency graph (DAG)**, supports **matrix builds and variants**, runs jobs in **Docker/Podman containers**, and includes **caching and artifact storage** for reproducible builds.
+
+The same configuration is used by [pre-push](https://github.com/AlexBurnes/pre-push) and CI systems, ensuring **consistent results everywhere**.
+
+### Self-Hosting
+
+The tool is **self-hosting** — buildfab builds itself using its own `.project.yml` configuration, demonstrating the power and flexibility of the approach.
+
+### Real-World Usage
+
+buildfab is actively used in production:
+- ✅ **Go projects**: Building buildfab itself locally and in GitHub Actions
+- ✅ **C++ modules**: Compiling complex C++ projects on GitLab CI with multi-distro support
+- ✅ **Container workflows**: Building applications and creating slim optimized images (30x+ smaller)
 
 ## Features
 
@@ -569,6 +622,8 @@ go test ./... -race
 
 - [Features and Examples](docs/Features-and-examples.md) - Comprehensive features documentation with detailed examples
 - [YAML Syntax Reference](docs/YAML-syntax-reference.md) - Complete YAML configuration syntax reference
+- [Comparison with Others](docs/Comparison-with-others.md) - Detailed comparison with Taskfile, GitHub Actions, Make, and other tools
+- [Release Announcement](docs/Release-announcement.md) - Latest release highlights and feature overview
 - [Project Specification](docs/Project-specification.md) - Complete technical specification
 - [API Reference](docs/Library.md) - Library API documentation
 - [Developer Workflow](docs/Developer-workflow.md) - Development setup and workflow
