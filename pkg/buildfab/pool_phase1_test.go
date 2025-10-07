@@ -128,7 +128,7 @@ func TestPhase1_UnlimitedParallel(t *testing.T) {
 
 // TestExecutionPool_BasicExecution tests basic pool task execution
 func TestExecutionPool_BasicExecution(t *testing.T) {
-	pool := NewExecutionPool("test", 2)
+	pool := NewExecutionPool("test", 2, context.Background())
 	pool.Start()
 	defer pool.Stop()
 	
@@ -169,7 +169,7 @@ func TestExecutionPool_BasicExecution(t *testing.T) {
 // TestExecutionPool_MaxParallelLimit tests that pool enforces max_parallel limit
 func TestExecutionPool_MaxParallelLimit(t *testing.T) {
 	maxParallel := 2
-	pool := NewExecutionPool("test", maxParallel)
+	pool := NewExecutionPool("test", maxParallel, context.Background())
 	pool.Start()
 	defer pool.Stop()
 	
@@ -216,7 +216,7 @@ func TestExecutionPool_MaxParallelLimit(t *testing.T) {
 
 // TestPoolManager_GlobalPool tests basic PoolManager functionality
 func TestPoolManager_GlobalPool(t *testing.T) {
-	pm := NewPoolManager(4)
+	pm := NewPoolManager(4, context.Background())
 	defer pm.StopAll()
 	
 	globalPool := pm.GetGlobalPool()
@@ -250,7 +250,7 @@ func TestPoolManager_GlobalPool(t *testing.T) {
 
 // TestPoolManager_MatrixPools tests matrix pool creation and retrieval
 func TestPoolManager_MatrixPools(t *testing.T) {
-	pm := NewPoolManager(4)
+	pm := NewPoolManager(4, context.Background())
 	defer pm.StopAll()
 	
 	// Create matrix pools
@@ -281,7 +281,10 @@ func TestPoolManager_MatrixPools(t *testing.T) {
 
 // TestExecutionPool_ContextCancellation tests that pool respects context cancellation
 func TestExecutionPool_ContextCancellation(t *testing.T) {
-	pool := NewExecutionPool("test", 2)
+	testCtx, testCancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer testCancel()
+	
+	pool := NewExecutionPool("test", 2, testCtx)
 	pool.Start()
 	defer pool.Stop()
 	

@@ -254,8 +254,9 @@ func NewRunnerWithRegistry(config *Config, opts *RunOptions, registry ActionRegi
 		maxParallel = GetDefaultMaxParallel()
 	}
 	
-	// Create pool manager with determined max parallel
-	poolManager := NewPoolManager(maxParallel)
+	// Note: PoolManager will receive actual context in runStageInternal
+	// For now create with background context - will be replaced when execution starts
+	poolManager := NewPoolManager(maxParallel, context.Background())
 	
 	return &Runner{
 		config:              config,
@@ -831,6 +832,16 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 		return r.executeStageDryRun(ctx, stageName, stage.Steps)
 	}
 	
+	// Recreate pool manager with execution context for proper signal handling
+	maxParallel := r.opts.MaxParallel
+	if maxParallel <= 0 && r.config.Project.MaxParallel > 0 {
+		maxParallel = r.config.Project.MaxParallel
+	}
+	if maxParallel <= 0 {
+		maxParallel = GetDefaultMaxParallel()
+	}
+	r.poolManager = NewPoolManager(maxParallel, ctx)
+	
 	// Expand matrix steps into individual steps with interpolated actions
 	expandedSteps, interpolatedActions, err := r.expandMatrixStepsWithActions(stage.Steps)
 	if err != nil {
@@ -1371,9 +1382,19 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 		}
 	}()
 	
-	<-done
+	// Wait for completion or context cancellation
+	select {
+	case <-done:
+		// All results processed normally
+	case <-ctx.Done():
+		// Context cancelled - cancel pools WITHOUT waiting to avoid WaitGroup panic
+		r.poolManager.CancelAll()
+		// Give a brief moment for cleanup
+		time.Sleep(50 * time.Millisecond)
+		// Return with whatever results we have
+	}
 	
-	return results, nil
+	return results, ctx.Err()
 }
 
 // createTaskForStep creates a Task from a DAG node for pool execution
@@ -2091,12 +2112,22 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 		}
 	}()
 	
-	<-done
+	// Wait for completion or context cancellation
+	select {
+	case <-done:
+		// All results processed normally
+		// Display any remaining steps that weren't displayed yet
+		r.displayRemainingSteps(ctx, steps, resultMap, displayed)
+	case <-ctx.Done():
+		// Context cancelled - cancel pools WITHOUT waiting to avoid WaitGroup panic
+		r.poolManager.CancelAll()
+		// Give a brief moment for cleanup
+		time.Sleep(50 * time.Millisecond)
+		// Display any remaining steps that weren't displayed yet
+		r.displayRemainingSteps(ctx, steps, resultMap, displayed)
+	}
 	
-	// Display any remaining steps that weren't displayed yet
-	r.displayRemainingSteps(ctx, steps, resultMap, displayed)
-	
-	return results, nil
+	return results, ctx.Err()
 }
 
 // checkAndDisplayNextStep checks if the next step in declaration order can be displayed
@@ -2388,14 +2419,24 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 					case <-ctxDone:
 						return
 					}
-				}(nodeName, node)
-			}
+			}(nodeName, node)
 		}
-	}()
-	
-	<-done
-	
-	return results, nil
+	}
+}()
+
+// Wait for completion or context cancellation
+select {
+case <-done:
+	// All results processed normally
+case <-ctx.Done():
+	// Context cancelled - cancel pools WITHOUT waiting to avoid WaitGroup panic
+	r.poolManager.CancelAll()
+	// Give a brief moment for cleanup
+	time.Sleep(50 * time.Millisecond)
+	// Return with whatever results we have
+}
+
+return results, ctx.Err()
 }
 
 // getReadyStepsLocked returns steps that are ready to execute (thread-safe version)

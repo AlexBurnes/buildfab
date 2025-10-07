@@ -1,5 +1,6 @@
 project:
   name: "container-build-matrix"
+  max_parallel: 1
 
 stages:
   images-build:

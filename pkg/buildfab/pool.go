@@ -36,9 +36,15 @@ type ExecutionPool struct {
 	stats      PoolStats
 }
 
-// NewExecutionPool creates a new execution pool
-func NewExecutionPool(name string, maxWorkers int) *ExecutionPool {
-	ctx, cancel := context.WithCancel(context.Background())
+// NewExecutionPool creates a new execution pool with a parent context
+func NewExecutionPool(name string, maxWorkers int, parentCtx context.Context) *ExecutionPool {
+	// If no parent context provided, use background context as fallback
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	
+	// Create pool context derived from parent - this preserves cancellation chain
+	ctx, cancel := context.WithCancel(parentCtx)
 	
 	pool := &ExecutionPool{
 		name:       name,
@@ -158,6 +164,26 @@ func (p *ExecutionPool) Stop() {
 	p.activeJobs.Wait()
 }
 
+// Cancel cancels the pool without waiting for completion
+func (p *ExecutionPool) Cancel() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	
+	if !p.running {
+		return
+	}
+	
+	// Cancel the context to stop workers
+	p.cancel()
+	p.running = false
+	
+	// Close the task queue to stop accepting new tasks
+	// This must be done after setting running=false to prevent Submit() from succeeding
+	close(p.taskQueue)
+	
+	// Don't wait for activeJobs - just cancel and return immediately
+}
+
 // GetStats returns current pool statistics
 func (p *ExecutionPool) GetStats() PoolStats {
 	p.mu.RLock()
@@ -174,18 +200,23 @@ func (p *ExecutionPool) GetName() string {
 type PoolManager struct {
 	globalPool  *ExecutionPool
 	matrixPools map[string]*ExecutionPool
+	parentCtx   context.Context               // Parent context for creating new pools
 	mu          sync.RWMutex
 }
 
-// NewPoolManager creates a new pool manager
-func NewPoolManager(globalMaxWorkers int) *PoolManager {
-	globalPool := NewExecutionPool("global", globalMaxWorkers)
+// NewPoolManager creates a new pool manager with a parent context
+func NewPoolManager(globalMaxWorkers int, parentCtx context.Context) *PoolManager {
+	// Create global pool with parent context for proper cancellation propagation
+	globalPool := NewExecutionPool("global", globalMaxWorkers, parentCtx)
 	globalPool.Start()
 	
-	return &PoolManager{
+	pm := &PoolManager{
 		globalPool:  globalPool,
 		matrixPools: make(map[string]*ExecutionPool),
+		parentCtx:   parentCtx,
 	}
+	
+	return pm
 }
 
 // GetOrCreateMatrixPool gets or creates a matrix-specific pool
@@ -197,7 +228,8 @@ func (pm *PoolManager) GetOrCreateMatrixPool(name string, maxWorkers int) *Execu
 		return pool
 	}
 	
-	pool := NewExecutionPool(name, maxWorkers)
+	// Create pool with parent context for proper cancellation propagation
+	pool := NewExecutionPool(name, maxWorkers, pm.parentCtx)
 	pool.Start()
 	pm.matrixPools[name] = pool
 	
@@ -221,7 +253,7 @@ func (pm *PoolManager) GetGlobalPool() *ExecutionPool {
 	return pm.globalPool
 }
 
-// StopAll stops all pools
+// StopAll stops all pools and waits for completion
 func (pm *PoolManager) StopAll() {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
@@ -230,6 +262,18 @@ func (pm *PoolManager) StopAll() {
 	
 	for _, pool := range pm.matrixPools {
 		pool.Stop()
+	}
+}
+
+// CancelAll cancels all pools without waiting for completion
+func (pm *PoolManager) CancelAll() {
+	pm.mu.Lock()
+	defer pm.mu.Unlock()
+	
+	pm.globalPool.Cancel()
+	
+	for _, pool := range pm.matrixPools {
+		pool.Cancel()
 	}
 }
 

@@ -6,6 +6,8 @@ import (
     "fmt"
     "os/exec"
     "strings"
+    "syscall"
+    "time"
 )
 
 // NewDockerEngine creates a new Docker engine
@@ -580,10 +582,32 @@ func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config 
         }
     }()
 
-    // Wait for command to complete
-    err = cmd.Wait()
+    // Wait for command to complete or context cancellation
+    cmdDone := make(chan error, 1)
+    go func() {
+        cmdDone <- cmd.Wait()
+    }()
 
-    // Wait for both goroutines to finish
+    var cmdErr error
+    select {
+    case cmdErr = <-cmdDone:
+        // Command completed normally
+    case <-ctx.Done():
+        // Context cancelled - kill the process aggressively
+        if cmd.Process != nil {
+            // First, try to kill the process group to stop all child processes
+            cmd.Process.Signal(syscall.SIGTERM)
+            
+            // Give it a brief moment to terminate gracefully
+            time.Sleep(100 * time.Millisecond)
+            
+            // Then force kill if still running
+            cmd.Process.Kill()
+        }
+        cmdErr = ctx.Err()
+    }
+
+    // Wait for both streaming goroutines to finish
     <-done
     <-done
 
@@ -595,10 +619,10 @@ func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config 
         Artifacts:   []string{},
     }
 
-    if err != nil {
+    if cmdErr != nil {
         result.ExitCode = 1
         if result.Error == "" {
-            result.Error = err.Error()
+            result.Error = cmdErr.Error()
         }
     }
 
@@ -1170,10 +1194,32 @@ func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config 
         }
     }()
 
-    // Wait for command to complete
-    err = cmd.Wait()
+    // Wait for command to complete or context cancellation
+    cmdDone := make(chan error, 1)
+    go func() {
+        cmdDone <- cmd.Wait()
+    }()
 
-    // Wait for both goroutines to finish
+    var cmdErr error
+    select {
+    case cmdErr = <-cmdDone:
+        // Command completed normally
+    case <-ctx.Done():
+        // Context cancelled - kill the process aggressively
+        if cmd.Process != nil {
+            // First, try to kill the process group to stop all child processes
+            cmd.Process.Signal(syscall.SIGTERM)
+            
+            // Give it a brief moment to terminate gracefully
+            time.Sleep(100 * time.Millisecond)
+            
+            // Then force kill if still running
+            cmd.Process.Kill()
+        }
+        cmdErr = ctx.Err()
+    }
+
+    // Wait for both streaming goroutines to finish
     <-done
     <-done
 
@@ -1185,10 +1231,10 @@ func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config 
         Artifacts:   []string{},
     }
 
-    if err != nil {
+    if cmdErr != nil {
         result.ExitCode = 1
         if result.Error == "" {
-            result.Error = err.Error()
+            result.Error = cmdErr.Error()
         }
     }
 

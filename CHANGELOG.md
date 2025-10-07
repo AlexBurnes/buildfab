@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Critical: Signal Handling for DAG Executor and Container Execution** - Fixed issue where Ctrl+C/INT signal did not terminate running jobs
+  - **Pool Context Issue**: ExecutionPool was creating an isolated context from `context.Background()` instead of deriving from parent context
+  - **Container Execution Issue**: Container engines were using `cmd.Wait()` without monitoring `ctx.Done()` for cancellation
+  - **DAG Executor Wait Issue**: DAG executors were blocking on `<-done` without monitoring `ctx.Done()`, causing hang even after context cancellation
+  - **Solution Part 1**: Modified `NewExecutionPool` and `NewPoolManager` to accept and use parent context, preserving cancellation chain
+  - **Solution Part 2**: Modified `RunContainerWithCallback` in both Docker and Podman engines to monitor context cancellation with three-step termination (SIGTERM → 100ms → SIGKILL)
+  - **Solution Part 3**: Modified all three DAG executors to monitor `ctx.Done()` when waiting for completion, calling `poolManager.StopAll()` immediately on cancellation
+  - **Impact**: All running jobs (regular and container) now properly terminate when Ctrl+C is pressed within ~150ms, no hanging processes
+  - **Verified**: Automated test confirms process terminates properly after receiving INT signal
+  - **Technical details**: See `docs/Signal-handling-fix.md` for comprehensive explanation
+  - **Modified files**: `pkg/buildfab/pool.go`, `pkg/buildfab/buildfab.go`, `pkg/buildfab/container/engines.go`, `pkg/buildfab/pool_phase1_test.go`
+
 ## [0.19.0] - 2025-10-07
 
 ### Added
