@@ -420,12 +420,8 @@ func TestActionValidationWithVariants(t *testing.T) {
 		{
 			name: "valid action with variants",
 			config: Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
@@ -449,12 +445,8 @@ func TestActionValidationWithVariants(t *testing.T) {
 		{
 			name: "invalid action with variant missing when",
 			config: Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
@@ -474,12 +466,8 @@ func TestActionValidationWithVariants(t *testing.T) {
 		{
 			name: "invalid action with variant missing run/uses",
 			config: Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
@@ -499,12 +487,8 @@ func TestActionValidationWithVariants(t *testing.T) {
 		{
 			name: "invalid action with variant having both run and uses",
 			config: Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
@@ -526,12 +510,8 @@ func TestActionValidationWithVariants(t *testing.T) {
 		{
 			name: "invalid action with both variants and direct run/uses",
 			config: Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
@@ -574,11 +554,7 @@ func TestActionValidationWithVariants(t *testing.T) {
 func TestRunActionWithVariants(t *testing.T) {
 	// Create a test configuration with variants
 	config := &Config{
-		Project: struct {
-			Name    string   `yaml:"name"`
-			Modules []string `yaml:"modules"`
-			BinDir  string   `yaml:"bin,omitempty"`
-		}{
+		Project: Project{
 			Name: "test-project",
 		},
 		Actions: []Action{

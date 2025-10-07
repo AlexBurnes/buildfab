@@ -3,6 +3,7 @@ package buildfab
 import (
 	"context"
 	"fmt"
+	"runtime"
 	
 	"github.com/AlexBurnes/buildfab/internal/version"
 	versiongo "github.com/AlexBurnes/version-go/pkg/version"
@@ -72,4 +73,14 @@ func AddVersionVariables(variables map[string]string) map[string]string {
 	}
 	
 	return variables
+}
+
+// GetDefaultMaxParallel returns the default max parallel value based on CPU cores
+// First tries to get from platform info, falls back to runtime.NumCPU()
+func GetDefaultMaxParallel() int {
+	platformInfo := versiongo.GetPlatformInfo()
+	if platformInfo.NumCPU > 0 {
+		return platformInfo.NumCPU
+	}
+	return runtime.NumCPU() // Fallback
 }

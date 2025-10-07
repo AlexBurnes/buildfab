@@ -26,14 +26,17 @@ const (
 	colorGray   = "\033[90m"
 )
 
+// Project represents the project metadata
+type Project struct {
+	Name        string   `yaml:"name"`
+	Modules     []string `yaml:"modules"`
+	BinDir      string   `yaml:"bin,omitempty"`
+	MaxParallel int      `yaml:"max_parallel,omitempty"` // Global parallel limit (default: CPU cores)
+}
+
 // Config represents the buildfab configuration loaded from YAML
 type Config struct {
-	Project struct {
-		Name    string   `yaml:"name"`
-		Modules []string `yaml:"modules"`
-		BinDir  string   `yaml:"bin,omitempty"`
-	} `yaml:"project"`
-	
+	Project Project           `yaml:"project"`
 	Include []string          `yaml:"include,omitempty"` // File patterns to include
 	Actions []Action          `yaml:"actions"`
 	Stages  map[string]Stage  `yaml:"stages"`
@@ -224,10 +227,11 @@ type ActionRunner interface {
 
 // Runner provides the main execution interface
 type Runner struct {
-	config   *Config
-	opts     *RunOptions
-	registry ActionRegistry
+	config              *Config
+	opts                *RunOptions
+	registry            ActionRegistry
 	interpolatedActions map[string]*Action // Store interpolated actions from matrix expansion
+	poolManager         *PoolManager       // Pool manager for concurrent execution
 }
 
 // NewRunner creates a new buildfab runner with default built-in actions
@@ -240,11 +244,25 @@ func NewRunnerWithRegistry(config *Config, opts *RunOptions, registry ActionRegi
 	if opts == nil {
 		opts = DefaultRunOptions()
 	}
+	
+	// Determine max parallel: opts > project config > CPU cores
+	maxParallel := opts.MaxParallel
+	if maxParallel <= 0 && config.Project.MaxParallel > 0 {
+		maxParallel = config.Project.MaxParallel
+	}
+	if maxParallel <= 0 {
+		maxParallel = GetDefaultMaxParallel()
+	}
+	
+	// Create pool manager with determined max parallel
+	poolManager := NewPoolManager(maxParallel)
+	
 	return &Runner{
-		config:   config,
-		opts:     opts,
-		registry: registry,
+		config:              config,
+		opts:                opts,
+		registry:            registry,
 		interpolatedActions: make(map[string]*Action),
+		poolManager:         poolManager,
 	}
 }
 
@@ -575,6 +593,11 @@ func (r *Runner) ListBuiltInActions() map[string]string {
 func (c *Config) Validate() error {
 	if c.Project.Name == "" {
 		return fmt.Errorf("project name is required")
+	}
+	
+	// Validate max_parallel if set
+	if c.Project.MaxParallel < 0 {
+		return fmt.Errorf("project.max_parallel must be >= 0 (0 means use CPU cores)")
 	}
 	
 	if len(c.Actions) == 0 {
@@ -1320,28 +1343,30 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 					continue
 				}
 				
-				// Execute the node in parallel
-				go func(nodeName string, node *DAGNode) {
-					// Find the step configuration
-					var stepConfig *Step
-					for _, step := range steps {
-						if step.Action == nodeName {
-							stepConfig = &step
-							break
-						}
+				// Submit the step to the execution pool instead of spawning unlimited goroutines
+				// Find the step configuration
+				var stepConfig *Step
+				for _, step := range steps {
+					if step.Action == nodeName {
+						stepConfig = &step
+						break
 					}
-					
-					result, _ := r.executeActionForDAGWithCallback(ctx, node.Action, stepConfig)
-					result.Name = nodeName
-					// Check if context was cancelled during execution
-					if ctx.Err() != nil {
-						result.Status = StatusError
-						result.Message = "cancelled"
-						result.Error = ctx.Err()
+				}
+				
+				// Create task for this step
+				task := r.createTaskForStep(ctx, nodeName, node, stepConfig, resultChan)
+				
+				// Submit to global pool
+				if err := r.poolManager.GetGlobalPool().Submit(task); err != nil {
+					// Pool submission failed, report error
+					result := Result{
+						Name:    nodeName,
+						Status:  StatusError,
+						Message: fmt.Sprintf("failed to submit to pool: %v", err),
+						Error:   err,
 					}
-					
 					resultChan <- result
-				}(nodeName, node)
+				}
 			}
 		}
 	}()
@@ -1349,6 +1374,45 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 	<-done
 	
 	return results, nil
+}
+
+// createTaskForStep creates a Task from a DAG node for pool execution
+func (r *Runner) createTaskForStep(ctx context.Context, nodeName string, node *DAGNode, stepConfig *Step, resultChan chan<- Result) Task {
+	return Task{
+		ID: nodeName,
+		Execute: func(taskCtx context.Context) error {
+			result, err := r.executeActionForDAGWithCallback(taskCtx, node.Action, stepConfig)
+			result.Name = nodeName
+			
+			// Check if context was cancelled during execution
+			if taskCtx.Err() != nil {
+				result.Status = StatusError
+				result.Message = "cancelled"
+				result.Error = taskCtx.Err()
+			}
+			
+			// Send result to channel
+			resultChan <- result
+			
+			return err
+		},
+		OnStart: func() {
+			// Optional: Add debug logging for pool task start
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Pool: Starting step %s in global pool\n", nodeName)
+			}
+		},
+		OnComplete: func(err error) {
+			// Optional: Add debug logging for pool task completion
+			if r.opts.Debug {
+				status := "OK"
+				if err != nil {
+					status = "ERROR"
+				}
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Pool: Completed step %s: %s\n", nodeName, status)
+			}
+		},
+	}
 }
 
 // executeActionForDAGWithCallback executes a single action for DAG execution using step callbacks
@@ -1970,23 +2034,56 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 					continue
 				}
 				
-				// Execute the node in parallel with streaming output control
-				go func(nodeName string, node *DAGNode) {
-					// Execute matrix step
-					result, err := r.executeActionForDAGWithStreamingControl(ctx, node.Action, streamingManager)
-					result.Name = nodeName
-					
-					// Call OnStepError immediately if the step failed
-					if err != nil && r.opts.StepCallback != nil {
-						r.opts.StepCallback.OnStepError(ctx, nodeName, err)
+				// Submit the step to the execution pool instead of spawning unlimited goroutines
+				// Create task for this step with streaming control
+				task := Task{
+					ID: nodeName,
+					Execute: func(taskCtx context.Context) error {
+						result, err := r.executeActionForDAGWithStreamingControl(taskCtx, node.Action, streamingManager)
+						result.Name = nodeName
+						
+						// Call OnStepError immediately if the step failed
+						if err != nil && r.opts.StepCallback != nil {
+							r.opts.StepCallback.OnStepError(taskCtx, nodeName, err)
+						}
+						
+						select {
+						case resultChan <- result:
+						case <-ctxDone:
+						}
+						
+						return err
+					},
+					OnStart: func() {
+						if r.opts.Debug {
+							fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Pool: Starting step %s in global pool\n", nodeName)
+						}
+					},
+					OnComplete: func(err error) {
+						if r.opts.Debug {
+							status := "OK"
+							if err != nil {
+								status = "ERROR"
+							}
+							fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Pool: Completed step %s: %s\n", nodeName, status)
+						}
+					},
+				}
+				
+				// Submit to global pool
+				if err := r.poolManager.GetGlobalPool().Submit(task); err != nil {
+					// Pool submission failed, report error
+					result := Result{
+						Name:    nodeName,
+						Status:  StatusError,
+						Message: fmt.Sprintf("failed to submit to pool: %v", err),
+						Error:   err,
 					}
-					
 					select {
 					case resultChan <- result:
 					case <-ctxDone:
-						return
 					}
-				}(nodeName, node)
+				}
 				
 				// Check if we can display the first step immediately after starting execution
 				r.checkAndDisplayNextStep(ctx, steps, resultMap, displayed, completed, started)

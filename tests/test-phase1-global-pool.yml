@@ -1,0 +1,39 @@
+version: 0.3
+
+project:
+  name: test-global-pool
+  max_parallel: 2  # Only 2 steps can run concurrently
+
+actions:
+  - name: long-action-1
+    run: |
+      echo "Starting action 1"
+      sleep 2
+      echo "Completed action 1"
+  
+  - name: long-action-2
+    run: |
+      echo "Starting action 2"
+      sleep 2
+      echo "Completed action 2"
+  
+  - name: long-action-3
+    run: |
+      echo "Starting action 3"
+      sleep 2
+      echo "Completed action 3"
+  
+  - name: long-action-4
+    run: |
+      echo "Starting action 4"
+      sleep 2
+      echo "Completed action 4"
+
+stages:
+  test-global:
+    steps:
+      - action: long-action-1
+      - action: long-action-2
+      - action: long-action-3
+      - action: long-action-4
+

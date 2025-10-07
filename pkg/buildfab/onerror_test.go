@@ -64,12 +64,8 @@ func TestOnErrorPolicyWithTestActions(t *testing.T) {
 		{
 			name: "test@success with onerror warn - should succeed",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
@@ -98,12 +94,8 @@ func TestOnErrorPolicyWithTestActions(t *testing.T) {
 		{
 			name: "test@failure with onerror warn - should convert to warning",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
@@ -132,12 +124,8 @@ func TestOnErrorPolicyWithTestActions(t *testing.T) {
 		{
 			name: "test@failure with onerror stop - should fail",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
@@ -166,12 +154,8 @@ func TestOnErrorPolicyWithTestActions(t *testing.T) {
 		{
 			name: "test@warn with onerror warn - should remain warning",
 			config: &Config{
-				Project: struct {
-					Name    string   `yaml:"name"`
-					Modules []string `yaml:"modules"`
-					BinDir  string   `yaml:"bin,omitempty"`
-				}{
-					Name: "test-project",
+				Project: Project{
+			Name: "test-project",
 				},
 				Actions: []Action{
 					{
