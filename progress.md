@@ -565,6 +565,18 @@
 - **Test coverage improvement**: Overall project coverage improved from 58.6% to 72.5%
 
 ## What's Left to Build
+- **Matrix Parallel Pools Implementation**: ⚠️ **CRITICAL ISSUE IDENTIFIED - NEEDS FIX** - Matrix `max_parallel` is NOT enforced
+  - **Problem**: Matrix steps are expanded at parse time into DAG nodes, and DAG executor runs ALL ready nodes in unlimited parallel
+  - **Current Status**: `max_parallel` configuration exists in YAML but is completely ignored during execution
+  - **Root Cause**: DAG executor spawns unlimited goroutines for ready steps, no worker pool or concurrency control
+  - **Solution Designed**: Implement pool-based execution system with global pool (CPU-limited) and matrix-specific pools
+  - **Implementation Plan**: See `docs/Matrix-parallel-pools-implementation.md` for detailed 4-week implementation plan
+  - **Phase 1**: Core pool infrastructure with ExecutionPool and PoolManager (Week 1)
+  - **Phase 2**: Step pool assignment and matrix expansion updates (Week 1-2)
+  - **Phase 3**: DAG executor pool integration (Week 2)
+  - **Phase 4**: Integration testing, performance optimization, documentation (Week 2-3)
+  - **Timeline**: 4 weeks total for complete implementation, testing, and release
+  - **Priority**: HIGH - This breaks a documented feature that users expect to work
 - **Container Feature Implementation**: ✅ **100% COMPLETE** - Docker and Podman support for isolated execution environments
   - **Current Status**: 100% complete with all core functionality fully implemented and tested
   - **All Features Working**: Basic container execution, engine detection (Docker/Podman), mount support, environment variables, environment files, cache management, resource limits, image building, slim images, artifact collection, `run_action`/`run_stage` execution
