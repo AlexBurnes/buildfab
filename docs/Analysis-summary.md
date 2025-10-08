@@ -10,6 +10,7 @@ buildfab is a **universal local automation platform** that successfully bridges 
 ### Position in the Market
 
 buildfab occupies a unique niche:
+
 - **More powerful than task runners**: Matrix builds, containers, pools, caching
 - **More practical than cloud CI/CD**: Local-first, instant startup, no vendor lock-in
 - **More modern than Make**: Declarative YAML, expression language, cross-platform

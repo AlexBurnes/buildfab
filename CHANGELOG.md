@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 2025-10-08
+
+### Documentation
+- **Documentation Translation and Reorganization**
+  - **Translated Russian documents to English**:
+    - `docs/Practical_applications.md` → `docs/Practical-applications.md` - comprehensive production usage guide
+    - `docs/slim_support_added.md` → `docs/Slim-support-added.md` - slim image feature documentation
+  - **Renamed files according to naming conventions** (First-word-second-word.md format):
+    - `Analysis_summary.md` → `Analysis-summary.md`
+    - `CLI_DRY_analysis.md` → `CLI-dry-analysis.md`
+    - `Documentation_complete.md` → `Documentation-complete.md`
+    - `Documentation_files.md` → `Documentation-files.md`
+    - `Git_integration_info.md` → `Git-integration-info.md`
+    - `Signal_handling_fix_summary.md` → `Signal-handling-fix-summary.md`
+  - **Project Specification Updates**:
+    - Replaced `docs/Project-specification.md` with more comprehensive root version (409 lines vs 175 lines)
+    - Removed duplicate `buildfab-project-specification.md` from root directory
+  - **README.md Enhancements**:
+    - Added comprehensive **Project Vision** section explaining buildfab's origins and frustrations it solves
+    - Added **Philosophy** section describing build orchestration approach
+    - Added **Architecture Overview** with high-level and detailed diagrams
+    - Added **Team** section introducing Alex Burnes, Buzzy (AI Assistant), and Coddy (AI Agent)
+    - Fixed **Installation** section structure - removed duplicate information
+    - Clarified **Git Hook Setup** - buildfab runs pre-push stages but doesn't install hooks
+    - Added link to [pre-push utility](https://github.com/AlexBurnes/pre-push) for Git hook installation
+    - Updated **Version Utility** description - semantic version validation and platform/git detection variables
+    - Updated **macOS Installation** to use Homebrew instead of curl script
+    - Updated **Linux Installation** to use platform-specific install scripts
+  - **Documentation Organization**:
+    - All documentation now follows consistent naming conventions
+    - All documents properly located in `docs/` directory (except memory bank files in root)
+    - No broken links found - all references already correct or updated
+
 ### Fixed
 - **Comparison Document Corrections**: Fixed multiple inaccuracies in Comparison-with-others.md based on real implementation
   - **Container Support**: Corrected to show real `container:` block syntax instead of incorrect `uses: docker@build`

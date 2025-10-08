@@ -9,6 +9,7 @@ We're excited to announce **buildfab** - a universal build orchestration system 
 ### The Problem
 
 Modern projects suffer from **build fragmentation**:
+
 - 📄 Bash scripts for local builds
 - 📄 Different YAML for CI pipelines (GitHub Actions, GitLab CI)
 - 📄 Custom Dockerfiles and entrypoint scripts for containers
@@ -19,6 +20,7 @@ Result: **duplicated logic, inconsistencies, maintenance nightmare**.
 ### The Solution
 
 buildfab provides **one `.project.yml` file** that works everywhere:
+
 - ✅ **Locally**: Same commands as CI
 - ✅ **In CI**: GitHub Actions/GitLab executes buildfab
 - ✅ **In containers**: Clean environment testing
@@ -212,6 +214,7 @@ buildfab is **self-hosting** and actively used in real production environments:
 ### 🏗️ Self-Hosting
 
 **buildfab builds itself** using its own `.project.yml` configuration:
+
 - **Locally**: Developers run `buildfab run build` on their machines
 - **In GitHub Actions**: CI executes the same stages with same YAML
 - **Multi-platform**: Parallel builds for Linux/Windows/macOS (amd64/arm64)
@@ -221,6 +224,7 @@ buildfab is **self-hosting** and actively used in real production environments:
 ### 🔧 Go Projects
 
 Real usage in buildfab project:
+
 - **Cross-platform compilation**: 6 platforms in parallel (Linux/Win/macOS × amd64/arm64)
 - **GitHub Actions integration**: Same commands locally and in CI
 - **GoReleaser workflow**: Build → Test → Package → Release
@@ -229,6 +233,7 @@ Real usage in buildfab project:
 ### 🛠️ C++ Modules
 
 Real production usage in complex C++ projects:
+
 - **GitLab CI integration**: Container-based builds on GitLab
 - **Multi-distro support**: Ubuntu, Debian, Alpine, CentOS
 - **Matrix builds**: Parallel compilation across OS/compiler combinations
@@ -238,6 +243,7 @@ Real production usage in complex C++ projects:
 ### 🐳 Container Workflows
 
 Active usage for container-based development:
+
 - **Application builds**: Compile inside containers for clean environments
 - **Slim images**: Optimize images (500MB → 15MB, 30x+ reduction)
 - **Multi-platform**: Matrix builds for different architectures
@@ -441,6 +447,7 @@ buildfab run release     # Create release
 ### The Problem
 
 Modern development requires complex automation:
+
 - Multiple platforms and architectures
 - Container-based workflows
 - Pre-commit/pre-push validation
@@ -448,6 +455,7 @@ Modern development requires complex automation:
 - Fast iteration cycles
 
 Existing solutions fall short:
+
 - **Task runners**: Too simple (no matrices, containers, caching)
 - **GitHub Actions**: Cloud-only (slow, network-dependent)
 - **Make**: Complex syntax, limited features
@@ -456,6 +464,7 @@ Existing solutions fall short:
 ### The Solution
 
 buildfab provides:
+
 - ✅ **CI-grade features** without cloud dependency
 - ✅ **Blazing performance** with instant startup
 - ✅ **Modern capabilities** (matrices, containers, pools)

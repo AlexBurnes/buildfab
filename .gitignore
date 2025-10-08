@@ -19,6 +19,9 @@ scripts/buildfab
 .env
 .docker-env
 
+# arts
+docs/art/
+
 # docs
 
 # IDE

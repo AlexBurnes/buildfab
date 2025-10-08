@@ -245,7 +245,7 @@ actions:
 | **Matrix builds** | ✅ Локально | ✅ Облако | ❌ Нет | ❌ Нет |
 | **Containers** | ✅ Docker/Podman | ✅ Services | ❌ Нет | ⚙️ Частичная |
 | **Library API** | ✅ Go embeddable | ❌ Нет | ❌ Нет | ❌ Нет |
-| **Ручной запуск** | ✅ buildfab run | ❌ Нет | ⚙️ Через npm | ✅ Да |
+| **Ручной запуск** | ✅ Да | ❌ Нет | ⚙️ Через npm | ✅ Да |
 | **Кросс-платформа** | ✅ Linux/Win/macOS | ⚙️ Runners | ✅ Да | ✅ Да |
 
 ## Реальное использование

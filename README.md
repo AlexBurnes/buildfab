@@ -4,7 +4,7 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.20.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.20.1-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Why buildfab?
 
@@ -22,17 +22,27 @@ Modern projects suffer from **fragmented build logic**: separate bash scripts fo
 project:
   name: "my-project"
 
-actions:
-  - name: test
-    run: go test ./...
-
 stages:
   pre-push:
     steps:
       - action: test
+
+  build:
+    steps:
+      - action: test
+      - action: build
+
+actions:
+  - name: test
+    run: go test ./...
+
+  - name: build
+    run: go build  -o bin/app ./cmd/app
+
 ```
 
 This same configuration works:
+
 - ✅ **Locally** - developers run the same commands as CI
 - ✅ **In CI** - GitHub Actions/GitLab CI executes buildfab stages
 - ✅ **In containers** - test builds in clean environments
@@ -55,9 +65,187 @@ The tool is **self-hosting** — buildfab builds itself using its own `.project.
 ### Real-World Usage
 
 buildfab is actively used in production:
+
 - ✅ **Go projects**: Building buildfab itself locally and in GitHub Actions
 - ✅ **C++ modules**: Compiling complex C++ projects on GitLab CI with multi-distro support
 - ✅ **Container workflows**: Building applications and creating slim optimized images (30x+ smaller)
+
+## 🌍 Project Vision
+
+**buildfab** was born from a simple frustration — every project had its own fragile build scripts, slightly different for each language, OS, or CI.
+Switching from Go to C++ or between Linux and macOS meant remembering new commands, reinstalling tools, and rewriting scripts.
+For years, every project maintained its own fragile scripts — for local builds, CI pipelines, and container environments — all drifting apart and hard to support.
+buildfab unifies them into a single declarative system where one YAML file defines everything: how to build, test, package, and verify a project — locally, in CI, or inside containers.
+
+As a developer, I didn't want to *think about building* — I wanted to *build by thinking*.
+
+So **buildfab** became not a build system, but a **build orchestrator** — a universal runner that executes whatever your project requires:
+Conan for dependencies, CMake for compilation, GoReleaser for publishing, Docker for container builds, or any custom script you still want to keep.
+Each project, language, and platform had its own fragile scripts: installing dependencies with Conan, compiling via CMake, packaging with GoReleaser, publishing for Scoop or Homebrew.
+Developers had to remember dozens of commands and flags — just to build the same project in a different place.
+I wanted the opposite:
+
+- to type `buildfab build` instead of a page-long command;
+- to type `make` when I changed code;
+- to type `install` when I was ready to run integration tests.
+
+All logic — dependencies, build steps, variants, and environments — should be written **once** in `.project.yml`.
+After that, the developer only chooses *what* to do, not *how* to do it.
+
+---
+
+## 🚀 Philosophy
+
+buildfab replaces the chaos of scattered build scripts with a single, declarative view of your project's lifecycle — but it doesn't forbid scripts or tools; isn't about replacing your build tools — it's about giving them order and visibility.
+You can still call `bash`, `conan`, `cmake`, or `docker` directly — buildfab simply coordinates them, caches results, and makes every build reproducible across local, CI, and container environments.
+It's the **conductor** of your build orchestra: every instrument keeps playing, but now under a single, clear score.
+**buildfab** transforms traditional, fragmented build workflows into a clear, reproducible orchestration model.
+
+---
+
+## 💬 In essence
+
+> **buildfab** is a lightweight, self-hosted CI runner and build orchestrator, is not a build system — it's a **build orchestrator**.
+> that lets developers focus on code, not commands.
+> One YAML file defines how every system builds your project — and even how buildfab builds itself.
+> It turns your project's build process into a structured graph of actions that can run locally, in CI, or inside containers — all from the same `.project.yml`.
+
+---
+
+## 🧩 Architecture Overview
+
+**From scripts to orchestration — from chaos to structure**
+
+---
+
+### 🎼 High-level View
+
+```
+┌───────────────────────────┐
+│      Developer / CI       │
+│  (runs "buildfab build")  │
+└────────────┬──────────────┘
+             │
+             ▼
+     ┌──────────────┐
+     │   buildfab   │
+     │ (orchestrator│
+     │   & runner)  │
+     └──────┬───────┘
+            │
+ ┌──────────┼───────────┬─────────────────────────┐
+ │          │           │                         │
+ ▼          ▼           ▼                         ▼
+Conan   →  CMake   →  GoReleaser   →  Docker/Podman
+deps       compile     package/release   container builds
+```
+
+🟢 buildfab provides **structure, visibility, and reproducibility**
+for what used to be a jungle of shell scripts and ad-hoc CI commands.
+
+---
+
+### 🧠 Detailed Architecture
+
+```
+                            ┌────────────────────────────────────────────┐
+                            │               Developer / CI               │
+                            │    git push, pre-push, build, test...      │
+                            └────────────────────┬───────────────────────┘
+                                                 │
+                                                 ▼
+                                      ┌───────────────────────────┐
+                                      │        buildfab CLI       │
+                                      │  YAML orchestrator engine │
+                                      └─────────────┬─────────────┘
+                                                    │
+                 ┌──────────────────────────────────┴─────────────────────────────────┐
+                 │                               │                                   │
+                 ▼                               ▼                                   ▼
+        ┌────────────────┐             ┌──────────────────┐               ┌────────────────┐
+        │   Stage graph  │             │  Action executor │               │  Matrix runner │
+        │  (DAG planner) │             │ (run / uses /    │               │ (variants &    │
+        │                │             │  container)      │               │ parallel exec) │
+        └────────────────┘             └──────────────────┘               └────────────────┘
+                 │                               │                                   │
+                 └──────────────┬────────────────┴──────────────┬────────────────────┘
+                                │                               │
+                                ▼                               ▼
+               ┌────────────────────────────┐     ┌────────────────────────────┐
+               │     Container engine       │     │     Local environment       │
+               │ (Docker / Podman runtime)  │     │ (bash, cmake, conan, etc.) │
+               └────────────┬───────────────┘     └────────────┬───────────────┘
+                            │                                 │
+                            ▼                                 ▼
+                ┌────────────────────┐             ┌────────────────────┐
+                │ build scripts,     │             │ native commands,   │
+                │ cmake, conan, etc. │             │ tests, linters     │
+                └────────────────────┘             └────────────────────┘
+```
+
+---
+
+### 💬 Core Idea
+
+> buildfab brings **structure to chaos** — a single YAML file defines how your project is built, tested, and released everywhere.
+> It's transparent, self-hosted, and human-readable — even for complex containerized builds.
+> What used to be hidden inside `set -x` debug output is now clear, reproducible, and beautifully organized.
+
+Where a `bash set -x` dump once looked like chaos,
+buildfab now prints clear, colored, and reproducible logs showing exactly what runs — even inside containers.
+Developers (and newcomers) can finally see *what happens* during the build, step by step.
+
+---
+
+### 🐳 Example — transparent container build
+
+```bash
+./bin/buildfab --config examples/container-build-matrix.yml images-build \
+  --matrix.image='alpine:latest' -vv
+```
+
+produces:
+
+```
+buildfab v0.20.0
+▶️  Running stage: images-build
+  💻 image-build.alpine:latest
+  🐳 Running container: podman run --rm ... alpine:latest sh -c '... buildfab run container-build ...'
+  ...
+  ✓ test-check executed successfully - in '10s'
+🎉 SUCCESS - images-build in 1m 15s
+```
+
+and the corresponding YAML:
+
+```yaml
+actions:
+  - name: image-build
+    container:
+      engine: podman
+      image: { from: ${{ matrix.image }} }
+      cpu: 2
+      memory: 4G
+      network: host
+      cache: { conan: ./.cache }
+      run_stage: container-build
+
+  - name: test-check
+    run: |
+      sh examples/test.sh
+```
+
+Every executed command, including full container invocations, is shown exactly — so the developer can reproduce any step manually.
+
+---
+
+## 👥 Team
+
+- 🧠 **Alex Burnes** - Team Lead & Architect. Designed the core idea, architecture, and ecosystem — from the first version-go library to buildfab and pre-push. Defines strategy, oversees design, and ensures clarity of the overall engineering vision.
+- 🐝 **AI Assistant "Buzzy"** — Architectural support & prompt engineering. Responsible for structuring, refining, and documenting the architecture; assists with system design decisions, documentation, and clarity. Provides the buzz behind the structure.
+- 🤖 **AI Agent "Coddy"** — Coder & tester. Implements and validates ideas at lightning speed — remembers every detail, calculates instantly, and ensures the logic works in practice. A quiet genius of precision and memory.
+
+---
 
 ## Features
 
@@ -81,7 +269,7 @@ buildfab provides a comprehensive automation framework with powerful features fo
 
 ### Installation
 
-See the [Installation and Git Hook Setup](#installation-and-git-hook-setup) section below for detailed installation instructions.
+See the [Installation](#installation) section below for detailed installation instructions.
 
 ### Basic Usage
 
@@ -181,17 +369,14 @@ buildfab run pre-push --dry-run --quiet
 buildfab action version@check --dry-run
 ```
 
-## Installation and Git Hook Setup
+## Installation
 
 ### Installing buildfab
 
 #### Linux
 ```bash
 # Download and install using the install script
-curl -sSL https://github.com/AlexBurnes/buildfab/releases/latest/download/install.sh | bash
-
-# Or download specific version
-curl -sSL https://github.com/AlexBurnes/buildfab/releases/download/v0.8.0/install.sh | bash
+wget -O - https://github.com/AlexBurnes/buildfab/releases/latest/download/buildfab-linux-amd64-install.sh | sh
 ```
 
 #### Windows (Scoop)
@@ -206,32 +391,44 @@ scoop install buildfab
 scoop update buildfab
 ```
 
-#### macOS
+#### macOS (Homebrew)
 ```bash
-# Download and install using the install script
-curl -sSL https://github.com/AlexBurnes/buildfab/releases/latest/download/install.sh | bash
+# Add the tap (if not already added)
+brew tap AlexBurnes/buildfab https://github.com/AlexBurnes/homebrew-buildfab
 
-# Or download specific version
-curl -sSL https://github.com/AlexBurnes/buildfab/releases/download/v0.8.0/install.sh | bash
+# Install buildfab
+brew install buildfab
+
+# Update buildfab
+brew upgrade buildfab
 ```
 
-### Setting up Git Hooks
+### Git Hook Setup
 
-Once installed, you can set up buildfab as a git hook for automated project validation:
+buildfab can execute `pre-push` stages, which are used by the [pre-push utility](https://github.com/AlexBurnes/pre-push) — a Git hook automation tool based on the buildfab library.
 
-#### 1. Install as Git Hook
+**Note**: buildfab itself does **not** install Git hooks. To set up automated pre-push validation, use the [pre-push utility](https://github.com/AlexBurnes/pre-push):
+
+#### 1. Install pre-push utility
 ```bash
-# Run once to install buildfab as a pre-push hook
-buildfab install-hook
+# Linux/macOS
+curl -sSL https://github.com/AlexBurnes/pre-push/releases/latest/download/install.sh | bash
 
-# Or manually create the hook
-echo '#!/bin/bash
-buildfab run pre-push' > .git/hooks/pre-push
-chmod +x .git/hooks/pre-push
+# Windows (Scoop)
+scoop bucket add pre-push https://github.com/AlexBurnes/pre-push-scoop-bucket
+scoop install pre-push
 ```
 
-#### 2. Configure Your Project
-Create a `.project.yml` file in your project root (see example from this project):
+#### 2. Install Git Hook
+```bash
+# Run once to install the pre-push hook
+pre-push install
+
+# This creates .git/hooks/pre-push that runs: buildfab run pre-push
+```
+
+#### 3. Configure Your Project
+Create a `.project.yml` file in your project root with a `pre-push` stage:
 
 ```yaml
 project:
@@ -261,24 +458,27 @@ stages:
       - action: git-untracked
 ```
 
-#### 3. Test the Setup
+#### 4. Test the Setup
 ```bash
-# Test the pre-push stage manually
+# Test the pre-push stage manually with buildfab
 buildfab run pre-push
+
+# Or test using pre-push utility
+pre-push test
 
 # Test individual actions
 buildfab action version@check
 buildfab action git@untracked
 ```
 
-### Version Utility for Testing
+### Version Utility
 
-This project uses the `version` CLI utility for testing and validation. Installation instructions for the `version` utility can be found in the [Build section](#installing-version-utility) above. The `version` utility provides:
+This project uses the `version` CLI utility for **semantic version validation** and **platform/git detection variables**. Installation instructions for the `version` utility can be found in the [Build section](#installing-version-utility) below. The `version` utility provides:
 
-- Version format validation
+- Semantic version format validation
 - Version comparison and sorting
 - Git tag integration
-- CMake build type detection
+- Platform and Git detection variables
 
 For complete documentation and usage examples, see the [version-go project README](https://github.com/AlexBurnes/version-go).
 
