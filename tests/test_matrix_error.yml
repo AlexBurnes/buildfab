@@ -1,0 +1,45 @@
+project:
+  name: "test-matrix-error"
+  max_parallel: 2
+
+actions:
+  - name: "successful-command"
+    run: |
+      echo "Starting successful command for ${{ matrix.platform }}..."
+      for i in $(seq 1 3); do
+        echo "Step $i of 3 for ${{ matrix.platform }}"
+        sleep 1
+      done
+      echo "Successful command completed for ${{ matrix.platform }}!"
+
+  - name: "failing-command"
+    run: |
+      echo "Starting failing command for ${{ matrix.platform }}..."
+      for i in $(seq 1 2); do
+        echo "Step $i of 2 for ${{ matrix.platform }}"
+        sleep 1
+      done
+      echo "About to fail for ${{ matrix.platform }}..."
+      exit 1
+
+stages:
+  test-matrix-error:
+    steps:
+      - action: "successful-command"
+        matrix:
+          values:
+            platform: ["linux", "windows"]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: true
+            order: "fifo"
+      - action: "failing-command"
+        matrix:
+          values:
+            platform: ["macos", "freebsd"]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: true
+            order: "fifo"

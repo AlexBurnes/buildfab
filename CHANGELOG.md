@@ -8,6 +8,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2025-10-08
+
+### Added
+- **Multiline Output Feature**: Enhanced quiet mode with real-time job status display
+  - Real-time status updates showing all jobs simultaneously (pending → running → success/error)
+  - ANSI escape codes for cursor control and dynamic display updates
+  - Consistent job display order matching declaration order
+  - Parallel execution support with max_parallel constraints
+  - Proper error handling with red ✗ indicators for failed jobs
+  - Clean terminal state management and cursor positioning
+  - Event-driven updates via existing DAG executor callback system
+  - Thread-safe concurrent updates with mutex protection
+  - TTY detection for terminal-only activation with graceful fallback for non-TTY environments
+
+### Changed
+- **Quiet Mode UX**: Enhanced user experience by showing all jobs simultaneously instead of single-line running indicator
+- **Output Manager**: Added MultilineOutputManager for quiet mode with OrderedOutputManager fallback for verbose mode
+- **Step Callback**: Extended StepCallback interface with GetResults() method for result collection
+- **Terminal Compatibility**: Improved cursor management and terminal state handling for better user experience
+
+### Technical Details
+- **New Components**: MultilineOutputManager, MultilineStepCallback integrating with existing DAG executor
+- **Backward Compatibility**: Verified verbose mode continues using OrderedOutputManager with zero breaking changes
+- **Testing**: Validated error scenarios, cursor positioning, and Ctrl+C termination handling
+- **Production Ready**: Feature enhances quiet mode UX while maintaining familiar verbose mode behavior
+
+### Documentation
+- **Feature Specification**: Created comprehensive PRD in `docs/Multiline-output-feature-specification.md`
+- **Implementation Details**: Documented technical architecture, ANSI escape codes, and integration points
+- **Testing Strategy**: Added test files for matrix streaming and error handling scenarios
+
+### Documentation
+- **Multiline Output Feature Specification**
+  - **Created comprehensive PRD** - `docs/Multiline-output-feature-specification.md` with detailed technical specification for enhancing quiet mode user experience
+  - **Current Implementation Analysis** - Analyzed existing OrderedOutputManager and OrderedStepCallback with single-line cyan circle running indicator (`◯ step-name (running...)`)
+  - **Feature Requirements** - Identified limitations: users can only see one job at a time, no overall progress visibility, limited status information during execution
+  - **Proposed Solution** - Multiline display showing all jobs simultaneously with real-time status updates using ANSI escape codes for cursor control
+  - **Technical Implementation** - MultilineOutputManager with ANSI escape codes (`\x1b[?25l`, `\x1b[2K`, `\x1b[n;mH`) for cursor control, job status tracking (pending, running, success, warning, error, skipped)
+  - **Integration Points** - Replace quiet mode logic in OrderedOutputManager.showStepStart(), integrate with existing DAG executor and step callback system
+  - **User Experience** - All jobs visible simultaneously with status icons (○ pending, ◯ running, ✓ success, ✗ error, → skipped), real-time status updates, execution order preservation
+  - **Implementation Plan** - 4 phases: Core Infrastructure (2-3 days), Integration (2-3 days), Testing and Refinement (1-2 days), Documentation and Release (1 day)
+  - **Testing Strategy** - Unit tests, integration tests, manual testing with real buildfab stages, edge case handling
+  - **Success Criteria** - All jobs visible, real-time updates, proper ordering, status accuracy, minimal overhead, responsive updates
+  - **Risk Mitigation** - TTY detection and fallback mode, terminal resizing handling, performance profiling, accessibility considerations
+
 ## [0.20.1] - 2025-10-08
 
 ### Documentation

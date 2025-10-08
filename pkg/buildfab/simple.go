@@ -153,13 +153,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         }
     }
 
-    // Create ordered step callback to collect results with proper ordering
-    stepCallback := NewOrderedStepCallback(expandedSteps, r.opts.VerboseLevel, r.opts.Debug, r.opts.ErrorOutput, r.config)
-    
-    // Set config path for container command display
-    stepCallback.manager.SetConfigPath(r.opts.ConfigPath)
-    
-    // Update interpolated actions for matrix steps
+    // Create interpolated actions for matrix steps
     // We need to expand matrix steps to get interpolated actions
     interpolatedActions := make(map[string]*Action)
     for _, step := range expandedSteps {
@@ -172,8 +166,21 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         }
     }
     
-    // Update interpolated actions in the step callback
-    stepCallback.UpdateInterpolatedActions(interpolatedActions)
+    // Create step callback based on verbosity level
+    var stepCallback StepCallback
+    if r.opts.VerboseLevel == 0 {
+        // Use multiline step callback for quiet mode
+        stepCallback = NewMultilineStepCallbackWithActions(expandedSteps, r.opts.VerboseLevel, r.opts.Debug, r.opts.ErrorOutput, r.config, r.opts.ConfigPath, interpolatedActions)
+    } else {
+        // Use ordered step callback for verbose mode
+        stepCallback = NewOrderedStepCallback(expandedSteps, r.opts.VerboseLevel, r.opts.Debug, r.opts.ErrorOutput, r.config)
+        
+        // Set config path for container command display
+        stepCallback.(*OrderedStepCallback).manager.SetConfigPath(r.opts.ConfigPath)
+        
+        // Update interpolated actions in the step callback
+        stepCallback.(*OrderedStepCallback).UpdateInterpolatedActions(interpolatedActions)
+    }
 
     // Convert to complex options for internal executor
     complexOpts := &RunOptions{
@@ -199,6 +206,12 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         if r.opts.Debug {
             fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Created matrix pool: %s (max_parallel=%d)\n", poolID, poolMaxParallel)
         }
+    }
+    
+    // Initialize multiline display if using multiline callback
+    if multilineCallback, ok := stepCallback.(*MultilineStepCallback); ok {
+        multilineCallback.Initialize()
+        defer multilineCallback.Cleanup()
     }
     
     err = runner.RunStageWithSteps(ctx, stageName, expandedSteps)
