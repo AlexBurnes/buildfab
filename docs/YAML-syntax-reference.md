@@ -332,6 +332,7 @@ ${{ cpu }}           # Number of CPU cores
 ```yaml
 # Available version variables from version-go library
 ${{ version.version }}        # Current version (e.g., "v1.2.3")
+${{ version.rawversion }}     # Raw version string (e.g., "v0.22.0-1-g1234abc")
 ${{ version.project }}        # Project name from .project.yml or go.mod
 ${{ version.commit }}         # Git commit hash
 ${{ version.date }}           # Build date

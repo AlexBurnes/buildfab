@@ -131,7 +131,7 @@ stages:
 
 Variables available in `${{ }}` syntax:
 - **Git state**: `tag`, `branch` (current repository state)
-- **Version info**: `version.version`, `version.project`, `version.module`, `version.modules`
+- **Version info**: `version.version`, `version.rawversion`, `version.project`, `version.module`, `version.modules`
 - **Custom variables**: Provided via `RunOptions.Variables`
 - **Environment**: `env.VAR_NAME` for environment variables
 

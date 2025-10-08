@@ -131,6 +131,7 @@ func TestDetector_GetVersionVariables(t *testing.T) {
 		"version.major",
 		"version.minor",
 		"version.patch",
+		"version.rawversion",
 	}
 
 	for _, key := range expectedKeys {

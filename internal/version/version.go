@@ -140,6 +140,14 @@ func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, 
 		variables["version.tag"] = "unknown"
 	}
 	
+	// Add raw version variable using version-go library GetRawVersion() (v1.5.0+)
+	// Returns the raw version string exactly as detected (e.g., "v0.22.0-1-g1234abc")
+	if rawVersion, err := version.GetRawVersion(); err == nil && rawVersion != "" {
+		variables["version.rawversion"] = rawVersion
+	} else {
+		variables["version.rawversion"] = "unknown"
+	}
+	
 	if branch, err := d.detectGitBranch(ctx); err == nil && branch != "" {
 		variables["version.branch"] = branch
 	} else {

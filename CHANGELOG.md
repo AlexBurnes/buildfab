@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 2025-10-08
+
+### Added
+- **New Version Variable**: Added `version.rawversion` variable using `GetRawVersion()` method from version-go library v1.5.0
+  - Returns raw version string exactly as detected (e.g., "v0.22.0-1-g1234abc")
+  - Provides full git describe output including commits since tag and commit hash
+  - Useful for development builds and detailed version tracking
+  - Accessible in all contexts (stages, actions, matrix, containers)
+  - Added to documentation in `docs/YAML-syntax-reference.md` and `docs/Project-specification.md`
+
+### Changed
+- **Version Library**: Updated version-go from v1.4.2 to v1.5.0
+  - New `GetRawVersion()` method for raw version string access
+  - Enhanced version detection with full git describe support
+  - Latest version parsing improvements
+
+### Technical Details
+- **File Modified**: `go.mod` - Upgraded version-go to v1.5.0
+- **File Modified**: `internal/version/version.go` - Added `version.rawversion` variable using `GetRawVersion()` method
+- **File Modified**: `internal/version/version_test.go` - Added `version.rawversion` to expected keys list
+- **File Modified**: `docs/YAML-syntax-reference.md` - Added `version.rawversion` to version variables documentation
+- **File Modified**: `docs/Project-specification.md` - Added `version.rawversion` to variable interpolation documentation
+
+### Testing
+- **All 13 Version Variables Verified**: version, version.version, version.rawversion, version.tag, version.project, version.major, version.minor, version.patch, version.type, version.build-type, version.version-type, version.branch, version.commit
+- **Verified Raw Version Access**: Tested that `version.rawversion` returns full git describe output
+- **All Tests Passing**: `go test ./internal/version/... -v` passes with new variable
+
 ## [0.22.0] - 2025-10-08
 
 ### Added
