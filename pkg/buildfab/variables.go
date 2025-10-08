@@ -41,7 +41,7 @@ func InterpolateVariables(text string, variables map[string]string) (string, err
 		if len(availableVars) > 0 {
 			errorMsg += fmt.Sprintf("\navailable variables: %s", strings.Join(availableVars, ", "))
 		}
-		return "", fmt.Errorf(errorMsg)
+		return "", fmt.Errorf("%s", errorMsg)
 	}
 	
 	// Second pass: perform actual interpolation

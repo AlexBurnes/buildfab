@@ -69,6 +69,12 @@ func (m *MockStepCallback) OnStepError(ctx context.Context, stepName string, err
 	})
 }
 
+func (m *MockStepCallback) GetResults() []StepResult {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return nil // MockStepCallback doesn't collect results
+}
+
 func (m *MockStepCallback) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()

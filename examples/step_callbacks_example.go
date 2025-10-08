@@ -50,6 +50,11 @@ func (c *ExampleStepCallback) OnStepError(ctx context.Context, stepName string, 
 	fmt.Printf("❌ %s failed: %v\n", stepName, err)
 }
 
+// GetResults returns the collected step results
+func (c *ExampleStepCallback) GetResults() []buildfab.StepResult {
+	return nil // ExampleStepCallback doesn't collect results
+}
+
 // VerboseStepCallback provides more detailed output
 type VerboseStepCallback struct {
 	startTime time.Time
@@ -101,6 +106,11 @@ func (c *VerboseStepCallback) OnStepError(ctx context.Context, stepName string, 
 	fmt.Printf("[%s] ❌ %s failed: %v\n", time.Now().Format("15:04:05"), stepName, err)
 }
 
+// GetResults returns the collected step results
+func (c *VerboseStepCallback) GetResults() []buildfab.StepResult {
+	return nil // VerboseStepCallback doesn't collect results
+}
+
 // SilentStepCallback provides minimal output
 type SilentStepCallback struct{}
 
@@ -125,6 +135,11 @@ func (c *SilentStepCallback) OnStepOutput(ctx context.Context, stepName string, 
 // OnStepError is called for step errors
 func (c *SilentStepCallback) OnStepError(ctx context.Context, stepName string, err error) {
 	fmt.Printf("Error in %s: %v\n", stepName, err)
+}
+
+// GetResults returns the collected step results
+func (c *SilentStepCallback) GetResults() []buildfab.StepResult {
+	return nil // SilentStepCallback doesn't collect results
 }
 
 func mainStepCallbacks() {

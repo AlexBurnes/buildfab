@@ -4,12 +4,14 @@ import (
     "context"
     "fmt"
     "io"
+    "os"
     "strings"
     "sync"
     "time"
 
     "github.com/AlexBurnes/buildfab/pkg/buildfab/container"
     containerRunner "github.com/AlexBurnes/buildfab/internal/container"
+    "golang.org/x/term"
 )
 
 // OrderedOutputManager manages step output in proper order using a queue-based approach
@@ -894,4 +896,484 @@ func (o *OrderedOutputManager) extractFailedDependency(stepName string) string {
         }
     }
     return ""
+}
+
+// ============================================================================
+// MultilineOutputManager - New multiline display system for quiet mode
+// ============================================================================
+
+// ANSI escape codes for terminal control
+const (
+    hideCursor     = "\x1b[?25l" // Hide cursor
+    showCursor     = "\x1b[?25h" // Show cursor
+    clearLine      = "\x1b[2K"   // Clear current line
+    saveCursor     = "\x1b7"     // Save cursor position
+    restoreCursor  = "\x1b8"     // Restore cursor position
+    getCursorPos   = "\x1b[6n"   // Get cursor position (returns \x1b[ROW;COL R)
+)
+
+// moveTo moves cursor to specific row and column (1-based)
+func moveTo(row, col int) string {
+    return fmt.Sprintf("\x1b[%d;%dH", row, col)
+}
+
+// moveUp moves cursor up by n lines
+func moveUp(n int) string {
+    if n <= 0 {
+        return ""
+    }
+    return fmt.Sprintf("\x1b[%dA", n)
+}
+
+// moveDown moves cursor down by n lines
+func moveDown(n int) string {
+    if n <= 0 {
+        return ""
+    }
+    return fmt.Sprintf("\x1b[%dB", n)
+}
+
+// moveToColumn moves cursor to specific column (1-based)
+func moveToColumn(col int) string {
+    return fmt.Sprintf("\x1b[%dG", col)
+}
+
+// JobStatus represents the status of a job in multiline display
+type JobStatus int
+
+const (
+    JobStatusPending JobStatus = iota
+    JobStatusRunning
+    JobStatusSuccess
+    JobStatusWarning
+    JobStatusError
+    JobStatusSkipped
+)
+
+// JobDisplay represents a job in the multiline display
+type JobDisplay struct {
+    Name        string        // Job name
+    Status      JobStatus     // Current status
+    Message     string        // Status message
+    Duration    time.Duration // Execution duration
+    Row         int           // Display row number (1-based)
+    Started     bool          // Whether job has started
+    Completed   bool          // Whether job has completed
+}
+
+// MultilineOutputManager manages multiline job status display using ANSI escape codes
+type MultilineOutputManager struct {
+    jobs              []JobDisplay             // Jobs in declaration order
+    jobMap            map[string]*JobDisplay   // Fast lookup by job name
+    verboseLevel      int                      // Verbosity level
+    debug             bool                     // Debug mode
+    errorOutput       io.Writer                // Output writer
+    config            *Config                  // Configuration
+    configPath        string                   // Configuration file path
+    interpolatedActions map[string]*Action     // Interpolated actions for matrix steps
+    mu                *sync.Mutex              // Mutex for thread safety
+    isTTY             bool                     // Whether output is to a terminal
+    initialized       bool                     // Whether display has been initialized
+    lastDisplay       string                   // Last displayed content for comparison
+}
+
+// NewMultilineOutputManager creates a new multiline output manager
+func NewMultilineOutputManager(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config) *MultilineOutputManager {
+    // Check if output is to a terminal
+    isTTY := false
+    if file, ok := errorOutput.(*os.File); ok {
+        isTTY = term.IsTerminal(int(file.Fd()))
+    }
+
+    // Create job displays from steps
+    jobs := make([]JobDisplay, len(steps))
+    jobMap := make(map[string]*JobDisplay)
+    
+    for i, step := range steps {
+        job := JobDisplay{
+            Name:     step.Action,
+            Status:   JobStatusPending,
+            Message:  "(pending)",
+            Row:      i + 1, // 1-based row numbering
+            Started:  false,
+            Completed: false,
+        }
+        jobs[i] = job
+        jobMap[step.Action] = &jobs[i]
+    }
+
+    return &MultilineOutputManager{
+        jobs:              jobs,
+        jobMap:            jobMap,
+        verboseLevel:      verboseLevel,
+        debug:             debug,
+        errorOutput:       errorOutput,
+        config:            config,
+        interpolatedActions: make(map[string]*Action),
+        mu:                &sync.Mutex{},
+        isTTY:             isTTY,
+        initialized:       false,
+    }
+}
+
+// SetConfigPath sets the configuration file path
+func (m *MultilineOutputManager) SetConfigPath(configPath string) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.configPath = configPath
+}
+
+// SetInterpolatedAction sets the interpolated action for a job
+func (m *MultilineOutputManager) SetInterpolatedAction(jobName string, action *Action) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.interpolatedActions[jobName] = action
+}
+
+// InitializeDisplay initializes the multiline display
+func (m *MultilineOutputManager) InitializeDisplay() {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+
+    if !m.isTTY || m.initialized {
+        return
+    }
+
+    if m.debug {
+        fmt.Fprintf(m.errorOutput, "[DEBUG] Initializing multiline display for %d jobs\n", len(m.jobs))
+    }
+
+    // Hide cursor
+    fmt.Fprint(m.errorOutput, hideCursor)
+    
+    // Initial display
+    m.redrawDisplay()
+    
+    m.initialized = true
+    
+    if m.debug {
+        fmt.Fprintf(m.errorOutput, "[DEBUG] Multiline display initialized with %d jobs\n", len(m.jobs))
+    }
+}
+
+// UpdateJobStatus updates the status of a specific job (called via callback system from DAG executor)
+func (m *MultilineOutputManager) UpdateJobStatus(jobName string, status JobStatus, message string, duration time.Duration) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+
+    if !m.isTTY || !m.initialized {
+        return
+    }
+
+    job, exists := m.jobMap[jobName]
+    if !exists {
+        if m.debug {
+            fmt.Fprintf(m.errorOutput, "[DEBUG] Job %s not found in multiline display\n", jobName)
+        }
+        return
+    }
+
+    if m.debug {
+        fmt.Fprintf(m.errorOutput, "[DEBUG] Updating job %s: status=%v, message=%s, duration=%v\n", jobName, status, message, duration)
+    }
+
+    // Update job data
+    job.Status = status
+    job.Message = message
+    job.Duration = duration
+    job.Started = true
+    
+    if status == JobStatusSuccess || status == JobStatusWarning || status == JobStatusError || status == JobStatusSkipped {
+        job.Completed = true
+    }
+
+    // Redraw the entire display
+    m.redrawDisplay()
+}
+
+// redrawDisplay redraws the entire multiline display
+func (m *MultilineOutputManager) redrawDisplay() {
+    if !m.isTTY {
+        return
+    }
+
+    // Build the display content
+    var display strings.Builder
+    for _, job := range m.jobs {
+        // Get status icon and color
+        icon, color := m.getStatusIconAndColor(job.Status)
+        
+        // Format duration if provided
+        durationStr := ""
+        if job.Duration > 0 {
+            durationStr = fmt.Sprintf(" - in '%.3fs'", job.Duration.Seconds())
+        }
+        
+        // Build the job line
+        line := fmt.Sprintf("  %s%s%s %s %s%s", color, icon, colorReset, job.Name, job.Message, durationStr)
+        display.WriteString(line)
+        display.WriteString("\n")
+    }
+    
+    newDisplay := display.String()
+    
+    // Only redraw if content has changed
+    if newDisplay != m.lastDisplay {
+        // Clear previous display by moving up and clearing lines
+        if m.lastDisplay != "" {
+            lines := strings.Count(m.lastDisplay, "\n")
+            if lines > 0 {
+                fmt.Fprint(m.errorOutput, moveUp(lines))
+            }
+        }
+        
+        // Draw new content
+        fmt.Fprint(m.errorOutput, newDisplay)
+        m.lastDisplay = newDisplay
+        
+        // Flush output
+        if f, ok := m.errorOutput.(interface{ Flush() }); ok {
+            f.Flush()
+        }
+    }
+}
+
+// getStatusIconAndColor returns the appropriate icon and color for a job status
+func (m *MultilineOutputManager) getStatusIconAndColor(status JobStatus) (string, string) {
+    switch status {
+    case JobStatusPending:
+        return "○", colorGray
+    case JobStatusRunning:
+        return "◯", colorCyan
+    case JobStatusSuccess:
+        return "✓", colorGreen
+    case JobStatusWarning:
+        return "!", colorYellow
+    case JobStatusError:
+        return "✗", colorRed
+    case JobStatusSkipped:
+        return "→", colorGray
+    default:
+        return "?", colorGray
+    }
+}
+
+// Cleanup cleans up the multiline display
+func (m *MultilineOutputManager) Cleanup() {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+
+    if !m.isTTY || !m.initialized {
+        return
+    }
+
+    if m.debug {
+        fmt.Fprintf(m.errorOutput, "[DEBUG] Cleaning up multiline display\n")
+    }
+
+    // Show cursor
+    fmt.Fprint(m.errorOutput, showCursor)
+    
+    // Don't clear the display - let it remain visible
+    // Just ensure we're positioned correctly for subsequent output
+    fmt.Fprint(m.errorOutput, "\n")
+    
+    m.initialized = false
+}
+
+// IsEnabled returns whether multiline display is enabled
+func (m *MultilineOutputManager) IsEnabled() bool {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    return m.isTTY && m.verboseLevel == 0 // Only enabled in quiet mode (level 0)
+}
+
+// GetJobStatus returns the current status of a job
+func (m *MultilineOutputManager) GetJobStatus(jobName string) (JobStatus, bool) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    
+    job, exists := m.jobMap[jobName]
+    if !exists {
+        return JobStatusPending, false
+    }
+    
+    return job.Status, true
+}
+
+// ============================================================================
+// MultilineStepCallback - StepCallback implementation using MultilineOutputManager
+// ============================================================================
+
+// MultilineStepCallback implements StepCallback interface using the multiline output manager
+type MultilineStepCallback struct {
+    manager        *MultilineOutputManager
+    results        []StepResult
+    mu             *sync.Mutex
+    fallbackManager *OrderedOutputManager // Fallback for verbose mode or non-TTY
+}
+
+// NewMultilineStepCallback creates a new multiline step callback
+func NewMultilineStepCallback(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config) *MultilineStepCallback {
+    multilineManager := NewMultilineOutputManager(steps, verboseLevel, debug, errorOutput, config)
+    
+    // Create fallback ordered manager for verbose mode or non-TTY environments
+    fallbackManager := NewOrderedOutputManager(steps, verboseLevel, debug, errorOutput, config)
+    
+    // Register all steps in the fallback manager
+    for _, step := range steps {
+        fallbackManager.RegisterStep(step.Action)
+    }
+
+    return &MultilineStepCallback{
+        manager:        multilineManager,
+        results:        make([]StepResult, 0),
+        mu:             &sync.Mutex{},
+        fallbackManager: fallbackManager,
+    }
+}
+
+// NewMultilineStepCallbackWithActions creates a new multiline step callback with interpolated actions
+func NewMultilineStepCallbackWithActions(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config, configPath string, interpolatedActions map[string]*Action) *MultilineStepCallback {
+    multilineManager := NewMultilineOutputManager(steps, verboseLevel, debug, errorOutput, config)
+    multilineManager.SetConfigPath(configPath)
+    
+    // Set interpolated actions for multiline manager
+    for stepName, action := range interpolatedActions {
+        multilineManager.SetInterpolatedAction(stepName, action)
+    }
+    
+    // Create fallback ordered manager with interpolated actions
+    fallbackManager := NewOrderedOutputManager(steps, verboseLevel, debug, errorOutput, config)
+    fallbackManager.SetConfigPath(configPath)
+    for stepName, action := range interpolatedActions {
+        fallbackManager.SetInterpolatedAction(stepName, action)
+    }
+    
+    // Register all steps in the fallback manager
+    for _, step := range steps {
+        fallbackManager.RegisterStep(step.Action)
+    }
+
+    return &MultilineStepCallback{
+        manager:        multilineManager,
+        results:        make([]StepResult, 0),
+        mu:             &sync.Mutex{},
+        fallbackManager: fallbackManager,
+    }
+}
+
+// UpdateInterpolatedActions updates the interpolated actions from RunOptions
+func (c *MultilineStepCallback) UpdateInterpolatedActions(interpolatedActions map[string]*Action) {
+    for stepName, action := range interpolatedActions {
+        c.manager.SetInterpolatedAction(stepName, action)
+        c.fallbackManager.SetInterpolatedAction(stepName, action)
+    }
+}
+
+// Initialize initializes the display (call this before execution starts)
+func (c *MultilineStepCallback) Initialize() {
+    if c.manager.IsEnabled() {
+        c.manager.InitializeDisplay()
+    }
+}
+
+// Cleanup cleans up the display (call this after execution completes)
+func (c *MultilineStepCallback) Cleanup() {
+    if c.manager.IsEnabled() {
+        c.manager.Cleanup()
+    }
+}
+
+// OnStepStart implements StepCallback interface
+func (c *MultilineStepCallback) OnStepStart(ctx context.Context, stepName string) {
+    if c.manager.IsEnabled() {
+        // Use multiline display for quiet mode
+        c.manager.UpdateJobStatus(stepName, JobStatusRunning, "(running...)", 0)
+    } else {
+        // Use fallback ordered manager for verbose mode or non-TTY
+        if c.fallbackManager != nil {
+            c.fallbackManager.OnStepStart(ctx, stepName)
+        }
+    }
+}
+
+// OnStepComplete implements StepCallback interface
+func (c *MultilineStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
+    if c.manager.IsEnabled() {
+        // Convert StepStatus to JobStatus and update multiline display
+        jobStatus := c.convertStepStatusToJobStatus(status)
+        c.manager.UpdateJobStatus(stepName, jobStatus, message, duration)
+    } else {
+        // Use fallback ordered manager for verbose mode or non-TTY
+        if c.fallbackManager != nil {
+            c.fallbackManager.OnStepComplete(ctx, stepName, status, message, duration, bufferedOutput)
+        }
+    }
+
+    // Collect result for summary (thread-safe)
+    c.mu.Lock()
+    c.results = append(c.results, StepResult{
+        StepName: stepName,
+        Status:   status,
+        Duration: duration,
+    })
+    c.mu.Unlock()
+}
+
+// OnStepOutput implements StepCallback interface
+func (c *MultilineStepCallback) OnStepOutput(ctx context.Context, stepName string, output string) {
+    if c.manager.IsEnabled() {
+        // In multiline mode, we don't show streaming output during execution
+        // The status updates are shown instead
+        return
+    } else {
+        // Use fallback ordered manager for verbose mode
+        if c.fallbackManager != nil {
+            c.fallbackManager.OnStepOutput(ctx, stepName, output)
+        }
+    }
+}
+
+// OnStepError implements StepCallback interface
+func (c *MultilineStepCallback) OnStepError(ctx context.Context, stepName string, err error) {
+    if c.manager.IsEnabled() {
+        // Convert error to job status and update multiline display
+        c.manager.UpdateJobStatus(stepName, JobStatusError, "execute failure", 0)
+    } else {
+        // Use fallback ordered manager for verbose mode or non-TTY
+        if c.fallbackManager != nil {
+            c.fallbackManager.OnStepError(ctx, stepName, err)
+        }
+    }
+}
+
+// convertStepStatusToJobStatus converts StepStatus to JobStatus
+func (c *MultilineStepCallback) convertStepStatusToJobStatus(status StepStatus) JobStatus {
+    switch status {
+    case StepStatusPending:
+        return JobStatusPending
+    case StepStatusRunning:
+        return JobStatusRunning
+    case StepStatusOK:
+        return JobStatusSuccess
+    case StepStatusWarn:
+        return JobStatusWarning
+    case StepStatusError:
+        return JobStatusError
+    case StepStatusSkipped:
+        return JobStatusSkipped
+    default:
+        return JobStatusPending
+    }
+}
+
+// GetResults returns the collected step results
+func (c *MultilineStepCallback) GetResults() []StepResult {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    // Return a copy to avoid race conditions
+    result := make([]StepResult, len(c.results))
+    copy(result, c.results)
+    return result
 }

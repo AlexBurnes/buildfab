@@ -281,6 +281,10 @@ func (c *TestStepCallback) OnStepError(ctx context.Context, stepName string, err
 	// No-op for testing
 }
 
+func (c *TestStepCallback) GetResults() []StepResult {
+	return nil // TestStepCallback doesn't collect results
+}
+
 // OnErrorTestResult represents a step execution result for testing
 type OnErrorTestResult struct {
 	StepName   string

@@ -69,4 +69,7 @@ type StepCallback interface {
 	
 	// OnStepError is called for step errors
 	OnStepError(ctx context.Context, stepName string, err error)
+	
+	// GetResults returns the collected step results
+	GetResults() []StepResult
 }
