@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.1] - 2025-10-08
+
+### Fixed
+- **Race Condition in DAG Executor**: Fixed concurrent map access race conditions in `executeDAGWithOrderedStreaming`
+  - Added mutex synchronization to all shared state map accesses (`displayed`, `completed`, `started`)
+  - Created thread-safe helper functions: `checkAndDisplayNextStep`, `displayStepInOrder`, `displayStepInOrderLocked`, `canDisplayStepInOrderLocked`, `displayRemainingSteps`
+  - Implemented proper unlock/lock patterns around callbacks to prevent deadlocks
+  - All tests now pass with race detector enabled (`go test ./... -race`)
+  
+- **Pool Context Cancellation Hang**: Fixed `ExecutionPool` hanging on context cancellation
+  - Added `drainQueuedTasks()` method to handle tasks still in queue when context is cancelled
+  - Implemented `sync.Once` pattern to ensure queue draining happens exactly once even with multiple workers
+  - Workers now properly drain queued tasks and call `OnComplete` with cancellation error
+  - Fixed WaitGroup balance by decrementing for drained tasks
+  - Test `TestExecutionPool_ContextCancellation` now completes successfully without hanging
+
+### Technical Details
+- **File Modified**: `pkg/buildfab/buildfab.go` - Added mutex parameters to display functions and proper locking
+- **File Modified**: `pkg/buildfab/pool.go` - Added `drainOnce sync.Once` field and `drainQueuedTasks()` method
+- **Testing**: All tests pass with race detector, including previously hanging `TestExecutionPool_ContextCancellation`
+
 ## [0.21.0] - 2025-10-08
 
 ### Added

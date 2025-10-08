@@ -15,13 +15,13 @@ stages:
 
       # Always run version module validation
       - action: version-module
-      
+
       # Run tests after version module validation
       - action: run-tests
         only: [release]
         require: [version-module]
-      
-      # Run Git checks for all versions      
+
+      # Run Git checks for all versions
       - action: git-untracked
       - action: git-uncommitted
       - action: git-modified
@@ -86,8 +86,8 @@ stages:
   #          - "alpine:latest"
   #          - "ubuntu:22.04"
   #      strategy:
-  #          max_parallel: 2    
-  #          fail_fast: true     
+  #          max_parallel: 2
+  #          fail_fast: true
   #          continue_on_error: false
   #          order: "fifo"
 
@@ -121,9 +121,6 @@ actions:
       done
 
   - name: run-tests
-    run: go test ./... -v
-
-  - name: run-all-tests
     run: go test ./... -v -race
 
   # Git actions
@@ -185,7 +182,7 @@ actions:
         echo "Installing with manual configuration"
         cmake --build .build --target install-current
       fi
-      
+
       # Verify installation
       if [ -f "bin/buildfab" ]; then
         echo "✓ Binary installed successfully: bin/buildfab"
@@ -210,26 +207,26 @@ actions:
     run: |
       # Build cross-platform binaries for testing
       echo "Building cross-platform binaries for testing..."
-      
+
       # Build Linux AMD64
       echo "Building Linux AMD64..."
       GOOS=linux GOARCH=amd64 go build -o bin/buildfab-linux-amd64 ./cmd/buildfab
-      
+
       # Build Windows AMD64
       echo "Building Windows AMD64..."
       GOOS=windows GOARCH=amd64 go build -o bin/buildfab-windows-amd64.exe ./cmd/buildfab
-      
+
       # Build macOS AMD64
       echo "Building macOS AMD64..."
       GOOS=darwin GOARCH=amd64 go build -o bin/buildfab-darwin-amd64 ./cmd/buildfab
-      
+
       echo "✓ Cross-platform binaries built successfully"
 
   - name: check-binaries
     run: |
       # Check that cross-platform binaries were built successfully
       echo "Checking cross-platform binaries..."
-      
+
       # Check Linux binary
       if [ -f "bin/buildfab-linux-amd64" ]; then
         echo "✓ Linux binary exists: bin/buildfab-linux-amd64"
@@ -238,7 +235,7 @@ actions:
         echo "✗ Linux binary missing: bin/buildfab-linux-amd64"
         exit 1
       fi
-      
+
       # Check Windows binary
       if [ -f "bin/buildfab-windows-amd64.exe" ]; then
         echo "✓ Windows binary exists: bin/buildfab-windows-amd64.exe"
@@ -247,7 +244,7 @@ actions:
         echo "✗ Windows binary missing: bin/buildfab-windows-amd64.exe"
         exit 1
       fi
-      
+
       # Check macOS binary
       if [ -f "bin/buildfab-darwin-amd64" ]; then
         echo "✓ macOS binary exists: bin/buildfab-darwin-amd64"
@@ -256,7 +253,7 @@ actions:
         echo "✗ macOS binary missing: bin/buildfab-darwin-amd64"
         exit 1
       fi
-      
+
       echo "✓ All cross-platform binaries verified successfully"
 
   # Test actions
@@ -311,7 +308,7 @@ actions:
 
   #- name: container-build
   #  container:
-  #    image: 
+  #    image:
   #      from: ${{ matrix.image }}
   #    workdir: /buildfab
   #    cpu: 2

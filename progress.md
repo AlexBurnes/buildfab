@@ -2,6 +2,20 @@
 
 ## What Works
 
+- **Race Condition Fixes** (v0.21.1 - October 8, 2025): Successfully fixed critical race conditions in DAG executor and pool context cancellation hang (100% complete)
+  - **DAG Executor Race Condition** - Fixed concurrent map access race conditions in `executeDAGWithOrderedStreaming` by adding mutex synchronization to all shared state map accesses (`displayed`, `completed`, `started`)
+  - **Thread-Safe Helper Functions** - Created `checkAndDisplayNextStep`, `displayStepInOrder`, `displayStepInOrderLocked`, `canDisplayStepInOrderLocked`, `displayRemainingSteps` with proper mutex locking
+  - **Deadlock Prevention** - Implemented proper unlock/lock patterns around callbacks to prevent deadlocks while maintaining thread safety
+  - **Pool Context Cancellation Hang** - Fixed `ExecutionPool` hanging on context cancellation by adding `drainQueuedTasks()` method to handle tasks still in queue
+  - **Sync.Once Pattern** - Implemented `sync.Once` to ensure queue draining happens exactly once even with multiple workers calling it simultaneously
+  - **WaitGroup Balance** - Fixed WaitGroup balance by properly decrementing for drained tasks that never executed
+  - **OnComplete Callbacks** - Workers now properly call `OnComplete` with cancellation error for drained tasks, preventing WaitGroup hangs
+  - **Comprehensive Testing** - All tests pass with race detector enabled (`go test ./... -race`), no race conditions detected
+  - **Test Fix** - Previously hanging test `TestExecutionPool_ContextCancellation` now completes successfully in 0.10s
+  - **Files Modified** - `pkg/buildfab/buildfab.go` (54 insertions, 12 deletions), `pkg/buildfab/pool.go` (33 insertions, 1 deletion)
+  - **Production Ready** - Both critical race conditions resolved with comprehensive testing and no remaining race issues
+  - **VERSION 0.21.1 RELEASED** - Race condition fixes completed and ready for production use
+
 - **Documentation Translation and Reorganization** (v0.20.1 - October 8, 2025): Successfully completed comprehensive documentation translation, file naming standardization, and specification consolidation (100% complete)
   - **Russian to English Translation** - Translated 2 major documents from Russian to English with comprehensive coverage: (1) `docs/Practical-applications.md` - 606 lines covering self-hosting, Go projects, C++ multi-distro compilation, container workflows, real metrics, and best practices; (2) `docs/Slim-support-added.md` - 292 lines covering slim image feature, technical details, workflow diagrams, and usage examples
   - **File Naming Standardization** - Renamed 6 documentation files to follow project naming convention (`First-word-second-word.md` format): `Analysis_summary.md` → `Analysis-summary.md`, `CLI_DRY_analysis.md` → `CLI-dry-analysis.md`, `Documentation_complete.md` → `Documentation-complete.md`, `Documentation_files.md` → `Documentation-files.md`, `Git_integration_info.md` → `Git-integration-info.md`, `Signal_handling_fix_summary.md` → `Signal-handling-fix-summary.md`

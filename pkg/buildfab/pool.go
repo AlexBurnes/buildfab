@@ -34,6 +34,7 @@ type ExecutionPool struct {
 	mu         sync.RWMutex
 	running    bool
 	stats      PoolStats
+	drainOnce  sync.Once // Ensures queue draining happens only once
 }
 
 // NewExecutionPool creates a new execution pool with a parent context
@@ -81,15 +82,45 @@ func (p *ExecutionPool) worker(id int) {
 		select {
 		case task, ok := <-p.taskQueue:
 			if !ok {
-				return // Channel closed
+				// Channel closed - drain any remaining tasks
+				p.drainQueuedTasks()
+				return
 			}
 			
 			p.executeTask(task)
 			
 		case <-p.ctx.Done():
+			// Context cancelled - drain remaining tasks from queue
+			// and call their OnComplete with cancellation error
+			p.drainQueuedTasks()
 			return
 		}
 	}
+}
+
+// drainQueuedTasks drains all remaining tasks from the queue when context is cancelled
+// Uses sync.Once to ensure draining only happens once even if multiple workers call it
+func (p *ExecutionPool) drainQueuedTasks() {
+	p.drainOnce.Do(func() {
+		// Drain all tasks from the queue
+		for {
+			select {
+			case task, ok := <-p.taskQueue:
+				if !ok {
+					return // Channel closed
+				}
+				// Task was queued but never executed - call OnComplete with cancellation error
+				// and decrement WaitGroup since it was incremented in Submit
+				p.activeJobs.Done()
+				if task.OnComplete != nil {
+					task.OnComplete(fmt.Errorf("task cancelled due to context cancellation"))
+				}
+			default:
+				// No more tasks in queue
+				return
+			}
+		}
+	})
 }
 
 // executeTask executes a single task

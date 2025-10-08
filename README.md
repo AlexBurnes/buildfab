@@ -4,7 +4,7 @@
 
 [![Go Version](https://img.shields.io/badge/go-1.23.1-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/release-v0.21.0-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
+[![Release](https://img.shields.io/badge/release-v0.21.1-orange.svg)](https://github.com/AlexBurnes/buildfab/releases)
 
 ## Why buildfab?
 

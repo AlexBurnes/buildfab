@@ -2075,10 +2075,10 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 			mu.Unlock()
 			
 			// Display immediately if it's ready in declaration order
-			r.displayStepInOrder(ctx, result.Name, steps, resultMap, displayed, completed)
+			r.displayStepInOrder(ctx, result.Name, steps, resultMap, displayed, completed, &mu)
 			
 			// Check if we can now display the next step
-			r.checkAndDisplayNextStep(ctx, steps, resultMap, displayed, completed, started)
+			r.checkAndDisplayNextStep(ctx, steps, resultMap, displayed, completed, started, &mu)
 		}
 	}()
 	
@@ -2282,7 +2282,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 				}
 				
 				// Check if we can display the first step immediately after starting execution
-				r.checkAndDisplayNextStep(ctx, steps, resultMap, displayed, completed, started)
+				r.checkAndDisplayNextStep(ctx, steps, resultMap, displayed, completed, started, &mu)
 			}
 		}
 	}()
@@ -2292,35 +2292,41 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 	case <-done:
 		// All results processed normally
 		// Display any remaining steps that weren't displayed yet
-		r.displayRemainingSteps(ctx, steps, resultMap, displayed)
+		r.displayRemainingSteps(ctx, steps, resultMap, displayed, &mu)
 	case <-ctx.Done():
 		// Context cancelled - cancel pools WITHOUT waiting to avoid WaitGroup panic
 		r.poolManager.CancelAll()
 		// Give a brief moment for cleanup
 		time.Sleep(50 * time.Millisecond)
 		// Display any remaining steps that weren't displayed yet
-		r.displayRemainingSteps(ctx, steps, resultMap, displayed)
+		r.displayRemainingSteps(ctx, steps, resultMap, displayed, &mu)
 	}
 	
 	return results, ctx.Err()
 }
 
 // checkAndDisplayNextStep checks if the next step in declaration order can be displayed
-func (r *Runner) checkAndDisplayNextStep(ctx context.Context, steps []Step, resultMap map[string]Result, displayed map[string]bool, completed map[string]bool, started map[string]bool) {
+func (r *Runner) checkAndDisplayNextStep(ctx context.Context, steps []Step, resultMap map[string]Result, displayed map[string]bool, completed map[string]bool, started map[string]bool, mu *sync.Mutex) {
+	mu.Lock()
+	defer mu.Unlock()
+	
 	// Find the next step that can be displayed
 	for _, step := range steps {
 		if !displayed[step.Action] {
 			// Check if we can display this step (either completed or currently executing)
-			if r.canDisplayStepInOrder(step, steps, displayed) {
+			if r.canDisplayStepInOrderLocked(step, steps, displayed) {
 				// Show step start message if not already shown
 				if r.opts.StepCallback != nil && !started[step.Action] {
-					r.opts.StepCallback.OnStepStart(ctx, step.Action)
 					started[step.Action] = true
+					// Unlock before callback to avoid deadlock
+					mu.Unlock()
+					r.opts.StepCallback.OnStepStart(ctx, step.Action)
+					mu.Lock()
 				}
 				
 				// If completed, also show completion message
 				if completed[step.Action] {
-					r.displayStepInOrder(ctx, step.Action, steps, resultMap, displayed, completed)
+					r.displayStepInOrderLocked(ctx, step.Action, steps, resultMap, displayed, completed, mu)
 				}
 				break // Only display one step at a time
 			}
@@ -2329,12 +2335,19 @@ func (r *Runner) checkAndDisplayNextStep(ctx context.Context, steps []Step, resu
 }
 
 // displayStepInOrder displays a step only if it can be shown in declaration order
-func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps []Step, resultMap map[string]Result, displayed map[string]bool, completed map[string]bool) {
+func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps []Step, resultMap map[string]Result, displayed map[string]bool, completed map[string]bool, mu *sync.Mutex) {
+	mu.Lock()
+	defer mu.Unlock()
+	r.displayStepInOrderLocked(ctx, stepName, steps, resultMap, displayed, completed, mu)
+}
+
+// displayStepInOrderLocked displays a step only if it can be shown in declaration order (assumes mutex is already locked)
+func (r *Runner) displayStepInOrderLocked(ctx context.Context, stepName string, steps []Step, resultMap map[string]Result, displayed map[string]bool, completed map[string]bool, mu *sync.Mutex) {
 	// Find the step in declaration order
 	for _, step := range steps {
 		if step.Action == stepName {
 			// Check if all previous steps in declaration order have been displayed
-			if r.canDisplayStepInOrder(step, steps, displayed) {
+			if r.canDisplayStepInOrderLocked(step, steps, displayed) {
 				
 				// Only show completion message if the step is actually completed
 				if result, exists := resultMap[stepName]; exists && completed[stepName] {
@@ -2343,7 +2356,10 @@ func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps 
 						// In verbose mode, display output during execution
 						// In quiet mode, output is buffered and only shown on failure in showStepCompletion
 						if r.opts.VerboseLevel > 0 && result.Message != "" {
+							// Unlock before callback to avoid deadlock
+							mu.Unlock()
 							r.opts.StepCallback.OnStepOutput(ctx, stepName, result.Message)
+							mu.Lock()
 						}
 						// Note: In quiet mode, buffered output is displayed in showStepCompletion, not here
 					}
@@ -2363,7 +2379,10 @@ func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps 
 							message = result.Message
 						}
 						
+						// Unlock before callback to avoid deadlock
+						mu.Unlock()
 						r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, result.Duration, result.BufferedOutput)
+						mu.Lock()
 					}
 					displayed[stepName] = true
 				}
@@ -2375,6 +2394,11 @@ func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps 
 
 // canDisplayStepInOrder checks if a step can be displayed in declaration order
 func (r *Runner) canDisplayStepInOrder(step Step, steps []Step, displayed map[string]bool) bool {
+	return r.canDisplayStepInOrderLocked(step, steps, displayed)
+}
+
+// canDisplayStepInOrderLocked checks if a step can be displayed in declaration order (assumes mutex is already locked)
+func (r *Runner) canDisplayStepInOrderLocked(step Step, steps []Step, displayed map[string]bool) bool {
 	// Find the position of this step in the declaration order
 	stepIndex := -1
 	for i, s := range steps {
@@ -2399,7 +2423,10 @@ func (r *Runner) canDisplayStepInOrder(step Step, steps []Step, displayed map[st
 }
 
 // displayRemainingSteps displays any steps that weren't displayed yet
-func (r *Runner) displayRemainingSteps(ctx context.Context, steps []Step, resultMap map[string]Result, displayed map[string]bool) {
+func (r *Runner) displayRemainingSteps(ctx context.Context, steps []Step, resultMap map[string]Result, displayed map[string]bool, mu *sync.Mutex) {
+	mu.Lock()
+	defer mu.Unlock()
+	
 	for _, step := range steps {
 		if !displayed[step.Action] {
 			if result, exists := resultMap[step.Action]; exists {
@@ -2418,7 +2445,10 @@ func (r *Runner) displayRemainingSteps(ctx context.Context, steps []Step, result
 						message = result.Message
 					}
 					
+					// Unlock before callback to avoid deadlock
+					mu.Unlock()
 					r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, result.Duration, result.BufferedOutput)
+					mu.Lock()
 				}
 				displayed[step.Action] = true
 			}
