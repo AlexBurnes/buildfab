@@ -1,176 +1,410 @@
-# Project Specification: buildfab
+# Technical Specification: buildfab
 
-## 1) Purpose & Scope
+**Project:** `buildfab`
+**Language:** Go
+**Scope:** CLI utility and library for building and running project automation stages and actions defined in a YAML configuration file.
 
-**buildfab** is a Go-based runner for project automations defined in a YAML file. It executes **stages** composed of **steps** (actions), supports **parallel** and **sequential** execution via dependencies, exposes a **library API** for embedding (e.g., `pre-push`), and provides a **CLI** for manual runs and scripting.
+## 1) Overview
 
-### Primary Goals
+Buildfab is a Go library and CLI utility that provides a flexible framework for executing project automation stages and actions defined in a `project.yml` configuration file. It serves as the underlying engine for tools like `pre-push` that need to run complex, dependency-aware automation workflows.
 
-* Run **stages** (pipelines) and **actions** (units) on demand from CLI and from an embedded API
-* Preserve/extend semantics already validated by the `pre-push` utility: `run`, `uses`, `require`, `onerror`, `only`, variables, etc.
-* Provide clear, colorized output with concise repro tips on failure
+### Core Features
+- **YAML-driven configuration**: Define stages and actions in `project.yml`
+- **DAG-based execution**: Parallel execution with explicit dependencies
+- **Built-in action registry**: Extensible system for common automation tasks
+- **Custom action support**: Execute shell commands and external tools
+- **Variable interpolation**: Dynamic configuration with `${{ }}` syntax
+- **Error policy management**: Configurable stop/warn behavior per step
+- **Cross-platform compatibility**: Linux, Windows, macOS (amd64/arm64)
 
-### Non-goals (v1)
+## 2) Library API
 
-* Matrix builds, reusable workflows, or remote executors
-* Secrets manager and complex environment templating (basic env pass-through only in v1)
+### Primary Interface
 
-## 2) Key Concepts & Terminology
+```go
+package buildfab
 
-* **Action**: a named unit defined under `actions:`. Either:
-  * `run:` — shell command block, or
-  * `uses:` — a built-in function (e.g., `git@untracked`, `git@uncommitted`, `git@modified`)
-* **Stage**: a pipeline of **steps** (each step references an **action**), defined under `stages:` (e.g., `pre-push`). Steps may declare `require:` dependencies and `onerror:` policies
-* **Variables**: GitHub-style `${{ ... }}` placeholders resolvable from repo state (`tag`, `branch`), and version library values when embedded
+import "context"
 
-## 3) Configuration Schema
+// RunStage executes a specific stage from project.yml configuration
+func RunStage(ctx context.Context, stageName string, opts *RunOptions) error
 
-The YAML file contains:
+// RunOptions configures stage execution
+type RunOptions struct {
+    ConfigPath    string            // Path to project.yml (default: ".project.yml")
+    MaxParallel   int               // Maximum parallel execution (default: CPU count)
+    Verbose       bool              // Enable verbose output
+    Debug         bool              // Enable debug output
+    Variables     map[string]string // Additional variables for interpolation
+    WorkingDir    string            // Working directory for execution
+    Output        io.Writer         // Output writer (default: os.Stdout)
+    ErrorOutput   io.Writer         // Error output writer (default: os.Stderr)
+}
 
-* `project`:
-  * `name` (string), `modules` (list), optional `bin` directory
-* `include` (optional list of strings):
-  * File patterns to include from other YAML files
-  * Supports exact file paths and glob patterns
-  * **Exact file paths**: Must exist or configuration fails (e.g., `file.yml`, `directory/file.yml`)
-  * **Glob patterns**: Don't fail if no matches found (e.g., `file-*.yml`, `directory/*.yml`)
-  * **Directory requirements**: Directory must exist for glob patterns, but no files required
-* `actions` (list of objects):
-  * `name` (string),
-  * Either `run: |` (multiline shell) **or** `uses: <provider@builtin>`
-* `stages` (map of stage→definition):
-  * Each stage has `steps` (list), each step has:
-    * `action: <name>` (required),
-    * `require:` string or list of action names,
-    * `onerror:` `warn` | `stop` (default `stop`),
-    * `only:` list of labels/conditions (e.g., `[release]`),
-    * `if:` condition expression (e.g., `"os == 'linux'"`)
+// StageResult contains execution results for a stage
+type StageResult struct {
+    StageName string
+    Success   bool
+    Steps     []StepResult
+    Duration  time.Duration
+    Error     error
+}
 
-**Include behavior:**
-* **Exact file paths**: `file.yml`, `directory/file.yml` - fails with syntax error if file doesn't exist
-* **Glob patterns**: `file-*.yml`, `directory/*.yml` - doesn't fail if no files match pattern
-* **Directory validation**: Directory must exist for glob patterns, fails if directory doesn't exist
-* **Merge order**: Included files are merged in declaration order, later includes override earlier ones
-* **Circular includes**: Detected and prevented to avoid infinite loops
+// StepResult contains execution results for a step
+type StepResult struct {
+    StepName   string
+    ActionName string
+    Status     StepStatus
+    Duration   time.Duration
+    Output     string
+    Error      error
+}
 
-**Validation expectations (v1):**
-* All referenced actions exist
-* No cyclic dependencies among steps (DAG)
-* `only:` is syntactically valid and left to the runner's condition evaluator
-* `if:` expressions are syntactically valid and use the same expression language as action variants
-* Include files exist (for exact paths) and directories exist (for glob patterns)
+type StepStatus int
 
-## 4) CLI Specification
+const (
+    StepStatusPending StepStatus = iota
+    StepStatusRunning
+    StepStatusOK
+    StepStatusWarn
+    StepStatusError
+    StepStatusSkipped
+)
+```
 
-### 4.1 Command Forms
+### Action Interface
 
-* `buildfab run <stage>` — run a stage named `<stage>` (if present)
-* `buildfab run pre-push` — run stage `pre-push`
-* `buildfab run pre-push version-check` — run **a single step** (`version-check`) inside stage `pre-push` (respecting its `require` chain only if `--with-requires` is provided; default is *just that step*)
-* `buildfab action <action>` — run a **standalone action** named `<action>` directly
-* `buildfab list-actions` — list available built-in actions
-* `buildfab validate` — validate project.yml configuration
+```go
+// Action defines the interface for executable actions
+type Action interface {
+    Run(ctx context.Context, opts *ActionOptions) error
+    GetName() string
+    GetHelp() string
+    GetRepro() string
+}
 
-**Name resolution rule:** If an identifier matches both a stage and an action, **stage takes priority**. An explicit `--action` can force action mode.
+// ActionOptions provides context for action execution
+type ActionOptions struct {
+    Variables   map[string]string
+    WorkingDir  string
+    Verbose     bool
+    Debug       bool
+    Output      io.Writer
+    ErrorOutput io.Writer
+}
+```
 
-### 4.2 Global Options
+## 3) Configuration Format: project.yml
 
-* `-c, --config <path>`: path to YAML (default: `project.yml`)
-* `-v, --verbose`: show commands and captured outputs
-* `-d, --debug`: include internals (vars, cwd, timing)
-* `--color auto|always|never`: color policy
-* `--env KEY=VAL` (repeatable): export env vars to actions
-* `--only <label>[,<label>...]`: inject labels for `only:` evaluation (e.g., `--only release`)
-* `--with-requires`: when running a single step by name (stage context), also run its prerequisites (transitive)
-* `--max-parallel N`: cap concurrency (default: logical CPUs)
+### Structure
 
-**Exit codes**
-* `0` on success or only warnings
-* `1` if any step with `onerror: stop` fails
-* `2` for configuration/validation errors (missing action, cycle, invalid YAML)
+```yaml
+project:
+  name: "project-name"
+  modules: ["module1", "module2"]
+  bin: "bin"  # Optional: directory for module binaries
 
-## 5) Execution Model (DAG Scheduler)
+actions:
+  - name: action-name
+    run: |
+      shell command
+      multi-line supported
+    # OR
+    uses: builtin@action-type
+    
+  - name: another-action
+    run: echo "Hello ${{ variable }}"
+    only: [release, prerelease]  # Optional: run only for specific version types
+    if: "condition expression"   # Optional: conditional execution
 
-### 5.1 Resolution & Planning
+stages:
+  stage-name:
+    steps:
+      - action: action-name
+        require: [dependency1, dependency2]  # Optional: dependencies
+        onerror: warn  # Optional: stop (default) or warn
+        only: [release]  # Optional: version type filter
+        if: "condition"  # Optional: conditional execution
+```
 
-* Build a DAG per **stage**:
-  * Node = step (references an action),
-  * Edge = `require:` dependencies
-* Validate: missing actions, non-existent `require`, cycles → error (exit 2)
-* Determine runnable "waves": steps whose requires are satisfied run **in parallel**. (Wave-by-wave schedule)
+### Variable Interpolation
 
-### 5.2 Running Actions
+Variables available in `${{ }}` syntax:
+- **Git state**: `tag`, `branch` (current repository state)
+- **Version info**: `version.version`, `version.project`, `version.module`, `version.modules`
+- **Custom variables**: Provided via `RunOptions.Variables`
+- **Environment**: `env.VAR_NAME` for environment variables
 
-* **run:** execute the multi-line shell with `/bin/sh -lc` (Linux/macOS) or `cmd /c` (Windows). Inherit environment plus `--env` values
-* **uses:** dispatch to registered built-ins (e.g., `git@untracked`, `git@uncommitted`, `git@modified`)
+### Built-in Actions
 
-### 5.3 Conditions & Policies
-
-* **`if:`** a condition expression that determines whether a step should be executed. Uses the same expression language as action variants. Example: `if: "os == 'linux'"`. If the condition evaluates to false → step is skipped (status = SKIP)
-* **`only:`** a list of labels; a step runs only if all required labels are present in the current run context. Example: `only: [release]`. The CLI `--only` flag provides labels. If `only` is set and the label is absent → step is skipped (status = SKIP)
-* **`onerror:`** `warn` allows the DAG to continue; `stop` blocks dependents from starting (default)
-
-### 5.4 Output & UX
-
-* Per-step status line:
-  * **OK**: `✔` green, **WARN**: `⚠` yellow, **ERROR**: `✖` red, **SKIP**: `○` dim
-* `--verbose`: print the command(s) and captured stdout/stderr (step-scoped, with truncation; configurable)
-* On failure:
-  * **uses**: print a concise **repro** hint (the built-in's helper command sequence)
-  * **run**: print "To reproduce:" and the exact block to paste
-* Deterministic final **summary** in topological order
-
-## 6) Variables & Context
-
-### 6.1 Interpolation
-
-* Replace `${{ ... }}` in `run:` blocks and in future action inputs:
-  * Core: `tag`, `branch`
-  * Embedded version values (when used as a library): e.g., `${{ version.version }}`, `${{ version.project }}`, etc.
-
-### 6.2 Resolution Policy
-
-* Fail fast (configuration error) if a placeholder cannot be resolved; suggest similar keys
-* Provide `--dump-context` (debug) to print available variables for troubleshooting
-
-## 7) Library API (for embedding)
-
-### 7.1 Packages
-
-* `pkg/buildfab`: main API functions
-  * `RunStage(ctx, name, opts) (Report, error)`
-  * `RunAction(ctx, name, opts) (Report, error)`
-  * `RunStageStep(ctx, stage, step, opts)` (with/without requires)
-* `internal/actions`: register and implement `uses:` actions (`git@untracked`, etc.)
-* `internal/variables`: variable providers (git state, version lib adapter)
-
-### 7.2 Embedding Pattern (pre-push)
-
-* `pre-push` loads the same `project.yml`, constructs `Runner`, then calls:
-  * `RunStage(ctx, "pre-push", opts)`
-    matching the exact steps shown in the working YAML
-
-## 8) Built-in Actions
-
-### Git Actions
+#### Git Actions
 - `git@untracked` - Fail if untracked files present
 - `git@uncommitted` - Fail if staged/unstaged changes present  
 - `git@modified` - Fail if working tree differs from HEAD
 
-### Version Actions
+#### Version Actions
 - `version@check` - Validate version format and consistency
 - `version@check-greatest` - Ensure current version is greatest
 
-## 9) Security & Safety
+#### Custom Actions
+- `run:` - Execute shell commands with full variable interpolation
+- Support for any external tool or script execution
 
-* `run:` executes shell; document this clearly and recommend reviewing YAML in VCS
-* Provide `--allow-run` (default true) and `--deny-run` mode (only `uses:` allowed) for locked environments
-* Sanitize/escape variable expansions where injected into shell; support disabling interpolation per step in future
+## 4) Library Architecture
 
-## 10) Acceptance Criteria
+### Package Structure
 
-1. Can run `buildfab run pre-push` and reproduce the behavior from the attached YAML, honoring `require`, `only`, and `onerror`
-2. Can run a **single action**: `buildfab action run-tests` (standalone)
-3. Can run a **single step** in a stage: `buildfab run pre-push version-module`
-4. Produces colorized, deterministic summaries; prints repro commands on failures
-5. Library API callable by the `pre-push` binary to run `pre-push` stage
+```
+buildfab/
+├── cmd/buildfab/           # CLI application
+│   └── main.go
+├── pkg/buildfab/           # Public API
+│   ├── buildfab.go         # Main API functions
+│   ├── types.go            # Public types and interfaces
+│   └── errors.go           # Error types
+├── internal/
+│   ├── config/             # YAML parsing and validation
+│   ├── executor/           # DAG execution engine
+│   ├── actions/            # Built-in action implementations
+│   ├── variables/          # Variable interpolation
+│   └── ui/                 # Output formatting and display
+└── examples/               # Usage examples
+```
+
+### Core Components
+
+#### 1. Configuration Parser (`internal/config/`)
+- YAML file parsing and validation
+- Schema validation for project.yml format
+- Variable resolution and interpolation
+- Action and stage definition parsing
+
+#### 2. DAG Executor (`internal/executor/`)
+- Dependency graph construction
+- Cycle detection and validation
+- Parallel execution scheduling
+- Error policy enforcement
+- Result aggregation and reporting
+
+#### 3. Action Registry (`internal/actions/`)
+- Built-in action implementations
+- Action discovery and instantiation
+- Custom action execution (run: commands)
+- Action result formatting
+
+#### 4. Variable System (`internal/variables/`)
+- Variable interpolation engine
+- Git state detection (tag, branch)
+- Version information integration
+- Custom variable support
+
+#### 5. UI System (`internal/ui/`)
+- Colored output formatting
+- Progress indication
+- Error reporting and reproduction hints
+- Verbose and debug output modes
+
+## 5) CLI Interface
+
+### Commands
+
+```bash
+buildfab [options] [command]
+
+Commands:
+  run <stage>     Run a specific stage from project.yml
+  list-actions    List available built-in actions
+  validate        Validate project.yml configuration
+  version         Show version information
+
+Options:
+  -c, --config string    Path to project.yml (default: ".project.yml")
+  -j, --max-parallel int Maximum parallel execution (default: CPU count)
+  -v, --verbose          Enable verbose output
+  -d, --debug            Enable debug output
+  -w, --working-dir string Working directory
+  -h, --help             Show help information
+  -V, --version          Show version only
+```
+
+### Example Usage
+
+```bash
+# Run pre-push stage
+buildfab run pre-push
+
+# Run with custom config and verbose output
+buildfab -c my-project.yml -v run pre-push
+
+# List available actions
+buildfab list-actions
+
+# Validate configuration
+buildfab validate
+```
+
+## 6) Integration with pre-push
+
+The pre-push utility will use buildfab as its execution engine:
+
+```go
+package main
+
+import (
+    "context"
+    "os"
+    "github.com/user/buildfab"
+)
+
+func main() {
+    ctx := context.Background()
+    
+    opts := &buildfab.RunOptions{
+        ConfigPath:  ".project.yml",
+        Verbose:     true,
+        WorkingDir:  ".",
+    }
+    
+    err := buildfab.RunStage(ctx, "pre-push", opts)
+    if err != nil {
+        os.Exit(1)
+    }
+}
+```
+
+## 7) Error Handling
+
+### Error Policies
+- **stop** (default): Halt execution on step failure
+- **warn**: Continue execution but mark step as warning
+
+### Error Types
+- **ConfigurationError**: Invalid project.yml format or content
+- **ExecutionError**: Step execution failure
+- **DependencyError**: Circular dependencies or missing dependencies
+- **VariableError**: Unresolved variable interpolation
+
+### Error Reporting
+- Clear error messages with context
+- Reproduction hints for failed actions
+- Step-by-step execution trace in debug mode
+- Exit codes: 0 (success), 1 (error), 2 (configuration error)
+
+## 8) Testing Strategy
+
+### Test Types
+- **Unit tests**: Individual component testing
+- **Integration tests**: End-to-end stage execution
+- **E2E tests**: Full workflow testing with temporary projects
+- **Race detection**: Concurrency safety validation
+
+### Test Coverage
+- Configuration parsing and validation
+- DAG construction and execution
+- Variable interpolation
+- Action execution (built-in and custom)
+- Error handling and policies
+- CLI interface and output formatting
+
+## 9) Build and Packaging
+
+**Note**: Build and packaging for buildfab will follow the same system as the pre-push project:
+
+### Build System
+- **CMake**: Cross-platform build configuration
+- **Conan**: Go toolchain and dependency management
+- **GoReleaser**: Automated release and packaging
+- **GitHub Actions**: CI/CD pipeline
+
+### Packaging Targets
+- **Linux**: tar.gz archives with install.sh script
+- **Windows**: Scoop manifest for package manager
+- **macOS**: Homebrew formula
+- **Cross-platform**: Static binaries (amd64/arm64)
+
+### Release Process
+1. Version bump in VERSION file
+2. Update CHANGELOG.md
+3. Create git tag
+4. Push to repository
+5. GoReleaser builds and publishes releases
+6. Package managers updated automatically
+
+## 10) Dependencies
+
+### Core Dependencies
+- `gopkg.in/yaml.v3`: YAML configuration parsing
+- `golang.org/x/sync/errgroup`: Parallel execution management
+- `github.com/spf13/cobra`: CLI framework (optional)
+
+### Development Dependencies
+- `golangci-lint`: Code linting and quality checks
+- `go test`: Testing framework
+- `gofmt`: Code formatting
+- `goimports`: Import organization
+
+### Build Dependencies
+- `conanfile-golang.py`: Go toolchain via Conan
+- `CMakeLists.txt`: Cross-platform build configuration
+- `.goreleaser.yml`: Release automation
+
+## 11) Performance Considerations
+
+### Optimization Targets
+- **Fast startup**: Minimal initialization overhead
+- **Efficient execution**: Parallel processing where possible
+- **Memory usage**: Stream processing for large outputs
+- **I/O efficiency**: Minimize file system operations
+
+### Scalability
+- Support for large dependency graphs
+- Efficient parallel execution scheduling
+- Memory-efficient variable interpolation
+- Streaming output for long-running actions
+
+## 12) Security Considerations
+
+### Input Validation
+- YAML file validation and sanitization
+- Variable interpolation safety
+- Command execution sandboxing
+- Path traversal prevention
+
+### Safe Execution
+- No arbitrary code execution in built-in actions
+- Command injection prevention
+- Secure file handling
+- Environment variable sanitization
+
+## 13) Future Extensions
+
+### Planned Features
+- **Matrix execution**: Run actions across multiple configurations
+- **Conditional execution**: Advanced condition expressions
+- **Action composition**: Reusable action definitions
+- **Plugin system**: External action registration
+- **Webhook integration**: Remote trigger support
+- **Metrics collection**: Execution timing and statistics
+
+### API Evolution
+- Backward compatibility for major versions
+- Deprecation warnings for removed features
+- Clear migration paths for breaking changes
+- Comprehensive documentation for all changes
+
+## 14) Documentation Requirements
+
+### Required Documentation
+- **README.md**: Installation, usage, and examples
+- **API documentation**: Complete GoDoc comments
+- **Configuration reference**: project.yml format specification
+- **Migration guide**: Upgrading between versions
+- **CHANGELOG.md**: Version history and changes
+
+### Example Projects
+- **Basic usage**: Simple project.yml examples
+- **Advanced workflows**: Complex dependency scenarios
+- **Integration examples**: Using with other tools
+- **Custom actions**: Creating project-specific actions
+
+This specification provides a comprehensive foundation for the buildfab library that will serve as the execution engine for pre-push and other automation tools requiring flexible, dependency-aware workflow execution.

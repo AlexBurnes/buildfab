@@ -1,6 +1,43 @@
 # Product Context: buildfab
 
-## Problem Statement
+## Core Purpose
+
+**buildfab** is a **universal build orchestration system** designed to replace fragmented build scripts used in local development, CI/CD, and containers with a single declarative format.
+
+### Key Concept
+
+**Describe all build, test, and release logic in one `.project.yml` file** that works identically:
+- **Locally** - developers run the same commands as CI
+- **In CI (GitHub/GitLab)** - buildfab executes inside containers with same YAML
+- **In containers** - test project builds in clean environments using same configuration
+- **In Git hooks** - automated validation via pre-push utility
+
+### The Problem: Build Fragmentation
+
+Modern projects have **scattered automation logic**:
+- 📄 Bash scripts for local builds
+- 📄 Different YAML for CI pipelines (GitHub Actions, GitLab CI)
+- 📄 Custom Dockerfiles and entrypoint scripts for containers
+- 📄 Platform-specific setup scripts for different OS/distros
+
+This fragmentation creates:
+- ❌ **Duplicated logic** across different environments
+- ❌ **Inconsistencies** between local and CI behavior
+- ❌ **"Works on my machine"** syndrome
+- ❌ **High maintenance** burden with scattered scripts
+
+### The Solution: Single Source of Truth
+
+buildfab unifies all build logic into **one `.project.yml`** that serves as the **single source of truth** for:
+- Build stages and actions
+- Dependency graphs
+- Platform variants
+- Matrix configurations
+- Container workflows
+- Error policies
+
+## Problem Statement (Original)
+
 Current project automation relies on complex bash scripts that are difficult to maintain, debug, and extend. The pre-push utility and similar tools need a robust, dependency-aware execution engine that can handle complex workflows with parallel execution, error policies, and clear reporting.
 
 ## User Experience Goals
