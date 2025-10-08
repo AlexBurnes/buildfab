@@ -32,15 +32,23 @@ type VersionInfo struct {
 }
 
 // DetectCurrentVersion detects the current version from various sources
+// Uses version.GetVersion() to return version WITHOUT 'v' prefix
 func (d *Detector) DetectCurrentVersion(ctx context.Context) (string, error) {
-	// Try to read from VERSION file first
-	if version, err := d.readVersionFile(); err == nil {
-		return version, nil
+	// Use version-go library GetVersion() to get version WITHOUT 'v' prefix
+	if ver, err := version.GetVersion(); err == nil && ver != "" {
+		return ver, nil
+	}
+	
+	// Fallback to VERSION file if version library fails
+	// Remove 'v' prefix if present to match GetVersion() behavior
+	if ver, err := d.readVersionFile(); err == nil && ver != "" {
+		return strings.TrimPrefix(ver, "v"), nil
 	}
 	
 	// Fallback to git tag detection
-	if version, err := d.detectGitTag(ctx); err == nil {
-		return version, nil
+	// Remove 'v' prefix if present to match GetVersion() behavior
+	if ver, err := d.detectGitTag(ctx); err == nil && ver != "" {
+		return strings.TrimPrefix(ver, "v"), nil
 	}
 	
 	// Final fallback
@@ -105,7 +113,7 @@ func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, 
 		"version.patch":   fmt.Sprintf("%d", info.Patch),
 	}
 	
-	// Add new variables from version-go v1.4.0
+	// Add new variables from version-go v1.4.2
 	if buildType, err := version.GetBuildType(info.Version); err == nil {
 		variables["version.build-type"] = buildType
 	}
@@ -124,8 +132,9 @@ func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, 
 		}
 	}
 	
-	// Add Git tag and branch variables
-	if tag, err := d.detectGitTag(ctx); err == nil && tag != "" {
+	// Add Git tag variable using version-go library GetRawTag() (v1.4.2+)
+	// Returns the raw git tag exactly as it appears (e.g., "v0.21.1")
+	if tag, err := version.GetRawTag(); err == nil && tag != "" {
 		variables["version.tag"] = tag
 	} else {
 		variables["version.tag"] = "unknown"

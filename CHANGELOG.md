@@ -8,6 +8,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.0] - 2025-10-08
+
+### Added
+- **New Version Variable**: Added `version.tag` variable using `GetRawTag()` method from version-go library
+  - Returns raw git tag WITH 'v' prefix (e.g., "v0.22.0")
+  - Useful for git operations requiring full tag format
+  - Accessible in all contexts (stages, actions, matrix, containers)
+
+### Changed
+- **Version Detection**: Fixed version variable detection to use correct `GetVersion()` API from version-go library
+  - `version` and `version.version` now return version WITHOUT 'v' prefix (e.g., "0.22.0")
+  - Properly formatted for Docker tags (e.g., `myapp:0.22.0`)
+  - Modified `getProjectVersion()` in `cmd/buildfab/main.go` to use `version.GetVersion()`
+  - Modified `DetectCurrentVersion()` in `internal/version/version.go` to use `version.GetVersion()`
+  - Both functions now return consistent values without 'v' prefix
+
+- **Version Library**: Updated version-go from v1.4.0 to v1.4.2
+  - New `GetRawTag()` method for raw git tag access
+  - Latest version detection improvements
+  - Enhanced version type classification
+
+### Fixed
+- **Variable Consistency**: Both `version` and `version.version` now return the same value
+  - Previously returned different values due to inconsistent detection methods
+  - Now both use `GetVersion()` from version-go library
+  - Ensures consistent behavior across all use cases
+
+### Technical Details
+- **File Modified**: `cmd/buildfab/main.go` - Added version-go import, updated `getProjectVersion()` to use `GetVersion()`
+- **File Modified**: `internal/version/version.go` - Updated `DetectCurrentVersion()` to use `GetVersion()`, added `version.tag` variable using `GetRawTag()`
+- **File Modified**: `internal/version/version_test.go` - Updated test expectations to match new behavior (version without 'v' prefix)
+- **File Modified**: `go.mod` - Upgraded version-go to v1.4.2
+- **File Modified**: `go.sum` - Updated checksums for version-go v1.4.2
+
+### Testing
+- **All 12 Version Variables Verified**: version, version.version, version.tag, version.project, version.major, version.minor, version.patch, version.type, version.build-type, version.version-type, version.branch, version.commit
+- **Complete Context Testing**: Verified all variables work correctly in:
+  - Regular stage execution
+  - Direct action execution
+  - Matrix-expanded steps
+  - Container execution
+  - Container + matrix combined execution
+- **Unit Tests**: All version tests pass with updated expectations
+
 ## [0.21.1] - 2025-10-08
 
 ### Fixed

@@ -2,6 +2,21 @@
 
 ## What Works
 
+- **Version Variables Enhancement** (v0.22.0 - October 8, 2025): Successfully updated version-go library to v1.4.2, fixed version variable detection, and added new version.tag variable (100% complete)
+  - **Version Library Updated** - Upgraded from version-go v1.4.0 to v1.4.2 with latest version detection improvements and new GetRawTag() method
+  - **Version Detection Fixed** - Modified getProjectVersion() in cmd/buildfab/main.go to use version.GetVersion() from version-go library (returns version WITHOUT 'v' prefix)
+  - **Internal Detection Fixed** - Updated DetectCurrentVersion() in internal/version/version.go to use version.GetVersion() ensuring consistent behavior
+  - **New Variable Added** - Added version.tag variable using version.GetRawTag() method (returns raw git tag WITH 'v' prefix for git operations)
+  - **Variable Consistency** - Both version and version.version now return same value without 'v' prefix (e.g., "0.22.0")
+  - **All 12 Variables Verified** - version, version.version, version.tag, version.project, version.major, version.minor, version.patch, version.type, version.build-type, version.version-type, version.branch, version.commit
+  - **Complete Context Testing** - Verified all variables work in regular stages, direct actions, matrix execution, container execution, and container+matrix combinations
+  - **Tests Updated** - Updated internal/version/version_test.go to expect correct behavior (version without 'v' prefix)
+  - **Docker Tag Formatting** - Version variables now properly formatted for Docker tags (e.g., myapp:0.22.0 instead of myapp:v0.22.0)
+  - **Git Operations Support** - version.tag variable provides raw git tag with 'v' prefix for git operations (e.g., git tag v0.22.0)
+  - **Files Modified** - cmd/buildfab/main.go (import added, getProjectVersion() updated), internal/version/version.go (DetectCurrentVersion() fixed, version.tag added), internal/version/version_test.go (expectations updated), go.mod (version-go v1.4.2), go.sum (checksums updated)
+  - **Production Ready** - All version variables correctly detected and accessible in all execution contexts using proper version-go library functions
+  - **VERSION 0.22.0 RELEASED** - Version variables enhancement completed and ready for production use
+
 - **Race Condition Fixes** (v0.21.1 - October 8, 2025): Successfully fixed critical race conditions in DAG executor and pool context cancellation hang (100% complete)
   - **DAG Executor Race Condition** - Fixed concurrent map access race conditions in `executeDAGWithOrderedStreaming` by adding mutex synchronization to all shared state map accesses (`displayed`, `completed`, `started`)
   - **Thread-Safe Helper Functions** - Created `checkAndDisplayNextStep`, `displayStepInOrder`, `displayStepInOrderLocked`, `canDisplayStepInOrderLocked`, `displayRemainingSteps` with proper mutex locking

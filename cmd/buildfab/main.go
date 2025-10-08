@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/AlexBurnes/buildfab/pkg/buildfab"
-	"github.com/AlexBurnes/buildfab/internal/version"
+	versiongo "github.com/AlexBurnes/version-go/pkg/version"
 )
 
 const (
@@ -33,22 +33,21 @@ func getVersion() string {
 	return "unknown"
 }
 
-// getProjectVersion returns the project version using the version library
+// getProjectVersion returns the project version using the version-go library
 func getProjectVersion() string {
-	// Use the version library to detect the current project version
-	// This will read from VERSION file or detect from git tags
-	detector := version.New()
-	ctx := context.Background()
-	
-	if version, err := detector.DetectCurrentVersion(ctx); err == nil && version != "" {
-		return version
+	// Use version-go library GetVersion() to get version WITHOUT 'v' prefix
+	// This is correct for most use cases like Docker tags: buildfab:0.21.1
+	if ver, err := versiongo.GetVersion(); err == nil && ver != "" {
+		return ver
 	}
 	
 	// Fallback to VERSION file if version library fails
+	// Remove 'v' prefix if present to match GetVersion() behavior
 	if data, err := os.ReadFile("VERSION"); err == nil {
-		version := strings.TrimSpace(string(data))
-		if version != "" {
-			return version
+		ver := strings.TrimSpace(string(data))
+		if ver != "" {
+			// Remove 'v' prefix if present
+			return strings.TrimPrefix(ver, "v")
 		}
 	}
 	

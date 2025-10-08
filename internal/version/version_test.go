@@ -52,8 +52,8 @@ func TestDetector_DetectCurrentVersion(t *testing.T) {
 	if err != nil {
 		t.Errorf("DetectCurrentVersion() unexpected error: %v", err)
 	}
-	if version != "v1.2.3" {
-		t.Errorf("DetectCurrentVersion() = %v, want %v", version, "v1.2.3")
+	if version != "1.2.3" {
+		t.Errorf("DetectCurrentVersion() = %v, want %v", version, "1.2.3")
 	}
 }
 
@@ -86,8 +86,8 @@ func TestDetector_DetectVersionInfo(t *testing.T) {
 	if err != nil {
 		t.Errorf("DetectVersionInfo() unexpected error: %v", err)
 	}
-	if versionInfo.Version != "v1.2.3" {
-		t.Errorf("Version = %v, want %v", versionInfo.Version, "v1.2.3")
+	if versionInfo.Version != "1.2.3" {
+		t.Errorf("Version = %v, want %v", versionInfo.Version, "1.2.3")
 	}
 }
 
@@ -140,8 +140,8 @@ func TestDetector_GetVersionVariables(t *testing.T) {
 	}
 
 	// Check specific values
-	if variables["version.version"] != "v1.2.3" {
-		t.Errorf("version.version = %v, want %v", variables["version.version"], "v1.2.3")
+	if variables["version.version"] != "1.2.3" {
+		t.Errorf("version.version = %v, want %v", variables["version.version"], "1.2.3")
 	}
 	if variables["version.major"] != "1" {
 		t.Errorf("version.major = %v, want %v", variables["version.major"], "1")

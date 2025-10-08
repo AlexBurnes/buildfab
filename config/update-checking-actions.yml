@@ -337,3 +337,11 @@ actions:
         # Don't exit with error as this is optional
       fi
 
+
+  - name: repo-size
+    run: |
+      curl -s https://api.github.com/repos/AlexBurnes/pre-push | jq '.size * 1024' | numfmt --to=iec --suffix=B
+
+  - name: release-size
+    run: |
+      curl -s https://api.github.com/repos/AlexBurnes/pre-push/releases | jq '[.[] | .assets[]?.size] | add' | numfmt --to=iec --suffix=B
