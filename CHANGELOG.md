@@ -8,6 +8,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 2025-10-09
+
+### Added
+- **Step-Level Variable Overrides**: Added ability to define variables at step level that override global variables
+  - New `variables` field in `Step` struct allows step-specific variable configuration
+  - Step variables take precedence over global variables during action execution
+  - Variables are automatically restored after step execution completes
+  - Supports both regular steps and matrix steps
+  - Step variables apply to all matrix jobs when used with matrix configuration
+  - Example usage:
+    ```yaml
+    stages:
+      build:
+        steps:
+          - action: build-image
+            variables:
+              image: "registry.svc/burnes/production"
+              tag: "v1.0.0"
+    ```
+  - Variable precedence (highest to lowest):
+    1. Step variables (`step.variables`)
+    2. Matrix variables (generated during matrix expansion)
+    3. Global variables (`RunOptions.Variables`)
+    4. Built-in variables (platform, version, environment)
+  - Implementation includes:
+    - `mergeStepVariables()` helper function for merging step and global variables
+    - `withStepVariables()` wrapper function that temporarily sets merged variables and restores them after execution
+    - Updated `executeStepRegular()` to use step variable merging
+    - Updated `executeStepWithMatrix()` to support step variables with matrix execution
+  - Files modified: `pkg/buildfab/buildfab.go`
+  - Tests added: `pkg/buildfab/variables_test.go` with comprehensive test coverage for variable merging
+  - Example configuration: `examples/step-variables-example.yml` demonstrating various use cases
+  - Documentation updated:
+    - `docs/YAML-syntax-reference.md` - Added "Step-Level Variables" section with syntax and examples
+    - `docs/Project-specification.md` - Added variable precedence documentation
+  - This feature enables:
+    - Reusing actions with different configurations in the same stage
+    - Overriding matrix variables for specific steps
+    - Providing step-specific configuration without modifying global variables
+    - Supporting multi-environment builds in a single stage
+
 ## [0.23.4] - 2025-10-09
 
 ### Fixed

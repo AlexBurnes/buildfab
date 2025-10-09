@@ -68,14 +68,15 @@ type Stage struct {
 
 // Step represents a single step in a stage
 type Step struct {
-	Action      string   `yaml:"action"`
-	Description string   `yaml:"description,omitempty"` // Step description for display
-	Require     []string `yaml:"require,omitempty"`
-	DependsOn   []string `yaml:"depends_on,omitempty"` // Alternative to require
-	OnError     string   `yaml:"onerror,omitempty"`
-	If          string   `yaml:"if,omitempty"`
-	Only        []string `yaml:"only,omitempty"`
-	Matrix      *MatrixConfig `yaml:"matrix,omitempty"` // Matrix configuration for this step
+	Action      string            `yaml:"action"`
+	Description string            `yaml:"description,omitempty"` // Step description for display
+	Require     []string          `yaml:"require,omitempty"`
+	DependsOn   []string          `yaml:"depends_on,omitempty"` // Alternative to require
+	OnError     string            `yaml:"onerror,omitempty"`
+	If          string            `yaml:"if,omitempty"`
+	Only        []string          `yaml:"only,omitempty"`
+	Matrix      *MatrixConfig     `yaml:"matrix,omitempty"`     // Matrix configuration for this step
+	Variables   map[string]string `yaml:"variables,omitempty"`  // Step-level variable overrides
 	
 	// Pool assignment (internal, not from YAML)
 	PoolID      string   `yaml:"-"` // Pool identifier for this step (e.g., "matrix-build")
@@ -1170,6 +1171,50 @@ func (r *Runner) executeStageWithCallback(ctx context.Context, steps []Step) err
 	return err
 }
 
+// mergeStepVariables creates a new variable map by merging step variables with global variables.
+// Step variables take precedence over global variables.
+func (r *Runner) mergeStepVariables(step Step) map[string]string {
+	if len(step.Variables) == 0 {
+		return r.opts.Variables
+	}
+	
+	// Create a copy of global variables
+	merged := make(map[string]string, len(r.opts.Variables)+len(step.Variables))
+	for k, v := range r.opts.Variables {
+		merged[k] = v
+	}
+	
+	// Override with step variables
+	for k, v := range step.Variables {
+		merged[k] = v
+	}
+	
+	return merged
+}
+
+// withStepVariables temporarily replaces runner variables with merged step+global variables
+// and restores them after the function completes.
+func (r *Runner) withStepVariables(step Step, fn func() error) error {
+	if len(step.Variables) == 0 {
+		// No step variables, execute directly
+		return fn()
+	}
+	
+	// Save original variables
+	originalVars := r.opts.Variables
+	
+	// Set merged variables
+	r.opts.Variables = r.mergeStepVariables(step)
+	
+	// Restore original variables when done
+	defer func() {
+		r.opts.Variables = originalVars
+	}()
+	
+	// Execute the function
+	return fn()
+}
+
 // executeStepWithMatrix handles step execution with matrix support
 func (r *Runner) executeStepWithMatrix(ctx context.Context, step Step) error {
 	// Debug output
@@ -1184,67 +1229,133 @@ func (r *Runner) executeStepWithMatrix(ctx context.Context, step Step) error {
 		return r.executeStepRegular(ctx, step)
 	}
 	
-	// Get the action for this step
-	action, exists := r.config.GetAction(step.Action)
-	if !exists {
-		return fmt.Errorf("action not found: %s", step.Action)
-	}
-	
-	// Create matrix expander
-	expander := NewMatrixExpander(r.config)
-	
-	// Expand matrix into jobs
-	jobs, err := expander.ExpandMatrix(&step, &action)
-	if err != nil {
-		return fmt.Errorf("failed to expand matrix: %w", err)
-	}
-	
-	if len(jobs) == 0 {
-		// No matrix jobs to execute
-		return nil
-	}
-	
-	// Set default strategy values if not specified
-	strategy := step.Matrix.Strategy
-	if strategy.MaxParallel <= 0 {
-		strategy.MaxParallel = r.opts.MaxParallel
-	}
-	if strategy.Order == "" {
-		strategy.Order = "fifo"
-	}
-	
-	// Create matrix scheduler
-	scheduler := NewMatrixScheduler(jobs, strategy, strategy.MaxParallel, r.opts)
-	
-	// Set step callback if available
-	if r.opts.StepCallback != nil {
-		scheduler.SetStepCallback(r.opts.StepCallback, step.Action)
-	}
-	
-	// Execute matrix jobs
-	return scheduler.ScheduleJobs(r, r.opts)
+	// Wrap execution with step variable merging
+	// Step variables apply to all matrix jobs
+	return r.withStepVariables(step, func() error {
+		// Get the action for this step
+		action, exists := r.config.GetAction(step.Action)
+		if !exists {
+			return fmt.Errorf("action not found: %s", step.Action)
+		}
+		
+		// Create matrix expander
+		expander := NewMatrixExpander(r.config)
+		
+		// Expand matrix into jobs
+		jobs, err := expander.ExpandMatrix(&step, &action)
+		if err != nil {
+			return fmt.Errorf("failed to expand matrix: %w", err)
+		}
+		
+		if len(jobs) == 0 {
+			// No matrix jobs to execute
+			return nil
+		}
+		
+		// Set default strategy values if not specified
+		strategy := step.Matrix.Strategy
+		if strategy.MaxParallel <= 0 {
+			strategy.MaxParallel = r.opts.MaxParallel
+		}
+		if strategy.Order == "" {
+			strategy.Order = "fifo"
+		}
+		
+		// Create matrix scheduler
+		scheduler := NewMatrixScheduler(jobs, strategy, strategy.MaxParallel, r.opts)
+		
+		// Set step callback if available
+		if r.opts.StepCallback != nil {
+			scheduler.SetStepCallback(r.opts.StepCallback, step.Action)
+		}
+		
+		// Execute matrix jobs
+		return scheduler.ScheduleJobs(r, r.opts)
+	})
 }
 
 // executeStepRegular handles regular step execution without matrix
 func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
-	// Check if it's a built-in action
-	if runner, exists := r.registry.GetRunner(step.Action); exists {
+	// Wrap execution with step variable merging
+	return r.withStepVariables(step, func() error {
+		// Check if it's a built-in action
+		if runner, exists := r.registry.GetRunner(step.Action); exists {
+			// Call step start callback if provided
+			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepStart(ctx, step.Action)
+			}
+
+			// Handle dry-run mode for built-in actions
+			if r.opts.DryRun {
+				description := runner.Description()
+				if r.opts.StepCallback != nil {
+					r.opts.StepCallback.OnStepComplete(ctx, step.Action, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
+				}
+				return nil
+			}
+
+			start := time.Now()
+			result, err := runner.Run(ctx)
+			duration := time.Since(start)
+
+			// Call step complete callback if provided
+			if r.opts.StepCallback != nil {
+				status := StepStatusOK
+				message := "executed successfully"
+				
+				// Prioritize result status and message over error when available
+				if result.Status == StatusError {
+					status = StepStatusError
+					message = result.Message
+					if err != nil {
+						r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+					}
+				} else if result.Status == StatusWarn {
+					status = StepStatusWarn
+					message = result.Message
+				} else if result.Status == StatusSkipped {
+					status = StepStatusSkipped
+					message = result.Message
+				} else if err != nil {
+					status = StepStatusError
+					message = err.Error()
+					r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+				}
+				
+				r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration, "")
+			}
+
+			return err
+		}
+
+		// Check if it's a custom action
+		action, exists := r.config.GetAction(step.Action)
+		if !exists {
+			return fmt.Errorf("action not found: %s", step.Action)
+		}
+
 		// Call step start callback if provided
 		if r.opts.StepCallback != nil {
 			r.opts.StepCallback.OnStepStart(ctx, step.Action)
 		}
 
-		// Handle dry-run mode for built-in actions
+		// Handle dry-run mode for custom actions
 		if r.opts.DryRun {
-			description := runner.Description()
+			err := r.runActionInternalDryRun(ctx, action)
 			if r.opts.StepCallback != nil {
-				r.opts.StepCallback.OnStepComplete(ctx, step.Action, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
+				status := StepStatusOK
+				message := "would execute action"
+				if err != nil {
+					status = StepStatusError
+					message = err.Error()
+				}
+				r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, 0, "")
 			}
-			return nil
+			return err
 		}
 
 		start := time.Now()
-		result, err := runner.Run(ctx)
+		err := r.runActionInternal(ctx, action)
 		duration := time.Since(start)
 
 		// Call step complete callback if provided
@@ -1252,20 +1363,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 			status := StepStatusOK
 			message := "executed successfully"
 			
-			// Prioritize result status and message over error when available
-			if result.Status == StatusError {
-				status = StepStatusError
-				message = result.Message
-				if err != nil {
-					r.opts.StepCallback.OnStepError(ctx, step.Action, err)
-				}
-			} else if result.Status == StatusWarn {
-				status = StepStatusWarn
-				message = result.Message
-			} else if result.Status == StatusSkipped {
-				status = StepStatusSkipped
-				message = result.Message
-			} else if err != nil {
+			if err != nil {
 				status = StepStatusError
 				message = err.Error()
 				r.opts.StepCallback.OnStepError(ctx, step.Action, err)
@@ -1275,53 +1373,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 		}
 
 		return err
-	}
-
-	// Check if it's a custom action
-	action, exists := r.config.GetAction(step.Action)
-	if !exists {
-		return fmt.Errorf("action not found: %s", step.Action)
-	}
-
-	// Call step start callback if provided
-	if r.opts.StepCallback != nil {
-		r.opts.StepCallback.OnStepStart(ctx, step.Action)
-	}
-
-	// Handle dry-run mode for custom actions
-	if r.opts.DryRun {
-		err := r.runActionInternalDryRun(ctx, action)
-		if r.opts.StepCallback != nil {
-			status := StepStatusOK
-			message := "would execute action"
-			if err != nil {
-				status = StepStatusError
-				message = err.Error()
-			}
-			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, 0, "")
-		}
-		return err
-	}
-
-	start := time.Now()
-	err := r.runActionInternal(ctx, action)
-	duration := time.Since(start)
-
-	// Call step complete callback if provided
-	if r.opts.StepCallback != nil {
-		status := StepStatusOK
-		message := "executed successfully"
-		
-		if err != nil {
-			status = StepStatusError
-			message = err.Error()
-			r.opts.StepCallback.OnStepError(ctx, step.Action, err)
-		}
-		
-		r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration, "")
-	}
-
-	return err
+	})
 }
 
 // executeDAGWithCallback executes the DAG using step callbacks for output management
@@ -1608,99 +1660,118 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	var result Result
 	var err error
 
-	// Measure execution time from when the action actually starts to when it finishes
-	start := time.Now()
-	
-	// Handle variants - select appropriate variant or skip if no match
-	variant, variantErr := action.SelectVariant(r.opts.Variables)
-	if variantErr != nil {
-		result = Result{
-			Status:  StatusError,
-			Message: variantErr.Error(),
-			Error:   variantErr,
-		}
-		duration := time.Since(start)
-		result.Duration = duration
-		
-		// Call step complete callback if provided
-		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusError, variantErr.Error(), duration, "")
-		}
-		
-		return result, variantErr
-	}
-	
-	// If variant is nil and action has variants, it means no variant matched - skip
-	if variant == nil && len(action.Variants) > 0 {
-		result = Result{
-			Status:  StatusSkipped,
-			Message: "no matching variant",
-		}
-		duration := time.Since(start)
-		result.Duration = duration
-		
-		// Call step complete callback if provided
-		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", duration, "")
-		}
-		
-		return result, nil // Not an error, just skipped
-	}
-	
-	// Use variant if available, otherwise use action directly
-	effectiveAction := action
-	if variant != nil {
-		effectiveAction = Action{
-			Name:      action.Name,
-			Run:       variant.Run,
-			Uses:      variant.Uses,
-			Shell:     variant.Shell,
-			Container: action.Container, // Preserve container configuration
-		}
-	}
-	
-	if effectiveAction.Uses != "" {
-		result, err = r.runBuiltInActionForDAG(ctx, effectiveAction)
+	// Create a step for variable merging if we have stepConfig
+	var stepForVars Step
+	if stepConfig != nil {
+		stepForVars = *stepConfig
 	} else {
-		result, err = r.runCustomActionForDAG(ctx, effectiveAction)
-	}
-	duration := time.Since(start)
-	
-	// Set the duration in the result
-	result.Duration = duration
-
-	// Apply onerror policy if step has one
-	if result.Status == StatusError && stepConfig != nil && stepConfig.OnError == "warn" {
-		// Convert error to warning
-		result.Status = StatusWarn
-		err = nil // Clear the error since it's now a warning
+		stepForVars = Step{Action: action.Name}
 	}
 
-	// Call step complete callback if provided
-	if r.opts.StepCallback != nil {
-		status := StepStatusOK
-		message := "executed successfully"
+	// Wrap execution with step variable merging
+	execErr := r.withStepVariables(stepForVars, func() error {
+		// Measure execution time from when the action actually starts to when it finishes
+		start := time.Now()
 		
-		// Prioritize result status and message over error when available
-		if result.Status == StatusError {
-			status = StepStatusError
-			message = result.Message
-			if err != nil {
+		// Handle variants - select appropriate variant or skip if no match
+		variant, variantErr := action.SelectVariant(r.opts.Variables)
+		if variantErr != nil {
+			result = Result{
+				Status:  StatusError,
+				Message: variantErr.Error(),
+				Error:   variantErr,
+			}
+			duration := time.Since(start)
+			result.Duration = duration
+			
+			// Call step complete callback if provided
+			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusError, variantErr.Error(), duration, "")
+			}
+			
+			err = variantErr
+			return err
+		}
+		
+		// If variant is nil and action has variants, it means no variant matched - skip
+		if variant == nil && len(action.Variants) > 0 {
+			result = Result{
+				Status:  StatusSkipped,
+				Message: "no matching variant",
+			}
+			duration := time.Since(start)
+			result.Duration = duration
+			
+			// Call step complete callback if provided
+			if r.opts.StepCallback != nil {
+				r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", duration, "")
+			}
+			
+			return nil // Not an error, just skipped
+		}
+		
+		// Use variant if available, otherwise use action directly
+		effectiveAction := action
+		if variant != nil {
+			effectiveAction = Action{
+				Name:      action.Name,
+				Run:       variant.Run,
+				Uses:      variant.Uses,
+				Shell:     variant.Shell,
+				Container: action.Container, // Preserve container configuration
+			}
+		}
+		
+		if effectiveAction.Uses != "" {
+			result, err = r.runBuiltInActionForDAG(ctx, effectiveAction)
+		} else {
+			result, err = r.runCustomActionForDAG(ctx, effectiveAction)
+		}
+		duration := time.Since(start)
+		
+		// Set the duration in the result
+		result.Duration = duration
+
+		// Apply onerror policy if step has one
+		if result.Status == StatusError && stepConfig != nil && stepConfig.OnError == "warn" {
+			// Convert error to warning
+			result.Status = StatusWarn
+			err = nil // Clear the error since it's now a warning
+		}
+
+		// Call step complete callback if provided
+		if r.opts.StepCallback != nil {
+			status := StepStatusOK
+			message := "executed successfully"
+			
+			// Prioritize result status and message over error when available
+			if result.Status == StatusError {
+				status = StepStatusError
+				message = result.Message
+				if err != nil {
+					r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+				}
+			} else if result.Status == StatusWarn {
+				status = StepStatusWarn
+				message = result.Message
+			} else if result.Status == StatusSkipped {
+				status = StepStatusSkipped
+				message = result.Message
+			} else if err != nil {
+				status = StepStatusError
+				message = err.Error()
 				r.opts.StepCallback.OnStepError(ctx, action.Name, err)
 			}
-		} else if result.Status == StatusWarn {
-			status = StepStatusWarn
-			message = result.Message
-		} else if result.Status == StatusSkipped {
-			status = StepStatusSkipped
-			message = result.Message
-		} else if err != nil {
-			status = StepStatusError
-			message = err.Error()
-			r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+			
+			r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, duration, result.BufferedOutput)
 		}
-		
-		r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, duration, result.BufferedOutput)
+
+		return err
+	})
+
+	// If execErr is not nil, it means the withStepVariables wrapper failed
+	if execErr != nil && err == nil {
+		err = execErr
 	}
 
 	return result, err

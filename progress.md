@@ -2,6 +2,19 @@
 
 ## What Works
 
+- **Step-Level Variable Overrides Feature** (v0.24.0 - October 9, 2025): Successfully implemented comprehensive step-level variable override feature allowing variables to be defined at step level that override global variables (100% complete)
+  - **Feature Requirements** - User requested ability to add variables at step level to override matrix variables or provide step-specific configuration
+  - **Implementation Complete** - Added `Variables map[string]string` field to Step struct, created helper functions for merging and temporary variable management
+  - **Variable Precedence** - Step variables (highest) → Matrix variables → Global variables → Built-in variables (lowest)
+  - **Key Functions Added** - `mergeStepVariables()` for merging step and global variables, `withStepVariables()` for temporary variable management
+  - **Execution Integration** - Updated `executeStepRegular()`, `executeStepWithMatrix()`, and `executeActionForDAGWithCallback()` to use step variables
+  - **Comprehensive Testing** - Added unit tests covering all scenarios: variable override, new keys, matrix.image override, proper restoration
+  - **Example Configuration** - Created `examples/step-variables-example.yml` with 3 scenarios: matrix override, single action variables, multi-environment build
+  - **Documentation Complete** - Updated YAML-syntax-reference.md, Project-specification.md with syntax, behavior, use cases, and examples
+  - **Files Modified** - `pkg/buildfab/buildfab.go` (Step struct, helper functions, execution logic), `pkg/buildfab/variables_test.go` (comprehensive tests)
+  - **Perfect User Experience** - Users can override any variable at step level, reuse actions with different configurations, support multi-environment builds
+  - **Production Ready** - Step-level variable overrides feature complete with implementation, testing, and documentation
+
 - **Container Command Environment Variables Display** (October 9, 2025): Successfully added environment variables to container run command display for reproducibility (100% complete)
   - **Problem Identified** - Environment variables like `-e "BRANCH=master"` were not being displayed in verbose output, making it impossible for users to reproduce container issues by copying the command
   - **User Requirement** - Environment variables MUST be included in container run command output for debugging and reproduction purposes, with proper quoting to prevent shell parsing issues

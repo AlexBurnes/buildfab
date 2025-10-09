@@ -125,6 +125,8 @@ stages:
         onerror: warn  # Optional: stop (default) or warn
         only: [release]  # Optional: version type filter
         if: "condition"  # Optional: conditional execution
+        variables:  # Optional: step-level variable overrides
+          key: "value"
 ```
 
 ### Variable Interpolation
@@ -133,7 +135,17 @@ Variables available in `${{ }}` syntax:
 - **Git state**: `tag`, `branch` (current repository state)
 - **Version info**: `version.version`, `version.rawversion`, `version.project`, `version.module`, `version.modules`
 - **Custom variables**: Provided via `RunOptions.Variables`
+- **Step variables**: Defined in `step.variables` field (override global variables for that step)
+- **Matrix variables**: Defined in matrix configuration (e.g., `matrix.image`, `matrix.os`)
 - **Environment**: `env.VAR_NAME` for environment variables
+
+#### Variable Precedence
+
+When the same variable name is defined at multiple levels, the following precedence applies (highest to lowest):
+1. **Step variables** - Defined in `step.variables`
+2. **Matrix variables** - Generated during matrix expansion
+3. **Global variables** - Provided via `RunOptions.Variables`
+4. **Built-in variables** - Platform, version, environment variables
 
 ### Built-in Actions
 

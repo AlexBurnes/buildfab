@@ -213,6 +213,8 @@ stages:
         onerror: "warn"           # Optional: Error policy (warn|stop, default: stop)
         only: ["label1", "label2"] # Optional: Execution labels (list)
         if: "condition"           # Optional: Conditional expression (string)
+        variables:                # Optional: Step-level variable overrides (map[string]string)
+          key: "value"
 ```
 
 ### Step Dependencies
@@ -268,6 +270,60 @@ stages:
         if: "env.TEST_LEVEL == 'integration'"
       - action: "e2e-tests"
         if: "os == 'linux' && cpu >= 4"
+```
+
+### Step-Level Variables
+
+Step-level variables allow you to override global variables or provide step-specific values:
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: "build-image"
+        variables:
+          image: "registry.svc/burnes/production"
+          tag: "v1.0.0"
+      
+      - action: "build-image"
+        variables:
+          image: "registry.svc/burnes/development"
+          tag: "latest"
+```
+
+**Behavior**:
+- Step variables override global variables with the same name
+- Step variables are temporary and only apply during that specific step execution
+- Global variables are restored after step completion
+- Works with both regular steps and matrix steps
+
+**Use Cases**:
+- Override matrix variables for specific steps
+- Provide step-specific configuration
+- Reuse actions with different parameters
+- Configure multiple environments in a single stage
+
+**Example with Matrix**:
+```yaml
+stages:
+  images-build:
+    steps:
+      - action: build-image
+        matrix:
+          values:
+            image: [
+              "registry.svc/clr-distr-centos8",
+              "registry.svc/clr-distr-centos7"
+            ]
+        variables:
+          tag: "latest"
+          registry: "registry.svc"
+      
+      - action: test-image
+        require: ["build-image"]
+        variables:
+          image: "registry.svc/clr-distr-centos8"
+          tag: "latest"
 ```
 
 ## Action Variants
