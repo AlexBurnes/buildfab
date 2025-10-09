@@ -570,7 +570,7 @@ func (c *SimpleStepCallback) buildContainerCommand(config *container.ContainerCo
 
         // Add CPU settings
         if config.CPU > 0 {
-            parts = append(parts, "--cpus", fmt.Sprintf("%.1f", config.CPU))
+            parts = append(parts, "--cpus", fmt.Sprintf("%d.0", config.CPU))
         }
 
         // Add memory limit
