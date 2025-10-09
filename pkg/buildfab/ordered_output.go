@@ -506,6 +506,11 @@ func (o *OrderedOutputManager) buildContainerCommand(config *container.Container
 
         hasWorkspaceMount := false
 
+        // Add environment variables
+        for key, value := range config.Env {
+            parts = append(parts, "-e", fmt.Sprintf("\"%s=%s\"", key, value))
+        }
+
         // Add mount arguments
         for _, mount := range config.Mounts {
             if mount.Target == "/tmp/buildfab-workspace" {

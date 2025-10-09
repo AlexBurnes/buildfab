@@ -2,6 +2,19 @@
 
 ## What Works
 
+- **Container Command Environment Variables Display** (October 9, 2025): Successfully added environment variables to container run command display for reproducibility (100% complete)
+  - **Problem Identified** - Environment variables like `-e "BRANCH=master"` were not being displayed in verbose output, making it impossible for users to reproduce container issues by copying the command
+  - **User Requirement** - Environment variables MUST be included in container run command output for debugging and reproduction purposes, with proper quoting to prevent shell parsing issues
+  - **Root Cause Found** - In `pkg/buildfab/ordered_output.go` and `pkg/buildfab/simple.go`, `buildContainerCommand` functions were not including environment variables in the display output
+  - **Solution Implemented** - Added environment variable display loop to both `buildContainerCommand` functions that iterates over `config.Env` and appends `-e "KEY=VALUE"` flags to the command display with proper quoting
+  - **Display Format** - Environment variables are now shown as `-e "TEST_VAR=container-test" -e "BUILD_ENV=container"` in the container run command output with quotes to prevent shell parsing issues
+  - **Complete Command Visibility** - Users can now see the complete container command with all environment variables properly quoted, enabling exact reproduction of container execution without parsing errors
+  - **Example Output** - `🐳 Running container: podman run --rm -e "TEST_VAR=container-test" -e "BUILD_ENV=container" alpine:latest sh -c '...'`
+  - **Comprehensive Testing** - Verified environment variables are displayed correctly in verbose output (`-vv` or `-vvv`) using `examples/container-run-test.yml` test-with-env action, confirmed proper quoting
+  - **Files Modified** - `pkg/buildfab/ordered_output.go` (added env display with quotes to buildContainerCommand), `pkg/buildfab/simple.go` (added env display with quotes to buildContainerCommand)
+  - **CHANGELOG Updated** - Added entry documenting the enhancement with example output showing quoted values
+  - **Production Ready** - Container command display now includes all necessary information for complete reproducibility with safe shell parsing, users can copy-paste commands with environment variables for debugging
+
 - **Container Artifact Collection Wildcard Fix** (October 9, 2025): Successfully fixed incorrect command generation for artifact collection with wildcard patterns (100% complete)
   - **Problem Identified** - Previous implementation generated incorrect command: `(mkdir -p /buildfab-artifacts/.rpmbuild/RPMS/* && cp -r .rpmbuild/RPMS/*/*.rpm /buildfab-artifacts/.rpmbuild/RPMS/*/*.rpm || true)` which fails because mkdir cannot create directories with wildcards in names
   - **Root Cause Found** - In `internal/container/runner.go`, `addArtifactCopyCommands` function used `filepath.Dir()` on wildcard patterns, creating invalid directory paths with wildcards

@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.4] - 2025-10-09
+
+### Fixed
+- **Container Command Display Environment Variables**: Added environment variables to container run command display for reproducibility
+  - Environment variables like `-e "BRANCH=master"` are now displayed in verbose output (`-vv` or `-vvv`)
+  - Values are properly quoted to prevent shell parsing issues with special characters and spaces
+  - Users can now reproduce container issues by copying the complete command with all environment variables
+  - Example output: `🐳 Running container: podman run --rm -e "TEST_VAR=container-test" -e "BUILD_ENV=container" alpine:latest sh -c '...'`
+  - Files modified: `pkg/buildfab/ordered_output.go`, `pkg/buildfab/simple.go`
+  - This fix ensures complete command visibility for debugging and reproduction purposes
+
 ## [0.23.3] - 2025-10-09
 
 ### Fixed

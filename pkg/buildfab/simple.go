@@ -558,6 +558,11 @@ func (c *SimpleStepCallback) buildContainerCommand(config *container.ContainerCo
         // Regular container run command
         parts = append(parts, "run", "--rm")
 
+        // Add environment variables
+        for key, value := range config.Env {
+            parts = append(parts, "-e", fmt.Sprintf("\"%s=%s\"", key, value))
+        }
+
         // Add mounts for workspace and binary
         for _, mount := range config.Mounts {
             parts = append(parts, fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target))
