@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 2025-10-10
+
+### Fixed
+- **Container Artifact Collection Filesystem Sync**: Added automatic filesystem sync after artifact collection to address bind mount directory entry cache issues
+  - Calls `fsync()` on artifact output directory after container completes
+  - Recursively syncs subdirectories containing artifacts
+  - Ensures directories created through bind mounts are visible to subsequent operations
+  - Addresses "orphaned inode" issue where directory is accessible but not listed in parent directory
+  - Best-effort sync with warning on failure (requires `-vv` verbosity)
+
+### Documentation
+- **Container Artifact Collection Guide**: Updated `docs/Container-artifact-collection.md` with known issues section
+  - Documented bind mount directory entry cache issue
+  - Added recommended workaround using separate artifact directory (`.artifacts`)
+  - Explained root cause of orphaned directory entries
+  - Updated examples to show best practice with separate output directory
+  - Included benefits and mitigation strategies
+
 ## [0.24.0] - 2025-10-09
 
 ### Added

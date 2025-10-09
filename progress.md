@@ -2,6 +2,17 @@
 
 ## What Works
 
+- **Container Artifact Collection Filesystem Sync** (v0.24.1 - October 10, 2025): Successfully fixed bind mount directory entry cache issue with filesystem sync implementation (100% complete)
+  - **Problem Identified** - Directories created through container bind mounts had orphaned inodes (accessible via path traversal but not visible in parent directory listings)
+  - **Root Cause** - Linux kernel bind mount cache issue where directory entry in parent directory's cache isn't updated when containers create subdirectories
+  - **Investigation Process** - Extensive debugging proved `ls .rpmbuild/RPMS/noarch/` works but `stat .rpmbuild` fails with "no such file or directory"
+  - **Solution Implemented** - Added `syncArtifactDirectory()` function that calls `fsync()` on artifact directory and subdirectories to flush directory entry cache
+  - **Workaround Documented** - Recommended using separate artifact directory (`.artifacts`) instead of project root to avoid bind mount cache issues entirely
+  - **Best Practice** - `output: .artifacts` + host-side `cp -r .artifacts/.rpmbuild/* .rpmbuild/` provides bulletproof solution
+  - **Files Modified** - `internal/container/runner.go` (added syncArtifactDirectory function and call after artifact collection)
+  - **Documentation Updated** - `docs/Container-artifact-collection.md` (added "Known Issues" section with symptoms, root cause, workaround, benefits)
+  - **Production Ready** - Filesystem sync improves reliability with built-in mitigation, while separate directory pattern provides recommended approach
+
 - **Step-Level Variable Overrides Feature** (v0.24.0 - October 9, 2025): Successfully implemented comprehensive step-level variable override feature allowing variables to be defined at step level that override global variables (100% complete)
   - **Feature Requirements** - User requested ability to add variables at step level to override matrix variables or provide step-specific configuration
   - **Implementation Complete** - Added `Variables map[string]string` field to Step struct, created helper functions for merging and temporary variable management

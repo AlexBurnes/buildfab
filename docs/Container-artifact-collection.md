@@ -53,11 +53,20 @@ actions:
         go build -o /app/myapp ./cmd/myapp
         cp config.yaml /app/config.yaml
       artifacts:
-        output: ./dist              # Host directory for artifacts
+        output: .artifacts          # ← Use separate directory (recommended)
         path:
-          - /app/myapp              # Will be saved as: ./dist/app/myapp
-          - /app/config.yaml        # Will be saved as: ./dist/app/config.yaml
+          - /app/myapp              # Will be saved as: .artifacts/app/myapp
+          - /app/config.yaml        # Will be saved as: .artifacts/app/config.yaml
+  
+  - name: organize-artifacts
+    run: |
+      # Optional: copy artifacts to final locations
+      mkdir -p dist
+      cp .artifacts/app/myapp dist/
+      cp .artifacts/app/config.yaml dist/
 ```
+
+**Note:** Using a separate artifact directory (`.artifacts`) avoids bind mount directory cache issues. See "Known Issues" section below.
 
 ## Implementation Details
 
@@ -176,11 +185,53 @@ actions:
 - `./release/build/bin/myapp`
 - `./release/build/lib/` (all .so files)
 
+## Known Issues and Workarounds
+
+### Bind Mount Directory Entry Cache Issue
+
+When using artifact output directory as project root (`output: ./`), there's a known Linux kernel issue where directories created through bind mounts may have **orphaned directory entries**:
+
+**Symptoms:**
+- Files inside the directory are accessible: `ls .rpmbuild/RPMS/noarch/file.rpm` works
+- But the directory entry itself is invisible: `stat .rpmbuild` fails
+- Subsequent operations (like `docker build`) can't find the directory
+
+**Root Cause:**
+Container creates directory through bind mount, but the parent directory's entry cache isn't updated, causing the directory inode to be accessible but not listed in the parent directory.
+
+**Workaround (Recommended):**
+Use a **separate artifact directory** instead of project root:
+
+```yaml
+actions:
+  - name: build-in-container
+    container:
+      run_stage: build
+      artifacts:
+        output: .artifacts        # ← Separate directory
+        path:
+          - .rpmbuild/RPMS/*/*.rpm
+  
+  - name: copy-artifacts-to-project
+    run: |
+      # Copy from .artifacts to project root
+      cp -r .artifacts/.rpmbuild/* .rpmbuild/
+```
+
+**Benefits:**
+- ✅ Avoids bind mount directory cache issues
+- ✅ Clear separation between container outputs and project files
+- ✅ Works reliably across all filesystems
+
+**Mitigation (Built-in):**
+Buildfab automatically calls `fsync()` on artifact directories after collection to help refresh directory caches, but this may not be 100% reliable for project root mounts.
+
 ## Error Handling
 
 - **Missing artifacts**: Commands use `|| true` to avoid failing on missing artifacts
 - **Permission issues**: Artifacts copied with container user permissions
 - **Path conflicts**: Full path preservation eliminates naming conflicts
+- **Bind mount cache**: Use separate artifact directory (`.artifacts`) to avoid orphaned directory entries
 
 ## Benefits
 
