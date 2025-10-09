@@ -511,6 +511,9 @@ func TestPoolManager_StopAll(t *testing.T) {
 		pool1.Submit(task)
 	}
 	
+	// Give tasks time to start executing
+	time.Sleep(5 * time.Millisecond)
+	
 	// StopAll should wait for all tasks to complete
 	start := time.Now()
 	pm.StopAll()
