@@ -104,18 +104,8 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
     // Create a copy of the config
     preparedConfig := config
 
-    // Handle artifact collection for run commands by pre-mounting volume
-    if config.Run != "" && len(config.Artifacts.Path) > 0 {
-        // Add artifact mount for direct run commands
-        if err := r.addArtifactMount(&preparedConfig); err != nil {
-            return preparedConfig, err
-        }
-        
-        // Add artifact copy commands to the run script
-        r.addArtifactCopyCommands(&preparedConfig)
-    }
-
     // If this is a run_action or run_stage, we need to mount the current directory and buildfab binary
+    // Handle this FIRST before artifact collection, since we need to transform run_action/run_stage into run
     if config.RunStage != "" || config.RunAction != "" {
         // Get current working directory and buildfab binary path
         wd, err := r.getCurrentWorkingDir()
@@ -224,6 +214,18 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 
         // Clear workdir since we've already handled it in the command
         preparedConfig.Workdir = ""
+    }
+
+    // Handle artifact collection for ALL run commands (including transformed run_action/run_stage)
+    // This must be done AFTER run_action/run_stage transformation
+    if preparedConfig.Run != "" && len(preparedConfig.Artifacts.Path) > 0 {
+        // Add artifact mount for all run commands
+        if err := r.addArtifactMount(&preparedConfig); err != nil {
+            return preparedConfig, err
+        }
+        
+        // Add artifact copy commands to the run script
+        r.addArtifactCopyCommands(&preparedConfig)
     }
 
     return preparedConfig, nil

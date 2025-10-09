@@ -2,6 +2,15 @@
 
 ## What Works
 
+- **Container Artifact Collection Fix** (v0.23.2 - October 9, 2025): Successfully fixed critical bug where container artifact collection was not working for `run_action` and `run_stage` operations (100% complete)
+  - **Problem Identified** - Artifacts were only being collected for direct `run` commands, but not for `run_action` and `run_stage` which are transformed into `run` commands
+  - **Root Cause Found** - In `internal/container/runner.go`, the artifact mount logic was checking `if config.Run != ""` before the `run_action`/`run_stage` transformation happened
+  - **Solution Implemented** - Moved artifact collection logic to execute AFTER `run_action`/`run_stage` transformation, ensuring artifacts are collected for all execution modes
+  - **Comprehensive Testing** - Created test files for both `run_action` and `run_stage` modes, verified artifacts collected correctly with full path preservation
+  - **Files Modified** - `internal/container/runner.go` (moved artifact collection logic from lines 107-116 to after line 227)
+  - **Test Files Added** - `tests/test-container-artifacts-run-action.yml`, `tests/test-container-artifacts-run-stage.yml`
+  - **Production Ready** - All container artifact collection modes (`run`, `run_action`, `run_stage`) now work correctly
+
 - **Container Command Display Fix** (v0.23.1 - October 9, 2025): Successfully fixed container build/slim/run command display at verbose level >= 2 with proper variable interpolation (100% complete)
   - **Problem Solved** - Container commands for build and slim operations were not being displayed at all at `-vv` level, and when displayed, variables like `${{version}}` and `${{project}}` were not interpolated
   - **Root Cause** - SimpleStepCallback used for direct action execution had no container command display logic, and both SimpleStepCallback and OrderedOutputManager were missing variable interpolation for display

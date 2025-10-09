@@ -1,0 +1,37 @@
+project:
+  name: test-container-artifacts-run-stage
+
+# Test container artifact collection with run_stage
+
+stages:
+  # Stage that creates artifacts
+  create-artifacts-stage:
+    steps:
+      - action: create-build-artifacts
+
+actions:
+  # Action that creates build artifacts
+  - name: create-build-artifacts
+    description: Create build artifacts in stage
+    run: |
+      mkdir -p /build/output
+      echo "Build artifact 1" > /build/output/app.bin
+      echo "Build artifact 2" > /build/output/lib.so
+      cat /build/output/app.bin
+      cat /build/output/lib.so
+
+  # Container action that runs the above stage
+  - name: test-run-stage-artifact
+    description: Test collecting artifacts from run_stage
+    container:
+      image:
+        from: alpine:latest
+      run_stage: create-artifacts-stage
+      artifacts:
+        output: ./test-artifacts/run-stage
+        path:
+          - /build/output/app.bin
+          - /build/output/lib.so
+    # Expected: ./test-artifacts/run-stage/build/output/app.bin
+    #           ./test-artifacts/run-stage/build/output/lib.so
+

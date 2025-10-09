@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.2] - 2025-10-09
+
+### Fixed
+- **Container Artifact Collection**: Fixed artifact collection not working for `run_action` and `run_stage` operations
+  - Artifacts are now properly collected for all three execution modes: `run`, `run_action`, and `run_stage`
+  - Fixed bug where artifact mount logic was executed before `run_action`/`run_stage` transformation to `run`
+  - Moved artifact collection logic to execute after command transformation
+  - Files modified: `internal/container/runner.go`
+  - Test files added: `tests/test-container-artifacts-run-action.yml`, `tests/test-container-artifacts-run-stage.yml`
+
 ## [0.23.1] - 2025-10-09
 
 ### Fixed
