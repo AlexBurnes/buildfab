@@ -2,6 +2,20 @@
 
 ## What Works
 
+- **Container Command Display Fix** (v0.23.1 - October 9, 2025): Successfully fixed container build/slim/run command display at verbose level >= 2 with proper variable interpolation (100% complete)
+  - **Problem Solved** - Container commands for build and slim operations were not being displayed at all at `-vv` level, and when displayed, variables like `${{version}}` and `${{project}}` were not interpolated
+  - **Root Cause** - SimpleStepCallback used for direct action execution had no container command display logic, and both SimpleStepCallback and OrderedOutputManager were missing variable interpolation for display
+  - **SimpleStepCallback Enhancement** - Added `showContainerCommand` and `buildContainerCommand` methods to display container commands at verbose level >= 2 for action-level execution
+  - **OrderedOutputManager Enhancement** - Added `variables` field and `SetVariables` method to support variable interpolation for stage-level execution
+  - **Variable Interpolation** - Integrated existing `InterpolateContainerConfig` function to interpolate variables before building display commands
+  - **Operation Type Detection** - Proper operation type prefixes: "Building image" for build, "Slimming image" for slim, "Running container" for run
+  - **Complete Interpolation** - Variables like `${{version}}`, `${{project}}`, and matrix variables are now properly interpolated before display
+  - **Perfect User Experience** - Users now see complete, interpolated container commands at `-vv` level: "🐳 Building image: docker build --build-arg VERSION=0.23.1 --tag buildfab:0.23.1 --network host -f Dockerfile ."
+  - **Comprehensive Testing** - Verified all three operation types (build, slim, run) work correctly in both action and stage execution contexts with proper variable interpolation
+  - **Files Modified** - `pkg/buildfab/ordered_output.go` (added variables field, SetVariables method, variable interpolation logic), `pkg/buildfab/simple.go` (added showContainerCommand, buildContainerCommand methods, variable interpolation, container imports)
+  - **Production Ready** - Container command display fully functional with variable interpolation and operation type detection
+  - **VERSION 0.23.1 RELEASED** - Container command display fix completed and ready for production use
+
 - **Version Library Update** (v0.23.0 - October 8, 2025): Successfully updated version-go library to v1.5.0 and added new version.rawversion variable (100% complete)
   - **Version Library Updated** - Upgraded from version-go v1.4.2 to v1.5.0 with new GetRawVersion() method
   - **New Variable Added** - Added `version.rawversion` variable that returns raw version string exactly as detected (e.g., "v0.22.0-1-g1234abc")

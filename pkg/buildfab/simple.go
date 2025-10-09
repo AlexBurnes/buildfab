@@ -8,6 +8,9 @@ import (
     "runtime"
     "strings"
     "time"
+    
+    "github.com/AlexBurnes/buildfab/pkg/buildfab/container"
+    containerRunner "github.com/AlexBurnes/buildfab/internal/container"
 )
 
 // formatExecutionTime formats a duration in the requested format (e.g., '20s' or '1m 20s')
@@ -177,6 +180,9 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         
         // Set config path for container command display
         stepCallback.(*OrderedStepCallback).manager.SetConfigPath(r.opts.ConfigPath)
+        
+        // Set variables for interpolation
+        stepCallback.(*OrderedStepCallback).manager.SetVariables(r.opts.Variables)
         
         // Update interpolated actions in the step callback
         stepCallback.(*OrderedStepCallback).UpdateInterpolatedActions(interpolatedActions)
@@ -408,13 +414,186 @@ func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
     if c.verboseLevel > 0 {
         fmt.Fprintf(c.errorOutput, "  💻 %s\n", stepName)
         
-        // Container command display is now handled in the actual execution
+        // Show container command for container actions (verbose level 2+)
+        if c.verboseLevel >= 2 {
+            c.showContainerCommand(stepName)
+        }
     } else {
         // In silence mode, show running indicator
         fmt.Fprintf(c.errorOutput, "  %s%s%s %s running...\r", colorCyan, "○", colorReset, stepName)
     }
 }
 
+// showContainerCommand shows the container command for container actions
+func (c *SimpleStepCallback) showContainerCommand(stepName string) {
+    // Get the action
+    action, exists := c.config.GetAction(stepName)
+    if !exists {
+        return
+    }
+
+    if action.Container != nil {
+        // Create a temporary runner to prepare the configuration for display
+        tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(c.verboseLevel)
+        if err != nil {
+            // Silently ignore runner creation errors for display purposes
+            return
+        }
+        
+        // Use the actual config path
+        configPath := c.configPath
+        if configPath == "" {
+            configPath = ".project.yml" // Fallback
+        }
+        
+        // Prepare the container configuration
+        preparedConfig, prepErr := tempRunner.PrepareContainerConfig(*action.Container, configPath)
+        if prepErr != nil {
+            // Silently ignore preparation errors for display purposes
+            // (artifacts might not be mounted yet, which is OK for display)
+            return
+        }
+        
+        // Interpolate variables in the container configuration for display
+        if c.variables != nil {
+            interpolatedConfig, err := InterpolateContainerConfig(&preparedConfig, c.variables)
+            if err == nil {
+                preparedConfig = *interpolatedConfig
+            }
+        }
+        
+        containerCmd := c.buildContainerCommand(&preparedConfig)
+        
+        // Determine the appropriate prefix based on the container operation type
+        prefix := "Running container"
+        if preparedConfig.Image.Build != nil {
+            prefix = "Building image"
+        } else if preparedConfig.Image.Slim != nil {
+            prefix = "Slimming image"
+        }
+        
+        fmt.Fprintf(c.errorOutput, "  🐳 %s: %s\n", prefix, containerCmd)
+    }
+}
+
+// buildContainerCommand builds a human-readable representation of the container command
+func (c *SimpleStepCallback) buildContainerCommand(config *container.ContainerConfig) string {
+    var parts []string
+
+    // Use specified engine or default to podman
+    engineName := "podman" // Default to podman
+    if config.Engine != "" {
+        engineName = config.Engine
+    }
+
+    // Add engine (Docker/Podman)
+    parts = append(parts, engineName)
+
+    // Handle build operations differently
+    if config.Image.Build != nil {
+        // For build operations, we run docker/podman build command
+        parts = append(parts, "build")
+
+        // Add build args
+        for key, value := range config.Image.Build.Args {
+            parts = append(parts, "--build-arg", fmt.Sprintf("%s=%s", key, value))
+        }
+
+        // Add tags
+        for _, tag := range config.Image.Build.Tags {
+            parts = append(parts, "--tag", tag)
+        }
+
+        // Add network if specified
+        if config.Image.Build.Network != "" {
+            parts = append(parts, "--network", config.Image.Build.Network)
+        }
+
+        // Add progress if specified
+        if config.Image.Build.Progress != "" {
+            parts = append(parts, "--progress", config.Image.Build.Progress)
+        }
+
+        // Add dockerfile if specified
+        if config.Image.Build.Dockerfile != "" {
+            parts = append(parts, "-f", config.Image.Build.Dockerfile)
+        }
+
+        // Add context (default to current directory)
+        context := config.Image.Build.Context
+        if context == "" {
+            context = "."
+        }
+        parts = append(parts, context)
+    } else if config.Image.Slim != nil {
+        // For slim operations, we need to mount the Docker socket
+        if engineName == "docker" {
+            parts = append(parts, "-v", "/var/run/docker.sock:/var/run/docker.sock")
+        } else if engineName == "podman" {
+            parts = append(parts, "-v", "/run/podman/podman.sock:/run/podman/podman.sock")
+        }
+
+        // For slim operations, we run the dslim/slim container with specific arguments
+        parts = append(parts, "dslim/slim:latest")
+        parts = append(parts, "slim", "build")
+
+        // Add slim-specific flags
+        if !config.Image.Slim.HttpProbe {
+            parts = append(parts, "--http-probe=false")
+            parts = append(parts, "--continue-after=exit")
+        }
+
+        parts = append(parts, config.Image.Slim.Target)
+
+        // Add exec command if specified
+        if config.Image.Slim.Exec != "" {
+            parts = append(parts, "--exec", config.Image.Slim.Exec)
+        }
+
+        // Add tags for the slim image
+        for _, tag := range config.Image.Slim.Tags {
+            parts = append(parts, "--tag", tag)
+        }
+    } else {
+        // Regular container run command
+        parts = append(parts, "run", "--rm")
+
+        // Add mounts for workspace and binary
+        for _, mount := range config.Mounts {
+            parts = append(parts, fmt.Sprintf("--mount=type=%s,source=%s,target=%s", mount.Type, mount.Source, mount.Target))
+        }
+
+        // Add working directory
+        if config.Workdir != "" {
+            parts = append(parts, "-w", config.Workdir)
+        }
+
+        // Add CPU settings
+        if config.CPU > 0 {
+            parts = append(parts, "--cpus", fmt.Sprintf("%.1f", config.CPU))
+        }
+
+        // Add memory limit
+        if config.Memory != "" {
+            parts = append(parts, "-m", config.Memory)
+        }
+
+        // Add network mode
+        if config.Network != "" {
+            parts = append(parts, "--network", config.Network)
+        }
+
+        // Add image name
+        parts = append(parts, config.Image.From)
+
+        // Add command
+        if config.Run != "" {
+            parts = append(parts, "sh", "-c", fmt.Sprintf("'%s'", config.Run))
+        }
+    }
+
+    return strings.Join(parts, " ")
+}
 
 func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
     // Initialize displayed map if not already done

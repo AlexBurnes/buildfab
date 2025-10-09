@@ -31,6 +31,7 @@ type OrderedOutputManager struct {
     config      *Config                    // Configuration for command extraction
     configPath  string                     // Configuration file path for container commands
     interpolatedActions map[string]*Action // Interpolated actions for matrix steps
+    variables   map[string]string          // Variables for interpolation
 }
 
 // StepOutputData contains all output data for a step
@@ -63,6 +64,11 @@ func NewOrderedOutputManager(steps []Step, verboseLevel int, debug bool, errorOu
 // SetConfigPath sets the configuration file path
 func (o *OrderedOutputManager) SetConfigPath(configPath string) {
     o.configPath = configPath
+}
+
+// SetVariables sets the variables for interpolation
+func (o *OrderedOutputManager) SetVariables(variables map[string]string) {
+    o.variables = variables
 }
 
 // SetInterpolatedAction sets the interpolated action for a step
@@ -394,8 +400,25 @@ func (o *OrderedOutputManager) showContainerCommand(stepName string) {
             return
         }
         
+        // Interpolate variables in the container configuration for display
+        if o.variables != nil {
+            interpolatedConfig, err := InterpolateContainerConfig(&preparedConfig, o.variables)
+            if err == nil {
+                preparedConfig = *interpolatedConfig
+            }
+        }
+        
         containerCmd := o.buildContainerCommand(&preparedConfig)
-        fmt.Fprintf(o.errorOutput, "  🐳 Running container: %s\n", containerCmd)
+        
+        // Determine the appropriate prefix based on the container operation type
+        prefix := "Running container"
+        if preparedConfig.Image.Build != nil {
+            prefix = "Building image"
+        } else if preparedConfig.Image.Slim != nil {
+            prefix = "Slimming image"
+        }
+        
+        fmt.Fprintf(o.errorOutput, "  🐳 %s: %s\n", prefix, containerCmd)
     }
 }
 

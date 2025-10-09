@@ -8,6 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.1] - 2025-10-09
+
+### Fixed
+- **Container Command Display**: Fixed container build/slim/run command display at verbose level >= 2
+  - Container commands now show proper prefix based on operation type:
+    - "Building image" for build operations
+    - "Slimming image" for slim operations
+    - "Running container" for regular run operations
+  - Variables like `${{version}}` and `${{project}}` are now properly interpolated before display
+  - Fixed issue where build and slim commands were not showing at all at `-vv` level
+  - Applies to both direct action execution and stage execution
+  - Files modified: `pkg/buildfab/ordered_output.go`, `pkg/buildfab/simple.go`
+
+### Technical Details
+- **SimpleStepCallback Enhancement**: Added `showContainerCommand` and `buildContainerCommand` methods
+  - Displays container commands at verbose level >= 2
+  - Supports all container operation types (build, slim, run)
+  - Includes variable interpolation for display
+- **OrderedOutputManager Enhancement**: Added variable interpolation for container command display
+  - Added `variables` field and `SetVariables` method
+  - Interpolates variables in container configuration before building display command
+- **Variable Interpolation**: Uses existing `InterpolateContainerConfig` function to interpolate variables
+  - Properly handles project variables like `${{version}}`, `${{project}}`
+  - Correctly expands matrix variables in matrix jobs
+
 ## [0.23.0] - 2025-10-08
 
 ### Added
