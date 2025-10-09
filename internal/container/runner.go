@@ -440,18 +440,14 @@ func (r *ContainerRunner) addArtifactCopyCommands(config *container.ContainerCon
     // Build artifact copy commands
     var copyCommands []string
     for _, artifactPath := range config.Artifacts.Path {
-        // For each artifact, preserve its full path structure
-        // Remove leading slash to make it relative
-        relPath := strings.TrimPrefix(artifactPath, "/")
-        destPath := filepath.Join("/buildfab-artifacts", relPath)
-        destDir := filepath.Dir(destPath)
+        // Use cp --parents to automatically create parent directory structure
+        // This works correctly with wildcards unlike mkdir -p with wildcards
+        // Example: cp --parents -r .rpmbuild/RPMS/*/*.rpm /buildfab-artifacts/
+        // Results in: /buildfab-artifacts/.rpmbuild/RPMS/x86_64/package.rpm
         
-        // Create destination directory and copy with full path preservation
         // Use (command || true) to prevent failures from stopping execution
-        copyCmd := fmt.Sprintf("(mkdir -p %s && cp -r %s %s || true)", 
-            destDir, 
-            artifactPath, 
-            destPath)
+        copyCmd := fmt.Sprintf("(cp --parents -r %s /buildfab-artifacts/ || true)", 
+            artifactPath)
         copyCommands = append(copyCommands, copyCmd)
     }
     

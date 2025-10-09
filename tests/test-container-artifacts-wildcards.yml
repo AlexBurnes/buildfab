@@ -1,0 +1,88 @@
+project:
+  name: test-container-artifacts-wildcards
+
+# Test container artifact collection with wildcard patterns
+# This test verifies the fix for wildcard path handling
+
+actions:
+  # Test: RPM-like wildcard pattern
+  - name: test-rpmbuild-wildcard
+    description: Test collecting RPM files with wildcard pattern (issue fix verification)
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Creating RPM-like directory structure..."
+        mkdir -p .rpmbuild/RPMS/x86_64
+        mkdir -p .rpmbuild/RPMS/noarch
+        echo "Package 1 content" > .rpmbuild/RPMS/x86_64/myapp-1.0-1.x86_64.rpm
+        echo "Package 2 content" > .rpmbuild/RPMS/x86_64/myapp-devel-1.0-1.x86_64.rpm
+        echo "Package 3 content" > .rpmbuild/RPMS/noarch/myapp-docs-1.0-1.noarch.rpm
+        echo "Created RPM files:"
+        find .rpmbuild -name "*.rpm" -type f
+        ls -la .rpmbuild/RPMS/x86_64/
+        ls -la .rpmbuild/RPMS/noarch/
+      artifacts:
+        output: ./test-artifacts/rpmbuild
+        path:
+          - .rpmbuild/RPMS/*/*.rpm
+    # Expected: ./test-artifacts/rpmbuild/.rpmbuild/RPMS/x86_64/myapp-1.0-1.x86_64.rpm
+    #           ./test-artifacts/rpmbuild/.rpmbuild/RPMS/x86_64/myapp-devel-1.0-1.x86_64.rpm
+    #           ./test-artifacts/rpmbuild/.rpmbuild/RPMS/noarch/myapp-docs-1.0-1.noarch.rpm
+
+  # Test: Nested wildcard pattern
+  - name: test-nested-wildcard
+    description: Test collecting files with nested wildcard pattern
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Creating nested structure with multiple levels..."
+        mkdir -p dist/linux/amd64 dist/linux/arm64 dist/darwin/amd64
+        echo "Linux AMD64 binary" > dist/linux/amd64/myapp
+        echo "Linux ARM64 binary" > dist/linux/arm64/myapp
+        echo "Darwin AMD64 binary" > dist/darwin/amd64/myapp
+        echo "Created binaries:"
+        find dist -name "myapp" -type f
+      artifacts:
+        output: ./test-artifacts/nested-wildcard
+        path:
+          - dist/*/*/myapp
+    # Expected: ./test-artifacts/nested-wildcard/dist/linux/amd64/myapp
+    #           ./test-artifacts/nested-wildcard/dist/linux/arm64/myapp
+    #           ./test-artifacts/nested-wildcard/dist/darwin/amd64/myapp
+
+  # Test: Mixed absolute and relative wildcards
+  - name: test-mixed-wildcards
+    description: Test collecting with mixed absolute and relative wildcard patterns
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "Creating mixed path artifacts..."
+        mkdir -p /tmp/build/logs
+        mkdir -p output/results
+        echo "Log 1" > /tmp/build/logs/build.log
+        echo "Log 2" > /tmp/build/logs/test.log
+        echo "Result 1" > output/results/test1.txt
+        echo "Result 2" > output/results/test2.txt
+        echo "Created files:"
+        find /tmp/build output -type f
+      artifacts:
+        output: ./test-artifacts/mixed
+        path:
+          - /tmp/build/logs/*.log
+          - output/results/*.txt
+    # Expected: ./test-artifacts/mixed/tmp/build/logs/build.log
+    #           ./test-artifacts/mixed/tmp/build/logs/test.log
+    #           ./test-artifacts/mixed/output/results/test1.txt
+    #           ./test-artifacts/mixed/output/results/test2.txt
+
+stages:
+  # Test all wildcard scenarios
+  test-wildcards:
+    steps:
+      - action: test-rpmbuild-wildcard
+      - action: test-nested-wildcard
+      - action: test-mixed-wildcards
+

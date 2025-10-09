@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.3] - 2025-10-09
+
+### Fixed
+- **Container Artifact Collection with Wildcards**: Fixed incorrect command generation for artifact collection with wildcard patterns
+  - Previous implementation: `(mkdir -p /buildfab-artifacts/.rpmbuild/RPMS/* && cp -r .rpmbuild/RPMS/*/*.rpm /buildfab-artifacts/.rpmbuild/RPMS/*/*.rpm || true)`
+  - New implementation: `(cp --parents -r .rpmbuild/RPMS/*/*.rpm /buildfab-artifacts/ || true)`
+  - The `cp --parents` flag automatically creates parent directory structure and works correctly with wildcard patterns
+  - Fixed issue where `mkdir -p` with wildcards in path would fail (wildcards in directory names are invalid)
+  - Full support for wildcard patterns: `*.rpm`, `dist/*/binary`, `.rpmbuild/RPMS/*/*.rpm`, `build/**/*.so`
+  - Files modified: `internal/container/runner.go`
+  - Documentation updated: `docs/Container-artifact-collection.md` with wildcard pattern support section
+  - Test file added: `tests/test-container-artifacts-wildcards.yml` with comprehensive wildcard tests
+
 ## [0.23.2] - 2025-10-09
 
 ### Fixed

@@ -2,6 +2,19 @@
 
 ## What Works
 
+- **Container Artifact Collection Wildcard Fix** (October 9, 2025): Successfully fixed incorrect command generation for artifact collection with wildcard patterns (100% complete)
+  - **Problem Identified** - Previous implementation generated incorrect command: `(mkdir -p /buildfab-artifacts/.rpmbuild/RPMS/* && cp -r .rpmbuild/RPMS/*/*.rpm /buildfab-artifacts/.rpmbuild/RPMS/*/*.rpm || true)` which fails because mkdir cannot create directories with wildcards in names
+  - **Root Cause Found** - In `internal/container/runner.go`, `addArtifactCopyCommands` function used `filepath.Dir()` on wildcard patterns, creating invalid directory paths with wildcards
+  - **Solution Implemented** - Replaced manual `mkdir -p` + `cp` approach with single `cp --parents` command: `(cp --parents -r .rpmbuild/RPMS/*/*.rpm /buildfab-artifacts/ || true)`
+  - **Command Simplification** - New approach is simpler, more reliable, and automatically handles parent directory creation with correct wildcard expansion
+  - **Full Wildcard Support** - Supports single wildcard (`*.rpm`), directory wildcard (`dist/*/binary`), multi-level wildcard (`.rpmbuild/RPMS/*/*.rpm`, `build/**/*.so`)
+  - **Comprehensive Testing** - Created `tests/test-container-artifacts-wildcards.yml` with 3 test scenarios: RPM-like wildcard, nested wildcard, mixed absolute/relative wildcards
+  - **All Tests Pass** - Verified RPM artifacts (`myapp-1.0-1.x86_64.rpm`, `myapp-devel-1.0-1.x86_64.rpm`, `myapp-docs-1.0-1.noarch.rpm`), nested binaries (`dist/linux/amd64/myapp`, `dist/darwin/amd64/myapp`), and mixed paths all collected correctly
+  - **Files Modified** - `internal/container/runner.go` (simplified `addArtifactCopyCommands` function)
+  - **Documentation Updated** - Enhanced `docs/Container-artifact-collection.md` with wildcard pattern support section and examples, removed "Glob Pattern Support" from future enhancements since it's now implemented
+  - **CHANGELOG Updated** - Added comprehensive entry documenting the fix with before/after command examples
+  - **Production Ready** - Wildcard artifact collection now fully functional with correct command generation, users can collect RPM files and other artifacts using wildcard patterns
+
 - **Container Artifact Collection Fix** (v0.23.2 - October 9, 2025): Successfully fixed critical bug where container artifact collection was not working for `run_action` and `run_stage` operations (100% complete)
   - **Problem Identified** - Artifacts were only being collected for direct `run` commands, but not for `run_action` and `run_stage` which are transformed into `run` commands
   - **Root Cause Found** - In `internal/container/runner.go`, the artifact mount logic was checking `if config.Run != ""` before the `run_action`/`run_stage` transformation happened

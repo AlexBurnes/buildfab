@@ -73,9 +73,12 @@ artifactMount := container.ContainerMount{
 }
 
 // 2. Add copy commands to run script (preserves full path)
-For artifact "/app/binary":
-  mkdir -p /buildfab-artifacts/app && 
-  cp -r /app/binary /buildfab-artifacts/app/binary
+For artifact "/app/binary" or ".rpmbuild/RPMS/*/*.rpm":
+  cp --parents -r /app/binary /buildfab-artifacts/
+  cp --parents -r .rpmbuild/RPMS/*/*.rpm /buildfab-artifacts/
+  
+// The --parents flag automatically creates parent directory structure
+// This works correctly with wildcard patterns like * and **
 ```
 
 ### For Built Images (Docker CP)
@@ -196,6 +199,38 @@ actions:
 - ✅ Same configuration for all platforms
 - ✅ Consistent behavior across engines
 
+## Wildcard Pattern Support
+
+Artifact paths support wildcard patterns for flexible file collection:
+
+### Supported Patterns
+
+- **Single wildcard**: `*.rpm`, `*.log`, `*.txt`
+- **Directory wildcard**: `dist/*/binary`, `.rpmbuild/RPMS/*/*.rpm`
+- **Multi-level wildcard**: `build/**/*.so`
+
+### Example with Wildcards
+
+```yaml
+actions:
+  - name: collect-rpms
+    container:
+      image:
+        from: fedora:latest
+      run: |
+        rpmbuild -ba myapp.spec
+      artifacts:
+        output: ./rpms
+        path:
+          - .rpmbuild/RPMS/*/*.rpm      # Collects all RPM files
+          - .rpmbuild/SRPMS/*.src.rpm   # Collects all SRPM files
+```
+
+**Result**:
+- `./rpms/.rpmbuild/RPMS/x86_64/myapp-1.0-1.x86_64.rpm`
+- `./rpms/.rpmbuild/RPMS/noarch/myapp-docs-1.0-1.noarch.rpm`
+- `./rpms/.rpmbuild/SRPMS/myapp-1.0-1.src.rpm`
+
 ## Technical Notes
 
 - Output directory is created automatically if it doesn't exist
@@ -204,13 +239,14 @@ actions:
 - For run commands, artifacts are collected via pre-mounted volume (no post-execution copy needed)
 - For build-only images, artifacts are extracted using docker/podman cp command
 - All paths are cleaned and normalized before copying
+- Wildcard patterns are fully supported using `cp --parents` for proper path preservation
 
 ## Future Enhancements
 
 Potential future improvements:
 
-1. **Glob Pattern Support**: Enhanced pattern matching for artifact paths
-2. **Compression**: Optional artifact compression before transfer
-3. **Streaming**: Stream artifacts during execution instead of after
-4. **Filters**: Exclude patterns to avoid collecting unwanted files
+1. **Compression**: Optional artifact compression before transfer
+2. **Streaming**: Stream artifacts during execution instead of after
+3. **Filters**: Exclude patterns to avoid collecting unwanted files
+4. **Artifact metadata**: Collect file permissions, timestamps, and checksums
 
