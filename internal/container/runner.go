@@ -331,59 +331,7 @@ func (r *ContainerRunner) collectArtifacts(result *container.ContainerResult, co
     if config.Run != "" || config.RunAction != "" || config.RunStage != "" {
         // Artifacts were collected via pre-mounted volume - nothing more to do
         // The addArtifactMount and addArtifactCopyCommands already handled the collection
-        
-        // Force filesystem sync to ensure all writes from container bind mount are visible
-        // This addresses race conditions where directories created through bind mounts
-        // may not be immediately visible in directory listings (orphaned inode issue)
-        if err := r.syncArtifactDirectory(config.Artifacts.Output); err != nil {
-            // Sync is best-effort - log warning but don't fail
-            if r.VerbosityLevel >= 2 {
-                fmt.Printf("Warning: failed to sync artifact directory: %v\n", err)
-            }
-        }
-        
         return nil
-    }
-    
-    return nil
-}
-
-// syncArtifactDirectory forces filesystem sync on the artifact directory
-// This ensures directory entries created through container bind mounts are visible
-func (r *ContainerRunner) syncArtifactDirectory(artifactPath string) error {
-    // Get absolute path
-    absPath, err := filepath.Abs(artifactPath)
-    if err != nil {
-        return fmt.Errorf("failed to get absolute path: %w", err)
-    }
-    
-    // Open and sync the artifact output directory itself
-    // This refreshes the directory entry cache for subdirectories created by containers
-    dir, err := os.Open(absPath)
-    if err != nil {
-        return fmt.Errorf("failed to open directory: %w", err)
-    }
-    defer dir.Close()
-    
-    // Sync to flush all metadata changes (directory entries)
-    if err := dir.Sync(); err != nil {
-        return fmt.Errorf("failed to sync directory: %w", err)
-    }
-    
-    // Recursively sync subdirectories that might contain artifacts
-    entries, err := os.ReadDir(absPath)
-    if err != nil {
-        return fmt.Errorf("failed to read directory for recursive sync: %w", err)
-    }
-    
-    for _, entry := range entries {
-        if entry.IsDir() {
-            subPath := filepath.Join(absPath, entry.Name())
-            if subDir, err := os.Open(subPath); err == nil {
-                subDir.Sync() // Best effort, ignore errors
-                subDir.Close()
-            }
-        }
     }
     
     return nil

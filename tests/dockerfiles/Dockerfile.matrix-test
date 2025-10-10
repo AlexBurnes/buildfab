@@ -1,0 +1,11 @@
+ARG BASE_IMAGE=alpine:latest
+FROM ${BASE_IMAGE}
+
+# Create a simple output file
+RUN mkdir -p /app && echo "Built from ${BASE_IMAGE}" > /app/output.txt
+
+# Show that the build completed
+RUN cat /app/output.txt
+
+CMD ["cat", "/app/output.txt"]
+

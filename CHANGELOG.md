@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.3] - 2025-10-10
+
+### Fixed
+- **Container Variable Interpolation in Output Display**: Fixed matrix and step variables not being interpolated in container command output
+  - Matrix variables like `${{ matrix.image }}` now display actual values (e.g., `alpine:latest`) instead of template syntax
+  - Step variables like `${{ image }}` now properly interpolate in container command display
+  - Fixed deadlock issue in `OnStepStart` by releasing mutex before calling display functions
+  - Added `SetStepVariables()` method to `OrderedOutputManager` to pass step-specific variables for display
+  - Step variables are now set before `OnStepStart` is called to ensure proper interpolation timing
+  - Container command output now shows fully interpolated values for both docker run and docker build operations
+  - Example: `🐳 Running container: podman run --rm alpine:latest sh -c '...'` (was showing `${{ matrix.image }}`)
+
+### Removed
+- **Container Filesystem Sync**: Removed `syncArtifactDirectory()` method and filesystem sync functionality
+  - Removed unnecessary `dir.Sync()` operations for bind mount artifact collection
+  - Simplified artifact collection code by removing sync-related logic
+
+### Added
+- **Test Coverage**: Added comprehensive test configuration for matrix and step variables in container actions
+  - New test file `tests/test-matrix-container-variables.yml` with test stages for matrix and step variable interpolation
+  - New dockerfile `tests/dockerfiles/Dockerfile.matrix-test` for testing matrix variable builds
+  - Test coverage includes docker run, docker build, matrix values, and step variables
+
 ## [0.24.2] - 2025-10-10
 
 ### Fixed

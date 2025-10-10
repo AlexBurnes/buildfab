@@ -1276,6 +1276,15 @@ func (r *Runner) executeStepWithMatrix(ctx context.Context, step Step) error {
 
 // executeStepRegular handles regular step execution without matrix
 func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
+	// Pass step variables to output manager if available
+	if len(step.Variables) > 0 && r.opts.StepCallback != nil {
+		mergedVars := r.mergeStepVariables(step)
+		// Check if this is an OrderedStepCallback with SetStepVariables method
+		if orderedCallback, ok := r.opts.StepCallback.(*OrderedStepCallback); ok {
+			orderedCallback.manager.SetStepVariables(step.Action, mergedVars)
+		}
+	}
+	
 	// Wrap execution with step variable merging
 	return r.withStepVariables(step, func() error {
 		// Check if it's a built-in action
@@ -1651,6 +1660,16 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	// Debug: Print step information
 	if r.opts.Debug {
 		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] executeActionForDAGWithCallback: action.Name=%s, stepConfig.Action=%s, stepName=%s\n", action.Name, stepConfig.Action, stepName)
+	}
+	
+	// Pass step variables to output manager BEFORE calling OnStepStart
+	if stepConfig != nil && len(stepConfig.Variables) > 0 && r.opts.StepCallback != nil {
+		stepForVars := *stepConfig
+		mergedVars := r.mergeStepVariables(stepForVars)
+		// Check if this is an OrderedStepCallback with SetStepVariables method
+		if orderedCallback, ok := r.opts.StepCallback.(*OrderedStepCallback); ok {
+			orderedCallback.manager.SetStepVariables(stepName, mergedVars)
+		}
 	}
 	
 	if r.opts.StepCallback != nil {

@@ -31,7 +31,8 @@ type OrderedOutputManager struct {
     config      *Config                    // Configuration for command extraction
     configPath  string                     // Configuration file path for container commands
     interpolatedActions map[string]*Action // Interpolated actions for matrix steps
-    variables   map[string]string          // Variables for interpolation
+    variables   map[string]string          // Global variables for interpolation
+    stepVariables map[string]map[string]string // Step-specific variables for interpolation
 }
 
 // StepOutputData contains all output data for a step
@@ -58,6 +59,7 @@ func NewOrderedOutputManager(steps []Step, verboseLevel int, debug bool, errorOu
         errorOutput: errorOutput,
         config:      config,
         interpolatedActions: make(map[string]*Action),
+        stepVariables: make(map[string]map[string]string),
     }
 }
 
@@ -66,9 +68,16 @@ func (o *OrderedOutputManager) SetConfigPath(configPath string) {
     o.configPath = configPath
 }
 
-// SetVariables sets the variables for interpolation
+// SetVariables sets the global variables for interpolation
 func (o *OrderedOutputManager) SetVariables(variables map[string]string) {
     o.variables = variables
+}
+
+// SetStepVariables sets the step-specific variables for interpolation
+func (o *OrderedOutputManager) SetStepVariables(stepName string, variables map[string]string) {
+    o.mu.Lock()
+    defer o.mu.Unlock()
+    o.stepVariables[stepName] = variables
 }
 
 // SetInterpolatedAction sets the interpolated action for a step
@@ -89,8 +98,7 @@ func (o *OrderedOutputManager) RegisterStep(stepName string) {
 // OnStepStart handles step start events from executor
 func (o *OrderedOutputManager) OnStepStart(ctx context.Context, stepName string) {
     o.mu.Lock()
-    defer o.mu.Unlock()
-
+    
     if o.debug {
         fmt.Fprintf(o.errorOutput, "[DEBUG] OnStepStart: %s\n", stepName)
         o.debugPrintState()
@@ -100,14 +108,24 @@ func (o *OrderedOutputManager) OnStepStart(ctx context.Context, stepName string)
         data.Started = true
     }
 
-    // Show step start message if this is the next step in order and not already shown
-    if o.canShowStepStart(stepName) && !o.stepData[stepName].Shown {
+    // Check if we can show step start (with mutex locked)
+    shouldShow := o.canShowStepStart(stepName) && !o.stepData[stepName].Shown
+    
+    // Release mutex before calling display functions to avoid deadlock
+    o.mu.Unlock()
+    
+    // Show step start message if ready (without holding mutex)
+    if shouldShow {
         if o.debug {
             fmt.Fprintf(o.errorOutput, "[DEBUG] Showing step start for: %s\n", stepName)
         }
         o.showStepStart(stepName)
+        
+        // Re-acquire mutex to update state
+        o.mu.Lock()
         o.stepData[stepName].Shown = true
         o.currentStep = stepName
+        o.mu.Unlock()
     } else {
         if o.debug {
             fmt.Fprintf(o.errorOutput, "[DEBUG] Cannot show step start for: %s (not ready or already shown)\n", stepName)
@@ -378,48 +396,70 @@ func (o *OrderedOutputManager) showContainerCommand(stepName string) {
         action = &actionValue
     }
 
-    if action.Container != nil {
-        // Create a temporary runner to prepare the configuration for display
-        tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(o.verboseLevel)
-        if err != nil {
-            // Silently ignore runner creation errors for display purposes
-            return
+    if action.Container == nil {
+        return
+    }
+    
+    // Create a temporary runner to prepare the configuration for display
+    tempRunner, err := containerRunner.NewContainerRunnerWithVerbosity(o.verboseLevel)
+    if err != nil {
+        // Silently ignore runner creation errors for display purposes
+        return
+    }
+    
+    // Use the actual config path
+    configPath := o.configPath
+    if configPath == "" {
+        configPath = ".project.yml" // Fallback
+    }
+    
+    // Use the already-interpolated container configuration from the action
+    // For matrix steps, the action.Container already has matrix variables substituted
+    preparedConfig, prepErr := tempRunner.PrepareContainerConfig(*action.Container, configPath)
+    if prepErr != nil {
+        // Silently ignore preparation errors for display purposes
+        // (artifacts might not be mounted yet, which is OK for display)
+        return
+    }
+    
+    // Interpolate variables based on step type:
+    // 1. Matrix steps (exists == true): already fully interpolated, no additional interpolation needed
+    // 2. Steps with step variables: use step-specific variables
+    // 3. Regular steps: use global variables
+    if !exists {
+        // Check if this step has step-specific variables
+        o.mu.Lock()
+        stepVars, hasStepVars := o.stepVariables[stepName]
+        o.mu.Unlock()
+        
+        var varsToUse map[string]string
+        if hasStepVars {
+            // Use step-specific variables (which should already be merged with global vars)
+            varsToUse = stepVars
+        } else if o.variables != nil {
+            // Use global variables
+            varsToUse = o.variables
         }
         
-        // Use the actual config path
-        configPath := o.configPath
-        if configPath == "" {
-            configPath = ".project.yml" // Fallback
-        }
-        
-        // Use the interpolated container configuration with matrix variables already substituted
-        preparedConfig, prepErr := tempRunner.PrepareContainerConfig(*action.Container, configPath)
-        if prepErr != nil {
-            // Silently ignore preparation errors for display purposes
-            // (artifacts might not be mounted yet, which is OK for display)
-            return
-        }
-        
-        // Interpolate variables in the container configuration for display
-        if o.variables != nil {
-            interpolatedConfig, err := InterpolateContainerConfig(&preparedConfig, o.variables)
+        if varsToUse != nil {
+            interpolatedConfig, err := InterpolateContainerConfig(&preparedConfig, varsToUse)
             if err == nil {
                 preparedConfig = *interpolatedConfig
             }
         }
-        
-        containerCmd := o.buildContainerCommand(&preparedConfig)
-        
-        // Determine the appropriate prefix based on the container operation type
-        prefix := "Running container"
-        if preparedConfig.Image.Build != nil {
-            prefix = "Building image"
-        } else if preparedConfig.Image.Slim != nil {
-            prefix = "Slimming image"
-        }
-        
-        fmt.Fprintf(o.errorOutput, "  🐳 %s: %s\n", prefix, containerCmd)
     }
+    
+    containerCmd := o.buildContainerCommand(&preparedConfig)
+    
+    // Determine the appropriate prefix based on the container operation type
+    prefix := "Running container"
+    if preparedConfig.Image.Build != nil {
+        prefix = "Building image"
+    } else if preparedConfig.Image.Slim != nil {
+        prefix = "Slimming image"
+    }
+    
+    fmt.Fprintf(o.errorOutput, "  🐳 %s: %s\n", prefix, containerCmd)
 }
 
 // buildContainerCommand builds a human-readable representation of the container command

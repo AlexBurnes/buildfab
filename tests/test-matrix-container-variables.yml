@@ -1,0 +1,116 @@
+project:
+  name: test-matrix-container-variables
+
+# Test matrix variables interpolation in container actions
+
+actions:
+  # Test 1: Matrix with docker run using different images
+  - name: test-run-with-matrix
+    description: Test docker run with matrix image variable
+    container:
+      image:
+        from: ${{ matrix.image }}
+      run: echo "Running in ${{ matrix.image }}"
+  
+  # Test 2: Matrix with docker build using different base images
+  - name: test-build-with-matrix
+    description: Test docker build with matrix base image variable
+    container:
+      image:
+        build:
+          dockerfile: tests/dockerfiles/Dockerfile.matrix-test
+          context: .
+          args:
+            BASE_IMAGE: ${{ matrix.base }}
+          tags:
+            - test-matrix-${{ matrix.name }}:latest
+      artifacts:
+        output: ./build-artifacts/matrix-${{ matrix.name }}
+        path:
+          - /app/output.txt
+  
+  # Test 3: Step variables with docker run
+  - name: test-run-with-step-vars
+    description: Test docker run with step variables
+    container:
+      image:
+        from: ${{ image }}
+      env:
+        TEST_VAR: ${{ test_var }}
+      run: |
+        echo "Image: ${{ image }}"
+        echo "Test var: $TEST_VAR"
+  
+  # Test 4: Step variables with docker build
+  - name: test-build-with-step-vars
+    description: Test docker build with step variables
+    container:
+      image:
+        build:
+          dockerfile: ${{ dockerfile }}
+          context: ${{ context }}
+          args:
+            BUILD_TAG: ${{ tag }}
+          tags:
+            - ${{ image }}:${{ tag }}
+
+stages:
+  # Stage 1: Test matrix with docker run
+  test-matrix-run:
+    steps:
+      - action: test-run-with-matrix
+        matrix:
+          values:
+            image: 
+              - alpine:latest
+              - ubuntu:22.04
+              - busybox:latest
+          strategy:
+            max_parallel: 1
+  
+  # Stage 2: Test matrix with docker build
+  test-matrix-build:
+    steps:
+      - action: test-build-with-matrix
+        matrix:
+          values:
+            base: 
+              - alpine:latest
+              - ubuntu:22.04
+            name:
+              - alpine-test
+              - ubuntu-test
+          strategy:
+            max_parallel: 1
+  
+  # Stage 3: Test step variables with docker run
+  test-step-vars-run:
+    steps:
+      - action: test-run-with-step-vars
+        variables:
+          image: alpine:latest
+          test_var: "hello-world"
+      
+      - action: test-run-with-step-vars
+        variables:
+          image: ubuntu:22.04
+          test_var: "test-ubuntu"
+  
+  # Stage 4: Test step variables with docker build
+  test-step-vars-build:
+    steps:
+      - action: test-build-with-step-vars
+        variables:
+          dockerfile: tests/dockerfiles/Dockerfile.simple-artifact
+          context: "."
+          image: test-step-vars
+          tag: v1.0.0
+      
+      - action: test-build-with-step-vars
+        variables:
+          dockerfile: tests/dockerfiles/Dockerfile.simple-artifact
+          context: "."
+          image: test-step-vars
+          tag: v2.0.0
+
+

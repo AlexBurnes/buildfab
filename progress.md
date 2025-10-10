@@ -2,6 +2,18 @@
 
 ## What Works
 
+- **Container Variable Interpolation** (v0.24.3 - October 10, 2025): Successfully fixed matrix and step variables not being interpolated in container command output display (100% complete)
+  - **Problem Identified** - Matrix variables like `${{ matrix.image }}` and step variables like `${{ image }}` were displaying as raw template syntax instead of actual values in container commands at `-vv` verbosity
+  - **User Impact** - Users couldn't copy displayed container commands for debugging because variables weren't interpolated (saw `${{ matrix.image }}` instead of `alpine:latest`)
+  - **Root Causes Found** - Three critical issues: (1) No support for step-specific variables in output manager, (2) Step variables set AFTER OnStepStart called, (3) Deadlock in mutex locking
+  - **Solution Implemented** - (1) Added `stepVariables` map to OrderedOutputManager, (2) Added `SetStepVariables()` method, (3) Call SetStepVariables() BEFORE OnStepStart, (4) Fixed deadlock by releasing mutex before display functions
+  - **Variable Priority** - Matrix steps (already interpolated) > step variables > global variables, ensuring correct interpolation for all scenarios
+  - **Removed Code** - Removed `syncArtifactDirectory()` method and filesystem sync operations from `internal/container/runner.go` (unnecessary for bind mounts)
+  - **Test Coverage** - Created `tests/test-matrix-container-variables.yml` with 4 test stages covering matrix+docker run, matrix+docker build, step variables+docker run, step variables+docker build
+  - **Files Modified** - `pkg/buildfab/ordered_output.go` (added stepVariables field and SetStepVariables method, fixed OnStepStart mutex handling, updated showContainerCommand), `pkg/buildfab/buildfab.go` (added SetStepVariables calls before OnStepStart in executeStepRegular and executeActionForDAGWithCallback), `internal/container/runner.go` (removed syncArtifactDirectory method)
+  - **Testing Validated** - Matrix variables interpolate correctly (alpine:latest, ubuntu:22.04), step variables interpolate correctly, no deadlocks, works for both docker run and docker build
+  - **Production Ready** - Variable interpolation fully functional for all container operations with proper mutex handling
+
 - **Container Verbosity Level Handling** (v0.24.2 - October 10, 2025): Successfully fixed container output and command display to properly respect verbosity levels (100% complete)
   - **Problem Identified** - Container output was not being displayed at verbosity level 1, and container commands were not showing the actual executed commands
   - **User Requirements** - Level >= 1 should show container output, level >= 2 should show both container command and output
