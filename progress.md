@@ -2,6 +2,16 @@
 
 ## What Works
 
+- **YAML Configuration Validation Enhanced** (v0.24.4 - October 10, 2025): Successfully implemented strict YAML unmarshaling to catch typos and unknown fields in configuration files (100% complete)
+  - **Problem Identified** - Users could write typos like `requires` instead of `require` in YAML configuration, and these errors would be silently ignored during validation, leading to confusing behavior where dependencies were not enforced
+  - **Root Cause Found** - YAML unmarshaler by default ignores unknown fields, so typos like `requires:` would not match any field in the Step struct and would be silently skipped without error reporting
+  - **Solution Implemented** - (1) Enabled strict YAML unmarshaling using `decoder.KnownFields(true)` in all configuration loading functions, (2) Updated `pkg/buildfab/config.go` to use strict decoder in LoadConfig, LoadConfigFromBytes, and loadAndMergeFile, (3) Updated `internal/config/config.go` and `internal/config/include.go` to use strict decoder, (4) Modified `cmd/buildfab/main.go` error handling to properly catch and display YAML parsing errors
+  - **Perfect Error Reporting** - Typos now caught with clear error messages like "Error: failed to parse configuration file: yaml: unmarshal errors: line 13: field requires not found in type buildfab.Step"
+  - **PartialConfig Fix** - Added `Include` field to PartialConfig struct to support circular include detection test with strict unmarshaling
+  - **Files Modified** - `pkg/buildfab/config.go` (strict decoder in 3 functions), `internal/config/config.go` (strict decoder in Load), `internal/config/include.go` (strict decoder in loadIncludedFile, added Include field to PartialConfig), `cmd/buildfab/main.go` (enhanced error handling for YAML parsing errors)
+  - **Comprehensive Testing** - Verified typos are caught and reported correctly, confirmed correct configuration still works as expected, tested with multiple typo scenarios, all tests pass including circular include test
+  - **Production Ready** - Configuration validation now catches all typos and unknown fields with clear error messages
+
 - **Container Variable Interpolation** (v0.24.3 - October 10, 2025): Successfully fixed matrix and step variables not being interpolated in container command output display (100% complete)
   - **Problem Identified** - Matrix variables like `${{ matrix.image }}` and step variables like `${{ image }}` were displaying as raw template syntax instead of actual values in container commands at `-vv` verbosity
   - **User Impact** - Users couldn't copy displayed container commands for debugging because variables weren't interpolated (saw `${{ matrix.image }}` instead of `alpine:latest`)
