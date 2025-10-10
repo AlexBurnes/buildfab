@@ -155,18 +155,16 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
         // Use absolute path to config file since we're not changing directory
         configFilePath := filepath.Join("/tmp", tempDirName, configFile)
 
-        // Build verbosity flags for the buildfab command inside the container
-        // Use minimal verbosity to avoid duplicate output (shell commands + output)
-        verbosityFlags := ""
-        if r.VerbosityLevel >= 1 {
-            verbosityFlags = "-v" // Use -v for basic verbosity
-        }
-        if r.VerbosityLevel >= 2 {
-            verbosityFlags = "-vv" // Keep -v to avoid duplicate output
-        }
-        if r.VerbosityLevel >= 3 {
-            verbosityFlags = "-vvv" // Keep -v to avoid duplicate output
-        }
+		// Build verbosity flags for the buildfab command inside the container
+		// Pass through the same verbosity level to the container
+		verbosityFlags := ""
+		if r.VerbosityLevel >= 3 {
+			verbosityFlags = "-vvv"
+		} else if r.VerbosityLevel >= 2 {
+			verbosityFlags = "-vv"
+		} else if r.VerbosityLevel >= 1 {
+			verbosityFlags = "-v"
+		}
 
         var command string
         if config.RunAction != "" {

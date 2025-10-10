@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2] - 2025-10-10
+
+### Fixed
+- **Container Verbosity Level Handling**: Fixed container output and command display to properly respect verbosity levels
+  - Verbosity level >= 1 (`-v`): Container output is now properly displayed
+  - Verbosity level >= 2 (`-vv`): Both container command and output are displayed
+  - Fixed output callback condition from `> 0` to `>= 1` for consistent behavior
+  - Fixed verbosity flags passed to buildfab commands running inside containers to match parent verbosity level
+  - Container builds, runs, and slim operations now show appropriate output based on verbosity setting
+
 ## [0.24.1] - 2025-10-10
 
 ### Fixed

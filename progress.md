@@ -2,6 +2,16 @@
 
 ## What Works
 
+- **Container Verbosity Level Handling** (v0.24.2 - October 10, 2025): Successfully fixed container output and command display to properly respect verbosity levels (100% complete)
+  - **Problem Identified** - Container output was not being displayed at verbosity level 1, and container commands were not showing the actual executed commands
+  - **User Requirements** - Level >= 1 should show container output, level >= 2 should show both container command and output
+  - **Root Cause** - Output callback had condition `VerboseLevel > 0` instead of `>= 1`, and verbosity flags passed to container buildfab commands were incorrect
+  - **Solution Implemented** - Changed output callback condition from `> 0` to `>= 1` in `pkg/buildfab/buildfab.go`, fixed verbosity flag logic in `internal/container/runner.go`
+  - **Verbosity Behavior** - Level 1 (`-v`): Shows container output only, Level 2 (`-vv`): Shows container command + output, Level 3 (`-vvv`): Maximum verbosity with debug info
+  - **Testing Complete** - Verified with `examples/container-docker-build.yml` at both verbosity levels, confirmed correct display behavior
+  - **Files Modified** - `pkg/buildfab/buildfab.go` (output callback condition), `internal/container/runner.go` (verbosity flags logic)
+  - **Production Ready** - Container verbosity handling now works as expected with proper output display at all verbosity levels
+
 - **Container Artifact Collection Filesystem Sync** (v0.24.1 - October 10, 2025): Successfully fixed bind mount directory entry cache issue with filesystem sync implementation (100% complete)
   - **Problem Identified** - Directories created through container bind mounts had orphaned inodes (accessible via path traversal but not visible in parent directory listings)
   - **Root Cause** - Linux kernel bind mount cache issue where directory entry in parent directory's cache isn't updated when containers create subdirectories

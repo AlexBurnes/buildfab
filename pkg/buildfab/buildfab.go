@@ -3482,8 +3482,9 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 	var containerResult *container.ContainerResult
 	err = func() error {
 		// Create a callback function for real-time output streaming
+		// Verbosity level >= 1: show container output
 		outputCallback := func(line string) {
-			if r.opts.StepCallback != nil && r.opts.VerboseLevel > 0 && line != "" {
+			if r.opts.StepCallback != nil && r.opts.VerboseLevel >= 1 && line != "" {
 				r.opts.StepCallback.OnStepOutput(ctx, action.Name, line)
 			}
 		}
