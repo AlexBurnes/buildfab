@@ -341,8 +341,10 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Load configuration to check if argument is a stage or action
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
-		// Check if it's a validation error
-		if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
+		// Check if it's a validation error or YAML parsing error
+		if strings.Contains(err.Error(), "failed to parse YAML") ||
+		   strings.Contains(err.Error(), "field") && strings.Contains(err.Error(), "not found") ||
+		   strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
 		   strings.Contains(err.Error(), "duplicate action name") ||
 		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
 			// In test mode, return the error instead of exiting
@@ -395,8 +397,10 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	// Load configuration using library API
 	cfg, err := buildfab.LoadConfig(configPath)
 	if err != nil {
-		// Check if it's a validation error
-		if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
+		// Check if it's a validation error or YAML parsing error
+		if strings.Contains(err.Error(), "failed to parse YAML") ||
+		   strings.Contains(err.Error(), "field") && strings.Contains(err.Error(), "not found") ||
+		   strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
 		   strings.Contains(err.Error(), "duplicate action name") ||
 		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
 			// In test mode, return the error instead of exiting

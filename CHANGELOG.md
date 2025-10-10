@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.4] - 2025-10-10
+
+### Fixed
+- **YAML Configuration Validation**: Added strict YAML unmarshaling to catch typos and unknown fields in configuration
+  - Enabled `KnownFields(true)` in YAML decoder to reject unknown/mistyped field names
+  - Typos like `requires` instead of `require` are now caught during config validation
+  - Applied to all configuration loading functions: `LoadConfig`, `LoadConfigFromBytes`, and include file processing
+  - Error messages clearly indicate the line number and the unknown field name
+  - Updated both `pkg/buildfab/config.go` and `internal/config/` loaders for consistency
+  - Modified `cmd/buildfab/main.go` to properly handle and display YAML parsing errors
+
 ## [0.24.3] - 2025-10-10
 
 ### Fixed

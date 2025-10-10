@@ -36,9 +36,11 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to read configuration file: %w", err)
 	}
 	
-	// Parse YAML
+	// Parse YAML with strict mode to catch unknown fields
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	decoder.KnownFields(true) // Enable strict mode - reject unknown fields
+	if err := decoder.Decode(&config); err != nil {
 		return nil, fmt.Errorf("failed to parse configuration file: %w", err)
 	}
 	
@@ -65,8 +67,11 @@ func LoadConfig(path string) (*Config, error) {
 
 // LoadConfigFromBytes loads configuration from YAML bytes
 func LoadConfigFromBytes(data []byte) (*Config, error) {
+	// Parse YAML with strict mode to catch unknown fields
 	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
+	decoder.KnownFields(true) // Enable strict mode - reject unknown fields
+	if err := decoder.Decode(&config); err != nil {
 		return nil, fmt.Errorf("failed to parse configuration: %w", err)
 	}
 	
@@ -163,9 +168,11 @@ func loadAndMergeFile(config *Config, path string, visited map[string]bool) erro
 		return fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 	
-	// Parse YAML
+	// Parse YAML with strict mode to catch unknown fields
 	var includedConfig Config
-	if err := yaml.Unmarshal(content, &includedConfig); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(string(content)))
+	decoder.KnownFields(true) // Enable strict mode - reject unknown fields
+	if err := decoder.Decode(&includedConfig); err != nil {
 		return fmt.Errorf("failed to parse YAML in file %s: %w", path, err)
 	}
 	

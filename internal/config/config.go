@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
 	"github.com/AlexBurnes/buildfab/pkg/buildfab"
+	"gopkg.in/yaml.v3"
 )
 
 // Loader handles loading and parsing configuration files
@@ -52,9 +52,11 @@ func (l *Loader) Load() (*buildfab.Config, error) {
 		return nil, fmt.Errorf("failed to read configuration file: %w", err)
 	}
 
-	// Parse YAML
+	// Parse YAML with strict mode to catch unknown fields
 	var config buildfab.Config
-	if err := yaml.Unmarshal(content, &config); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(string(content)))
+	decoder.KnownFields(true) // Enable strict mode - reject unknown fields
+	if err := decoder.Decode(&config); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML configuration: %w", err)
 	}
 

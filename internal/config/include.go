@@ -128,7 +128,8 @@ func (ir *IncludeResolver) LoadIncludedConfigs(filePaths []string) (*PartialConf
 
 // PartialConfig represents a partial configuration that can be merged
 type PartialConfig struct {
-	Actions []Action `yaml:"actions,omitempty"`
+	Include []string         `yaml:"include,omitempty"`
+	Actions []Action         `yaml:"actions,omitempty"`
 	Stages  map[string]Stage `yaml:"stages,omitempty"`
 }
 
@@ -171,9 +172,11 @@ func (ir *IncludeResolver) loadIncludedFile(filePath string) (*PartialConfig, er
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 	
-	// Parse YAML
+	// Parse YAML with strict mode to catch unknown fields
 	var config PartialConfig
-	if err := yaml.Unmarshal(content, &config); err != nil {
+	decoder := yaml.NewDecoder(strings.NewReader(string(content)))
+	decoder.KnownFields(true) // Enable strict mode - reject unknown fields
+	if err := decoder.Decode(&config); err != nil {
 		return nil, fmt.Errorf("failed to parse YAML: %w", err)
 	}
 	
