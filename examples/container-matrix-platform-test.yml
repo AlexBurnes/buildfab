@@ -13,10 +13,10 @@ stages:
         matrix:
           values:
             image: ["alpine:latest", "ubuntu:22.04", "debian:12"]
-        strategy:
-          max_parallel: 3
-          fail_fast: false
-          continue_on_error: true
+          strategy:
+            max_parallel: 3
+            fail_fast: false
+            continue_on_error: true
 
   test-view:
     steps:
@@ -24,10 +24,10 @@ stages:
         matrix:
           values:
             image: ["alpine:latest", "ubuntu:22.04", "debian:12"]
-        strategy:
-          max_parallel: 3
-          fail_fast: false
-          continue_on_error: true
+          strategy:
+            max_parallel: 3
+            fail_fast: false
+            continue_on_error: true
 
   test-stream:
     steps:
@@ -35,10 +35,10 @@ stages:
         matrix:
           values:
             image: ["alpine:latest", "ubuntu:22.04", "debian:12"]
-        strategy:
-          max_parallel: 3
-          fail_fast: false
-          continue_on_error: true
+          strategy:
+            max_parallel: 3
+            fail_fast: false
+            continue_on_error: true
 
 actions:
   - name: platform-view
@@ -51,6 +51,7 @@ actions:
       echo "OS Version: '${{os_version}}'"
       echo "CPU Count: ${{cpu}}"
       echo "================================"
+      exit 1
 
   - name: container-platform-view
     description: Test platform detection in ${{ matrix.image }}

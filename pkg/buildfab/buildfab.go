@@ -44,13 +44,14 @@ type Config struct {
 
 // Action represents a single action that can be executed
 type Action struct {
-	Name      string                 `yaml:"name"`
-	Run       string                 `yaml:"run,omitempty"`
-	Uses      string                 `yaml:"uses,omitempty"`
-	Shell     string                 `yaml:"shell,omitempty"` // Optional shell specification
-	Variants  []ActionVariant        `yaml:"variants,omitempty"` // Optional variants for conditional execution
-	Options   map[string]interface{} `yaml:"options,omitempty"` // Optional action options (e.g., delay)
-	Container *container.ContainerConfig `yaml:"container,omitempty"` // Optional container configuration
+	Name        string                 `yaml:"name"`
+	Description string                 `yaml:"description,omitempty"` // Optional action description
+	Run         string                 `yaml:"run,omitempty"`
+	Uses        string                 `yaml:"uses,omitempty"`
+	Shell       string                 `yaml:"shell,omitempty"` // Optional shell specification
+	Variants    []ActionVariant        `yaml:"variants,omitempty"` // Optional variants for conditional execution
+	Options     map[string]interface{} `yaml:"options,omitempty"` // Optional action options (e.g., delay)
+	Container   *container.ContainerConfig `yaml:"container,omitempty"` // Optional container configuration
 }
 
 // ActionVariant represents a conditional variant of an action
@@ -3037,16 +3038,16 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 		}
 		}
 		
-		if err != nil {
-		// Provide better error message with reproduction instructions
-		errorMessage := fmt.Sprintf("failed, to check run:\n  %s", action.Run)
-		// Debug output
-		fmt.Fprintf(os.Stderr, "[DEBUG] runCustomActionForDAGWithStreamingControl: bufferedOutput=%q\n", bufferedOutput)
-		return Result{
-			Status:         StatusError,
-			Message:        errorMessage,
-			BufferedOutput: bufferedOutput,
-		}, fmt.Errorf("command failed: %w", err)
+	if err != nil {
+	// Provide better error message with reproduction instructions
+	errorMessage := fmt.Sprintf("failed, to check run:\n  %s", interpolatedAction.Run)
+	// Debug output
+	fmt.Fprintf(os.Stderr, "[DEBUG] runCustomActionForDAGWithStreamingControl: bufferedOutput=%q\n", bufferedOutput)
+	return Result{
+		Status:         StatusError,
+		Message:        errorMessage,
+		BufferedOutput: bufferedOutput,
+	}, fmt.Errorf("command failed: %w", err)
 	}
 	
 	return Result{
@@ -3138,7 +3139,7 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 	
 	if err != nil {
 		// Provide better error message with reproduction instructions
-		errorMessage := fmt.Sprintf("failed, to check run:\n  %s", action.Run)
+		errorMessage := fmt.Sprintf("failed, to check run:\n  %s", interpolatedAction.Run)
 		return Result{
 			Status:         StatusError,
 			Message:        errorMessage,
@@ -3377,7 +3378,7 @@ func (r *Runner) runCustomAction(ctx context.Context, action Action) error {
 	
 	if err != nil {
 		// Provide better error message with reproduction instructions
-		return fmt.Errorf("failed, to check run:\n  %s", action.Run)
+		return fmt.Errorf("failed, to check run:\n  %s", interpolatedAction.Run)
 	}
 	
 	return nil

@@ -1,7 +1,5 @@
 project:
-  name: buildfab
-
-name: container-docker-build-example
+  name: container-docker-build-example
 
 stages:
   docker-build:

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -156,6 +157,14 @@ var listStepsCmd = &cobra.Command{
 	RunE:  runListSteps,
 }
 
+// listVariablesCmd represents the list-variables command
+var listVariablesCmd = &cobra.Command{
+	Use:   "list-variables",
+	Short: "List all available variables with their values",
+	Long:  `List all available variables that can be used in configuration, sorted by name.`,
+	RunE:  runListVariables,
+}
+
 func init() {
 	listStepsCmd.Flags().BoolVarP(&showGraph, "graph", "g", false, "show steps as a dependency graph")
 }
@@ -303,6 +312,7 @@ func main() {
 	rootCmd.AddCommand(listActionsCmd)
 	rootCmd.AddCommand(listStagesCmd)
 	rootCmd.AddCommand(listStepsCmd)
+	rootCmd.AddCommand(listVariablesCmd)
 	rootCmd.AddCommand(validateCmd)
 	
 	// Parse matrix flags before executing
@@ -736,6 +746,83 @@ func runListStages(cmd *cobra.Command, args []string) error {
 		stepCount := len(stage.Steps)
 		description := fmt.Sprintf("%d step(s)", stepCount)
 		fmt.Printf("  %-20s %s\n", name, description)
+	}
+	
+	return nil
+}
+
+// runListVariables handles the list-variables command
+func runListVariables(cmd *cobra.Command, args []string) error {
+	// Load configuration using library API
+	cfg, err := buildfab.LoadConfig(configPath)
+	if err != nil {
+		return handleConfigLoadError(configPath, err)
+	}
+	
+	// Create variables map from environment variables
+	variables := make(map[string]string)
+	for _, envVar := range envVars {
+		parts := strings.SplitN(envVar, "=", 2)
+		if len(parts) == 2 {
+			variables[parts[0]] = parts[1]
+		}
+	}
+	
+	// Add matrix variables from CLI flags
+	for key, value := range matrixVars {
+		variables[fmt.Sprintf("matrix.%s", key)] = value
+	}
+	
+	// Add platform variables
+	variables = buildfab.AddPlatformVariables(variables)
+	
+	// Add version variables
+	variables = buildfab.AddVersionVariables(variables)
+	
+	// Add direct project and version variables for convenience
+	if cfg != nil {
+		variables["project"] = cfg.Project.Name
+		// Add first module as the primary module
+		if len(cfg.Project.Modules) > 0 {
+			variables["module"] = cfg.Project.Modules[0]
+		}
+	}
+	
+	// Add OS environment variables with env. prefix
+	// Only add commonly used ones to avoid clutter
+	commonEnvVars := []string{"PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "PWD", "GOPATH", "GOROOT"}
+	for _, envName := range commonEnvVars {
+		if envValue := os.Getenv(envName); envValue != "" {
+			variables[fmt.Sprintf("env.%s", envName)] = envValue
+		}
+	}
+	
+	fmt.Println("Available variables:")
+	fmt.Println()
+	
+	if len(variables) == 0 {
+		fmt.Println("  No variables available")
+		return nil
+	}
+	
+	// Sort variables by name
+	var names []string
+	for name := range variables {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	
+	// Find the longest variable name for alignment
+	maxNameLen := 0
+	for _, name := range names {
+		if len(name) > maxNameLen {
+			maxNameLen = len(name)
+		}
+	}
+	
+	// Print variables in aligned format
+	for _, name := range names {
+		fmt.Printf("  %-*s = %s\n", maxNameLen, name, variables[name])
 	}
 	
 	return nil

@@ -345,3 +345,11 @@ actions:
   - name: release-size
     run: |
       curl -s https://api.github.com/repos/AlexBurnes/pre-push/releases | jq '[.[] | .assets[]?.size] | add' | numfmt --to=iec --suffix=B
+
+  - name: yaml-project-lint
+    run: |
+      if [ -e $(which yamllint) ]; then
+        yamllint --no-warnings .project.yml
+      else
+        echo -e "⚠️ for validate project yml require install yamllint utility"
+      fi

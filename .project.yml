@@ -27,6 +27,8 @@ stages:
       - action: git-modified
         onerror: warn
 
+      - action: yaml-project-lint
+
   build:
     steps:
       - action: pre-check

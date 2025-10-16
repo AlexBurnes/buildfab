@@ -2,6 +2,33 @@
 
 ## What Works
 
+- **List Variables Command and YAML Fixes** (v0.25.0 - October 16, 2025): Successfully added new list-variables command and fixed critical YAML validation issues (100% complete)
+  - **New list-variables Command** - Added `buildfab list-variables` command that displays all available variables with their values sorted alphabetically
+  - **Variable Types Included** - Platform variables (os, arch, cpu, platform, os_version), version variables (version.*, branch, commit), project variables (project, module), CLI environment variables (--env), OS environment variables with env. prefix (env.PATH, env.HOME, env.USER, env.SHELL, env.LANG, env.PWD, env.GOPATH, env.GOROOT)
+  - **Action Description Field** - Added optional `description` field to Action struct for better documentation in YAML configuration
+  - **YAML Validation Fixes** - Fixed missing Description field in Action struct, corrected strategy field placement (must be nested inside matrix), fixed commands field (should use run), fixed top-level name field (should use project.name)
+  - **Error Message Interpolation** - Fixed error messages to show interpolated values instead of template variables, users can now copy commands directly from error messages
+  - **Example Files Updated** - Fixed `container-matrix-platform-test.yml`, `container-docker-build.yml`, `container-debug-test.yml` to pass strict validation
+  - **Files Modified** - `cmd/buildfab/main.go` (added list-variables command and runListVariables function), `pkg/buildfab/buildfab.go` (added Description field to Action, fixed error interpolation in 3 locations), `pkg/buildfab/simple.go` (fixed extractCommand to prefer interpolated commands), `pkg/buildfab/ordered_output.go` (fixed extractCommand to prefer interpolated commands), example YAML files
+  - **Comprehensive Testing** - Verified list-variables shows all variable types, confirmed error messages display interpolated values, validated all examples pass strict validation
+  - **Production Ready** - Users can now discover available variables easily and get actionable error messages with copy-pasteable commands
+
+- **DAG Graph Visualization Feature Planning** (October 10, 2025): Successfully created comprehensive planning document for DAG graph visualization feature (100% planning complete)
+  - **Feature Overview** - DAG visualization will allow users to visualize project configuration as a tree/graph of all stages, actions, and their dependencies
+  - **Planning Document Created** - Created 606-line comprehensive planning document `docs/Graph-visualization-feature-plan.md` covering complete feature specification, requirements, design, and implementation plan
+  - **Output Formats Defined** - ASCII (terminal tree view), DOT (Graphviz for PNG/SVG rendering), Mermaid (GitHub-compatible diagrams), JSON (programmatic access)
+  - **Architecture Designed** - Graph builder (config to graph conversion), graph validator (cycle detection, reference validation), graph analyzer (waves, critical paths), renderer system (multiple output formats)
+  - **CLI Interface Planned** - `buildfab graph <stage-name> [options]` command with format selection, file output, validation, wave display, and critical path analysis
+  - **Data Structures Specified** - Graph, GraphNode, GraphEdge, StageGraph, GraphAnalysis structures with proper relationships and metadata
+  - **Implementation Plan** - 8-phase incremental development: (1) Core graph builder, (2) Validation & analysis, (3) ASCII renderer, (4) DOT & Mermaid renderers, (5) JSON renderer, (6) CLI integration, (7) Advanced features, (8) Testing & documentation
+  - **Timeline Estimated** - 9.5 days total with phased approach for manageable implementation
+  - **Testing Strategy Defined** - Unit tests for graph building and rendering, integration tests for CLI, golden file tests for output verification, edge case coverage for cycles and orphans
+  - **Success Criteria** - MVP must include graph building, validation, ASCII/DOT output, CLI command, 80%+ test coverage, complete documentation
+  - **Files Created** - `docs/Graph-visualization-feature-plan.md` (comprehensive planning document with requirements, design, implementation plan, timeline, success criteria)
+  - **Documentation Updated** - `CHANGELOG.md` (added planning document entry in Unreleased section), `activeContext.md` (added planning summary to current work focus)
+  - **Target Version** - v0.25.0 for full feature release
+  - **Next Steps** - Review and approve planning document, begin Phase 1 implementation (core graph builder)
+
 - **YAML Configuration Validation Enhanced** (v0.24.4 - October 10, 2025): Successfully implemented strict YAML unmarshaling to catch typos and unknown fields in configuration files (100% complete)
   - **Problem Identified** - Users could write typos like `requires` instead of `require` in YAML configuration, and these errors would be silently ignored during validation, leading to confusing behavior where dependencies were not enforced
   - **Root Cause Found** - YAML unmarshaler by default ignores unknown fields, so typos like `requires:` would not match any field in the Step struct and would be silently skipped without error reporting

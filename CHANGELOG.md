@@ -8,6 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.0] - 2025-10-16
+
+### Added
+- **New list-variables Command**: Added `buildfab list-variables` command to display all available variables with their values
+  - Shows all variables that can be used in configuration files with `${{ variable }}` syntax
+  - Includes platform variables (os, arch, cpu, platform, os_version)
+  - Includes version variables (version.*, branch, commit, etc.)
+  - Includes project variables (project, module)
+  - Includes CLI environment variables (passed via --env flags)
+  - Includes OS environment variables with `env.` prefix (env.PATH, env.HOME, env.USER, etc.)
+  - Variables are sorted alphabetically for easy reading
+  - Values are aligned for clean output format
+  - Example: `buildfab list-variables` or `buildfab list-variables --env MY_VAR=test`
+- **Action Description Field**: Added optional `description` field to Action struct for better documentation
+  - Allows documenting what each action does directly in YAML configuration
+  - Supports YAML tag `description,omitempty` for backward compatibility
+  - Example: `- name: my-action\n  description: "Does something useful"\n  run: echo "hello"`
+
+### Fixed
+- **YAML Configuration Validation Issues**: Fixed strict YAML validation breaking valid configurations
+  - Fixed missing `Description` field in Action struct causing validation errors in example files
+  - Fixed `strategy` field placement - must be nested inside `matrix` block, not as sibling of `matrix`
+  - Fixed `commands` field in container config - should use `run` instead (ContainerConfig doesn't have `commands` field)
+  - Fixed top-level `name` field in configs - should use `project.name` instead
+  - Updated example files: `container-matrix-platform-test.yml`, `container-docker-build.yml`, `container-debug-test.yml`
+  - All example configurations now pass strict YAML validation without errors
+- **Error Message Variable Interpolation**: Fixed error messages showing template variables instead of actual values
+  - Error messages now display interpolated values that users can copy and run directly
+  - Changed error message generation to use `interpolatedAction.Run` instead of `action.Run`
+  - Updated command extraction in both `simple.go` and `ordered_output.go` to prefer interpolated commands from error messages
+  - Example: Error now shows `echo "Platform: linux"` instead of `echo "Platform: ${{platform}}"`
+  - Users can now directly copy commands from error messages and run them on the host
+  - Fixed in 3 locations in `buildfab.go` and 2 command extraction functions
+
+### Documentation
+- **DAG Graph Visualization Feature Planning**: Created comprehensive planning document for DAG graph visualization feature
+  - Documented complete feature specification including requirements, design, and implementation plan
+  - Defined output formats: ASCII, DOT (Graphviz), Mermaid, and JSON
+  - Detailed architecture with graph builder, validator, analyzer, and renderer components
+  - Planned CLI interface: `buildfab graph <stage-name> [options]`
+  - Included data structures for graph representation, nodes, edges, and analysis results
+  - Provided output examples for all supported formats
+  - Created 8-phase implementation plan with timeline (9.5 days total)
+  - Defined success criteria, testing strategy, and future enhancements
+  - Document location: `docs/Graph-visualization-feature-plan.md`
+
 ## [0.24.4] - 2025-10-10
 
 ### Fixed

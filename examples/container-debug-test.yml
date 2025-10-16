@@ -11,8 +11,8 @@ actions:
     container:
       image:
         from: alpine:latest
-      commands:
-        - echo "=== Container Debug Test ==="
-        - echo "Container is running successfully!"
-        - "echo \"Platform: $(uname -a)\""
-        - echo "=============================="
+      run: |
+        echo "=== Container Debug Test ==="
+        echo "Container is running successfully!"
+        echo "Platform: $(uname -a)"
+        echo "=============================="

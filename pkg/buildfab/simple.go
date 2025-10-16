@@ -780,6 +780,31 @@ func (c *SimpleStepCallback) enhanceMessage(stepName string, status StepStatus, 
 
 // extractCommand tries to extract the command that failed
 func (c *SimpleStepCallback) extractCommand(stepName, message string) string {
+    // First, check if the message already contains the command (from error message)
+    // This will have interpolated variables
+    if strings.Contains(message, "to check run:") {
+        lines := strings.Split(message, "\n")
+        var commandLines []string
+        foundCommand := false
+        for _, line := range lines {
+            if strings.Contains(line, "to check run:") {
+                foundCommand = true
+                continue // Skip the "to check run:" line itself
+            } else if foundCommand && strings.TrimSpace(line) != "" {
+                commandLines = append(commandLines, line)
+            }
+        }
+        if len(commandLines) > 0 {
+            // Reformat with proper indentation
+            var alignedLines []string
+            for _, line := range commandLines {
+                // Trim existing indentation and add 6 spaces
+                alignedLines = append(alignedLines, "      "+strings.TrimLeft(line, " \t"))
+            }
+            return strings.Join(alignedLines, "\n")
+        }
+    }
+    
     if c.config == nil {
         return fmt.Sprintf("      %s", stepName)
     }
