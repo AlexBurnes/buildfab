@@ -8,6 +8,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.0] - 2025-10-17
+
+### Added
+- **Optional Step Names**: Steps can now have optional `name:` field for unique identification in DAG
+  - Allows using the same action or stage multiple times within a single stage
+  - Custom names used for dependency resolution via `require:` field
+  - Automatic step name derivation: custom name > action name > stage name
+  - Matrix-expanded steps append matrix values to custom names for uniqueness
+  - Validation ensures no duplicate step names within a stage
+  - Clear error messages suggest using `name:` field when duplicates are detected
+  
+### Changed
+- **DAG Construction**: Updated to use `step.GetStepName()` method consistently across all components
+  - DAG nodes now use custom step names when provided
+  - Output managers track steps by their custom names
+  - All step callbacks use custom names for consistent identification
+  
+- **Matrix Integration**: Matrix expander now uses custom step names as base names for variants
+  - Matrix variants with custom names: `name: test` → expands to `test.linux`, `test.windows`, etc.
+  - Matrix variants without custom names: `action: build` → expands to `build.linux`, `build.windows`, etc.
+  - Dependencies can reference matrix-generated names (e.g., `require: [test.linux, test.windows]`)
+  - Validation accepts matrix-generated dependency names (pattern: `basename.variant`)
+  
+### Documentation
+- **YAML Syntax Reference**: Added comprehensive documentation for step `name:` field
+  - Detailed explanation of default behavior vs custom names
+  - Examples demonstrating multiple uses of same action with different names
+  - Matrix integration examples showing name uniqueness
+  - Error examples showing duplicate name validation
+  
+- **Example Configurations**: Added four new example files demonstrating step names
+  - `examples/step-names-basic-test.yml` - Basic usage with and without custom names
+  - `examples/step-names-simple-test.yml` - Simple example using same action multiple times
+  - `examples/step-names-duplicate-error.yml` - Example showing validation error for duplicates
+  - `examples/step-names-matrix-test.yml` - Matrix variants with custom step names
+
+### Testing
+- **Comprehensive Test Suite**: Added complete test coverage for step name feature
+  - Unit tests for `Step.GetStepName()` method with all scenarios
+  - Validation tests for duplicate name detection
+  - Dependency resolution tests with custom names
+  - Integration tests with working examples
+
 ## [0.27.0] - 2025-10-17
 
 ### Added

@@ -69,6 +69,7 @@ type Stage struct {
 
 // Step represents a single step in a stage
 type Step struct {
+	Name        string            `yaml:"name,omitempty"`        // Optional unique name for this step (for DAG linking)
 	Action      string            `yaml:"action,omitempty"`      // Action to execute (mutually exclusive with Stage)
 	Stage       string            `yaml:"stage,omitempty"`       // Stage to execute (mutually exclusive with Action)
 	Description string            `yaml:"description,omitempty"` // Step description for display
@@ -82,6 +83,18 @@ type Step struct {
 	
 	// Pool assignment (internal, not from YAML)
 	PoolID      string   `yaml:"-"` // Pool identifier for this step (e.g., "matrix-build")
+}
+
+// GetStepName returns the name to use for this step in the DAG
+// Priority: 1) explicit Name field, 2) Action, 3) Stage
+func (s *Step) GetStepName() string {
+	if s.Name != "" {
+		return s.Name
+	}
+	if s.Action != "" {
+		return s.Action
+	}
+	return s.Stage
 }
 
 // MatrixConfig represents matrix configuration for parallel execution
@@ -668,15 +681,16 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("stage %s must have at least one step", stageName)
 		}
 		
-		// Build a map of step identifiers for dependency validation
+		// Build a map of step identifiers for dependency validation and check for duplicates
 		stepNames := make(map[string]bool)
-		for _, step := range stage.Steps {
-			// Get step identifier (either action or stage name)
-			stepID := step.Action
-			if stepID == "" {
-				stepID = step.Stage
-			}
+		for i, step := range stage.Steps {
+			// Get step identifier (name, action, or stage)
+			stepID := step.GetStepName()
 			if stepID != "" {
+				// Check for duplicate step names
+				if stepNames[stepID] {
+					return fmt.Errorf("duplicate step name '%s' in stage %s (step %d): use unique 'name:' field to differentiate steps using the same action/stage", stepID, stageName, i+1)
+				}
 				stepNames[stepID] = true
 			}
 		}
@@ -733,14 +747,38 @@ func (c *Config) Validate() error {
 			// Validate require dependencies exist in the stage
 			for _, dep := range step.Require {
 				if !stepNames[dep] {
-					return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, stepID, stageName, dep)
+					// Check if this might be a matrix-generated name (e.g., "step-name.matrix-value")
+					// If so, check if the base name exists as a matrix step
+					isMatrixDep := false
+					if strings.Contains(dep, ".") {
+						baseName := dep[:strings.Index(dep, ".")]
+						if stepNames[baseName] {
+							// Base name exists, assume it's a valid matrix-generated dependency
+							isMatrixDep = true
+						}
+					}
+					if !isMatrixDep {
+						return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, stepID, stageName, dep)
+					}
 				}
 			}
 			
 			// Validate depends_on dependencies exist in the stage
 			for _, dep := range step.DependsOn {
 				if !stepNames[dep] {
-					return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, stepID, stageName, dep)
+					// Check if this might be a matrix-generated name (e.g., "step-name.matrix-value")
+					// If so, check if the base name exists as a matrix step
+					isMatrixDep := false
+					if strings.Contains(dep, ".") {
+						baseName := dep[:strings.Index(dep, ".")]
+						if stepNames[baseName] {
+							// Base name exists, assume it's a valid matrix-generated dependency
+							isMatrixDep = true
+						}
+					}
+					if !isMatrixDep {
+						return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, stepID, stageName, dep)
+					}
 				}
 			}
 		}
@@ -766,11 +804,8 @@ func detectCyclesInStage(stageName string, stage Stage, allStages map[string]Sta
 	stepExists := make(map[string]bool)
 	
 	for _, step := range stage.Steps {
-		// Get the step identifier (action or stage name)
-		stepID := step.Action
-		if stepID == "" {
-			stepID = step.Stage
-		}
+		// Get the step identifier (name, action, or stage)
+		stepID := step.GetStepName()
 		stepExists[stepID] = true
 		
 		// Add dependencies from both require and depends_on
@@ -1597,18 +1632,21 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 	
 	// Wrap execution with step variable merging
 	return r.withStepVariables(step, func() error {
+		// Get step name for callbacks
+		stepName := step.GetStepName()
+		
 		// Check if it's a built-in action
 		if runner, exists := r.registry.GetRunner(step.Action); exists {
 			// Call step start callback if provided
 			if r.opts.StepCallback != nil {
-				r.opts.StepCallback.OnStepStart(ctx, step.Action)
+				r.opts.StepCallback.OnStepStart(ctx, stepName)
 			}
 
 			// Handle dry-run mode for built-in actions
 			if r.opts.DryRun {
 				description := runner.Description()
 				if r.opts.StepCallback != nil {
-					r.opts.StepCallback.OnStepComplete(ctx, step.Action, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
+					r.opts.StepCallback.OnStepComplete(ctx, stepName, StepStatusOK, fmt.Sprintf("would execute built-in action: %s", description), 0, "")
 				}
 				return nil
 			}
@@ -1627,7 +1665,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 					status = StepStatusError
 					message = result.Message
 					if err != nil {
-						r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+						r.opts.StepCallback.OnStepError(ctx, stepName, err)
 					}
 				} else if result.Status == StatusWarn {
 					status = StepStatusWarn
@@ -1638,10 +1676,10 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 				} else if err != nil {
 					status = StepStatusError
 					message = err.Error()
-					r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+					r.opts.StepCallback.OnStepError(ctx, stepName, err)
 				}
 				
-				r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration, "")
+				r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, duration, "")
 			}
 
 			return err
@@ -1655,7 +1693,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 
 		// Call step start callback if provided
 		if r.opts.StepCallback != nil {
-			r.opts.StepCallback.OnStepStart(ctx, step.Action)
+			r.opts.StepCallback.OnStepStart(ctx, stepName)
 		}
 
 		// Handle dry-run mode for custom actions
@@ -1668,7 +1706,7 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 					status = StepStatusError
 					message = err.Error()
 				}
-				r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, 0, "")
+				r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, 0, "")
 			}
 			return err
 		}
@@ -1685,10 +1723,10 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 			if err != nil {
 				status = StepStatusError
 				message = err.Error()
-				r.opts.StepCallback.OnStepError(ctx, step.Action, err)
+				r.opts.StepCallback.OnStepError(ctx, stepName, err)
 			}
 			
-			r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, duration, "")
+			r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, duration, "")
 		}
 
 		return err
@@ -2251,7 +2289,7 @@ func (r *Runner) shouldExecuteStep(ctx context.Context, node *DAGNode) bool {
 	if err != nil {
 		// If there's an error evaluating the condition, log it and skip the step
 		if r.opts.VerboseLevel > 0 {
-			fmt.Fprintf(r.opts.ErrorOutput, "Warning: failed to evaluate if condition for step %s: %v\n", node.Step.Action, err)
+			fmt.Fprintf(r.opts.ErrorOutput, "Warning: failed to evaluate if condition for step %s: %v\n", node.Step.GetStepName(), err)
 		}
 		return false
 	}
@@ -2283,7 +2321,7 @@ func (s *StreamingOutputManager) ShouldStreamOutput(stepName string) bool {
 	// Find the step in declaration order
 	stepIndex := -1
 	for i, step := range s.steps {
-		if step.Action == stepName {
+		if step.GetStepName() == stepName {
 			stepIndex = i
 			break
 		}
@@ -2297,7 +2335,7 @@ func (s *StreamingOutputManager) ShouldStreamOutput(stepName string) bool {
 	// Only allow streaming for the first step in declaration order that hasn't been displayed yet
 	// Check if all previous steps in declaration order have been displayed
 	for i := 0; i < stepIndex; i++ {
-		if !s.displayed[s.steps[i].Action] {
+		if !s.displayed[s.steps[i].GetStepName()] {
 			// Previous step not displayed yet
 			return false
 		}
@@ -2321,7 +2359,7 @@ func (s *StreamingOutputManager) ShouldShowStepStart(stepName string) bool {
 	// Find the step in declaration order
 	stepIndex := -1
 	for i, step := range s.steps {
-		if step.Action == stepName {
+		if step.GetStepName() == stepName {
 			stepIndex = i
 			break
 		}
@@ -2333,7 +2371,7 @@ func (s *StreamingOutputManager) ShouldShowStepStart(stepName string) bool {
 	
 	// Check if all previous steps in declaration order have been started
 	for i := 0; i < stepIndex; i++ {
-		if !s.started[s.steps[i].Action] {
+		if !s.started[s.steps[i].GetStepName()] {
 			return false
 		}
 	}
@@ -2359,8 +2397,8 @@ func (r *Runner) buildDAG(steps []Step) (map[string]*DAGNode, error) {
 			return nil, fmt.Errorf("action not found: %s", step.Action)
 		}
 		
-		// Use the step action as the node name (matrix steps now have unique action names)
-		nodeName := step.Action
+		// Use the step name (custom name if provided, otherwise action/stage name)
+		nodeName := step.GetStepName()
 		
 		node := &DAGNode{
 			Step:         step,
@@ -2376,7 +2414,7 @@ func (r *Runner) buildDAG(steps []Step) (map[string]*DAGNode, error) {
 	for _, node := range dag {
 		for _, dep := range node.Dependencies {
 			if depNode, exists := dag[dep]; exists {
-				depNode.Dependents = append(depNode.Dependents, node.Step.Action)
+				depNode.Dependents = append(depNode.Dependents, node.Step.GetStepName())
 			} else {
 				return nil, fmt.Errorf("dependency not found: %s", dep)
 			}
@@ -2712,21 +2750,22 @@ func (r *Runner) checkAndDisplayNextStep(ctx context.Context, steps []Step, resu
 	
 	// Find the next step that can be displayed
 	for _, step := range steps {
-		if !displayed[step.Action] {
+		stepName := step.GetStepName()
+		if !displayed[stepName] {
 			// Check if we can display this step (either completed or currently executing)
 			if r.canDisplayStepInOrderLocked(step, steps, displayed) {
 				// Show step start message if not already shown
-				if r.opts.StepCallback != nil && !started[step.Action] {
-					started[step.Action] = true
+				if r.opts.StepCallback != nil && !started[stepName] {
+					started[stepName] = true
 					// Unlock before callback to avoid deadlock
 					mu.Unlock()
-					r.opts.StepCallback.OnStepStart(ctx, step.Action)
+					r.opts.StepCallback.OnStepStart(ctx, stepName)
 					mu.Lock()
 				}
 				
 				// If completed, also show completion message
-				if completed[step.Action] {
-					r.displayStepInOrderLocked(ctx, step.Action, steps, resultMap, displayed, completed, mu)
+				if completed[stepName] {
+					r.displayStepInOrderLocked(ctx, stepName, steps, resultMap, displayed, completed, mu)
 				}
 				break // Only display one step at a time
 			}
@@ -2745,7 +2784,7 @@ func (r *Runner) displayStepInOrder(ctx context.Context, stepName string, steps 
 func (r *Runner) displayStepInOrderLocked(ctx context.Context, stepName string, steps []Step, resultMap map[string]Result, displayed map[string]bool, completed map[string]bool, mu *sync.Mutex) {
 	// Find the step in declaration order
 	for _, step := range steps {
-		if step.Action == stepName {
+		if step.GetStepName() == stepName {
 			// Check if all previous steps in declaration order have been displayed
 			if r.canDisplayStepInOrderLocked(step, steps, displayed) {
 				
@@ -2801,8 +2840,9 @@ func (r *Runner) canDisplayStepInOrder(step Step, steps []Step, displayed map[st
 func (r *Runner) canDisplayStepInOrderLocked(step Step, steps []Step, displayed map[string]bool) bool {
 	// Find the position of this step in the declaration order
 	stepIndex := -1
+	stepName := step.GetStepName()
 	for i, s := range steps {
-		if s.Action == step.Action {
+		if s.GetStepName() == stepName {
 			stepIndex = i
 			break
 		}
@@ -2814,7 +2854,7 @@ func (r *Runner) canDisplayStepInOrderLocked(step Step, steps []Step, displayed 
 	
 	// Check if all previous steps in declaration order have been displayed
 	for i := 0; i < stepIndex; i++ {
-		if !displayed[steps[i].Action] {
+		if !displayed[steps[i].GetStepName()] {
 			return false
 		}
 	}
@@ -2828,8 +2868,9 @@ func (r *Runner) displayRemainingSteps(ctx context.Context, steps []Step, result
 	defer mu.Unlock()
 	
 	for _, step := range steps {
-		if !displayed[step.Action] {
-			if result, exists := resultMap[step.Action]; exists {
+		stepName := step.GetStepName()
+		if !displayed[stepName] {
+			if result, exists := resultMap[stepName]; exists {
 				if r.opts.StepCallback != nil {
 					status := StepStatusOK
 					message := "executed successfully"
@@ -2847,10 +2888,10 @@ func (r *Runner) displayRemainingSteps(ctx context.Context, steps []Step, result
 					
 					// Unlock before callback to avoid deadlock
 					mu.Unlock()
-					r.opts.StepCallback.OnStepComplete(ctx, step.Action, status, message, result.Duration, result.BufferedOutput)
+					r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, result.Duration, result.BufferedOutput)
 					mu.Lock()
 				}
-				displayed[step.Action] = true
+				displayed[stepName] = true
 			}
 		}
 	}

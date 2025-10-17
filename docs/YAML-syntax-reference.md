@@ -208,15 +208,17 @@ Stages define workflows composed of steps that can reference either actions or o
 stages:
   stage-name:                     # Stage identifier
     steps:
-      - action: "action-name"     # Option 1: Action to execute (mutually exclusive with stage)
-        require: ["dep1", "dep2"] # Optional: Dependencies (list of action/stage names)
+      - name: "unique-name"       # Optional: Unique name for this step (for DAG linking)
+        action: "action-name"     # Option 1: Action to execute (mutually exclusive with stage)
+        require: ["dep1", "dep2"] # Optional: Dependencies (list of action/stage/step names)
         onerror: "warn"           # Optional: Error policy (warn|stop, default: stop)
         only: ["label1", "label2"] # Optional: Execution labels (list)
         if: "condition"           # Optional: Conditional expression (string)
         variables:                # Optional: Step-level variable overrides (map[string]string]
           key: "value"
       
-      - stage: "stage-name"       # Option 2: Stage to execute (mutually exclusive with action)
+      - name: "unique-name"       # Optional: Unique name for this step
+        stage: "stage-name"       # Option 2: Stage to execute (mutually exclusive with action)
         require: ["dep1"]         # Optional: Dependencies work same as actions
         onerror: "warn"           # Optional: Inherited by all steps in referenced stage
         variables:                # Optional: Variables inherited by all steps in referenced stage
@@ -234,6 +236,79 @@ stages:
 - **Variable Inheritance**: Variables from stage steps are inherited by all steps in the referenced stage
 - **Condition Inheritance**: `if` conditions from stage steps are combined with conditions in referenced steps
 - **Error Policy Inheritance**: `onerror` settings are inherited if not overridden in referenced steps
+
+### Step Names
+
+The optional `name` field allows you to assign a unique identifier to a step for DAG linking. This is particularly useful when you need to use the same action multiple times within a stage:
+
+**Default Behavior (without `name` field):**
+- Steps are identified by their `action` or `stage` name
+- You cannot use the same action twice in the same stage (causes duplicate name error)
+
+**With `name` field:**
+- Steps are identified by the custom name you provide
+- You can use the same action multiple times with different names
+- Matrix-expanded steps append matrix values to the name for uniqueness
+
+**Example: Using the Same Action Multiple Times**
+
+```yaml
+actions:
+  - name: sleep
+    run: sleep ${{ duration }}
+
+stages:
+  pipeline:
+    steps:
+      # First use of sleep action with custom name
+      - name: sleep-before-build
+        action: sleep
+        variables:
+          duration: "2"
+      
+      # Build step
+      - name: build
+        action: build-app
+        require: [sleep-before-build]  # References custom name
+      
+      # Second use of sleep action with different custom name
+      - name: sleep-before-test
+        action: sleep
+        variables:
+          duration: "1"
+        require: [build]
+      
+      # Test step
+      - name: test
+        action: run-tests
+        require: [sleep-before-test]  # References custom name
+```
+
+**Error Without `name` field:**
+
+```yaml
+stages:
+  pipeline:
+    steps:
+      - action: sleep  # First sleep
+      - action: sleep  # ERROR: Duplicate step name 'sleep'!
+```
+
+**Matrix Integration:**
+
+When using `name` with matrix steps, the matrix values are appended to create unique names:
+
+```yaml
+stages:
+  test:
+    steps:
+      - name: test-platform  # Custom base name
+        action: run-tests
+        matrix:
+          values:
+            os: [linux, windows, macos]
+        # Creates: test-platform.linux, test-platform.windows, test-platform.macos
+```
 
 ### Step Dependencies
 

@@ -1,0 +1,33 @@
+project:
+  name: step-names-simple-test
+  modules: []
+
+actions:
+  - name: echo
+    description: Echo a message
+    run: echo "${{ message }}"
+
+stages:
+  test:
+    steps:
+      # Use the same action multiple times with unique names
+      - name: greeting
+        action: echo
+        description: Say hello
+        variables:
+          message: "Hello!"
+      
+      - name: farewell
+        action: echo
+        description: Say goodbye
+        variables:
+          message: "Goodbye!"
+        require: [greeting]
+      
+      - name: final
+        action: echo
+        description: Final message
+        variables:
+          message: "All done!"
+        require: [farewell]
+

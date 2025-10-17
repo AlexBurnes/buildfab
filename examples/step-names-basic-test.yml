@@ -1,0 +1,49 @@
+project:
+  name: step-names-basic-test
+  modules: []
+
+actions:
+  - name: echo1
+    description: Echo message 1
+    run: echo "Hello"
+    
+  - name: echo2
+    description: Echo message 2
+    run: echo "Goodbye"
+    
+  - name: echo3
+    description: Echo message 3
+    run: echo "Done"
+
+stages:
+  test:
+    steps:
+      # Normal case - each step uses a different action
+      - action: echo1
+        description: First message
+      
+      - action: echo2
+        description: Second message
+        require: [echo1]
+      
+      - action: echo3
+        description: Third message
+        require: [echo2]
+
+  test-with-names:
+    steps:
+      # Use custom names to use the same action multiple times
+      - name: step1
+        action: echo1
+        description: Use echo1 first time
+      
+      - name: step2
+        action: echo1
+        description: Use echo1 second time  
+        require: [step1]
+      
+      - name: step3
+        action: echo1
+        description: Use echo1 third time
+        require: [step2]
+

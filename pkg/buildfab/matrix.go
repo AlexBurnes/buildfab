@@ -90,8 +90,11 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 	totalJobs := len(combinations)
 	
 	for i, combination := range combinations {
+		// Get base name from step (custom name if provided, otherwise action name)
+		baseName := step.GetStepName()
+		
 		// Create step description
-		description := me.generateStepDescription(action.Name, i+1, totalJobs)
+		description := me.generateStepDescription(baseName, i+1, totalJobs)
 		
 		// Create matrix variables for this step
 		matrixVars := make(map[string]string)
@@ -115,7 +118,7 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 			containerCopy := *matrixAction.Container
 			matrixAction.Container = &containerCopy
 		}
-		matrixAction.Name = me.generateStepName(action.Name, combination, step.Matrix.Values) // Generate name with matrix values
+		matrixAction.Name = me.generateStepName(baseName, combination, step.Matrix.Values) // Generate name with matrix values
 		
 		// Interpolate variables in the action
 		if matrixAction.Run != "" {
@@ -195,8 +198,9 @@ func (me *MatrixExpander) ExpandMatrixToStepsWithActions(step *Step, action *Act
 			matrixVars[key] = fmt.Sprintf("%v", value)
 		}
 		
-		// Generate step name with matrix values
-		stepName := me.generateStepName(step.Action, combination, step.Matrix.Values)
+		// Generate step name with matrix values (use custom name if provided, otherwise action name)
+		baseName := step.GetStepName()
+		stepName := me.generateStepName(baseName, combination, step.Matrix.Values)
 		
 		// Create description with matrix values
 		description := me.interpolateVariables(step.Description, matrixVars)

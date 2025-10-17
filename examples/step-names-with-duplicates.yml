@@ -1,0 +1,77 @@
+project:
+  name: step-names-example
+  modules: []
+
+actions:
+  - name: sleep
+    description: Sleep for a specified duration
+    run: sleep ${{ delay }}
+    
+  - name: echo
+    description: Echo a message
+    run: echo "${{ message }}"
+
+stages:
+  test-unique-names:
+    steps:
+      # First sleep with custom name
+      - name: sleep-before-build
+        action: sleep
+        description: Wait before build
+        variables:
+          delay: "1"
+      
+      # Build step
+      - name: build
+        action: echo
+        description: Building project
+        variables:
+          message: "Building..."
+        require: [sleep-before-build]
+      
+      # Second sleep with custom name
+      - name: sleep-after-build
+        action: sleep
+        description: Wait after build
+        variables:
+          delay: "1"
+        require: [build]
+      
+      # Test step
+      - name: test
+        action: echo
+        description: Testing project
+        variables:
+          message: "Testing..."
+        require: [sleep-after-build]
+      
+      # Third sleep with custom name
+      - name: sleep-after-test
+        action: sleep
+        description: Wait after test
+        variables:
+          delay: "1"
+        require: [test]
+      
+      # Deploy step
+      - name: deploy
+        action: echo
+        description: Deploying project
+        variables:
+          message: "Deploying..."
+        require: [sleep-after-test]
+
+  test-without-names:
+    steps:
+      # This will work because each step has a unique action
+      - action: sleep
+        description: First sleep
+        variables:
+          delay: "1"
+      
+      - action: echo
+        description: Echo message
+        variables:
+          message: "Hello!"
+        require: [sleep]
+

@@ -1,0 +1,25 @@
+project:
+  name: step-names-error-example
+  modules: []
+
+actions:
+  - name: sleep
+    description: Sleep for a specified duration
+    run: sleep ${{ delay }}
+
+stages:
+  test-duplicate-error:
+    steps:
+      # First sleep (no custom name)
+      - action: sleep
+        description: First sleep
+        variables:
+          delay: "1"
+      
+      # Second sleep (no custom name) - This will cause a validation error!
+      - action: sleep
+        description: Second sleep
+        variables:
+          delay: "1"
+        require: [sleep]  # This require won't work because both steps have the same name "sleep"
+

@@ -249,7 +249,9 @@ func mergeConfig(config *buildfab.Config, included *PartialConfig) {
 		// Copy steps
 		for i, step := range stage.Steps {
 			buildfabStage.Steps[i] = buildfab.Step{
+				Name:    step.Name,
 				Action:  step.Action,
+				Stage:   step.Stage,
 				Require: step.Require,
 				OnError: step.OnError,
 				If:      step.If,

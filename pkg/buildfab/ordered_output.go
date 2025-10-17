@@ -231,7 +231,7 @@ func (o *OrderedOutputManager) shouldStreamOutput(stepName string) bool {
     // Find the step in declaration order
     stepIndex := -1
     for i, step := range o.steps {
-        if step.Action == stepName {
+        if step.GetStepName() == stepName {
             stepIndex = i
             break
         }
@@ -244,7 +244,7 @@ func (o *OrderedOutputManager) shouldStreamOutput(stepName string) bool {
     // Only allow streaming for the first step in declaration order that hasn't been completed yet
     // Check if all previous steps in declaration order have been completed
     for i := 0; i < stepIndex; i++ {
-        if data, exists := o.stepData[o.steps[i].Action]; !exists || !data.Completed {
+        if data, exists := o.stepData[o.steps[i].GetStepName()]; !exists || !data.Completed {
             return false
         }
     }
@@ -272,7 +272,7 @@ func (o *OrderedOutputManager) canShowStepStart(stepName string) bool {
     // Find step index in declaration order
     stepIndex := -1
     for i, step := range o.steps {
-        if step.Action == stepName {
+        if step.GetStepName() == stepName {
             stepIndex = i
             break
         }
@@ -326,15 +326,15 @@ func (o *OrderedOutputManager) checkAndShowCompletedSteps() {
         o.mu.Lock()
         var stepToShow string
         for _, step := range o.steps {
-            stepName := step.Action
+            stepName := step.GetStepName()
             if data, exists := o.stepData[stepName]; exists && data.Completed && !data.Shown {
                 // Check if all previous steps have been completed AND shown
                 canShow := true
                 for _, s := range o.steps {
-                    if s.Action == stepName {
+                    if s.GetStepName() == stepName {
                         break
                     }
-                    prevData, prevExists := o.stepData[s.Action]
+                    prevData, prevExists := o.stepData[s.GetStepName()]
                     if !prevExists || !prevData.Completed || !prevData.Shown {
                         canShow = false
                         break
@@ -389,7 +389,7 @@ func (o *OrderedOutputManager) checkAndShowNextStep() {
     
     // Find the next step that can be shown
     for _, step := range o.steps {
-        stepName := step.Action
+        stepName := step.GetStepName()
         if data, exists := o.stepData[stepName]; exists && data.Started && !data.Completed && !data.Shown {
             if o.canShowStepStart(stepName) {
                 stepToShow = stepName
@@ -784,9 +784,9 @@ type OrderedStepCallback struct {
 func NewOrderedStepCallback(steps []Step, verboseLevel int, debug bool, errorOutput io.Writer, config *Config) *OrderedStepCallback {
     manager := NewOrderedOutputManager(steps, verboseLevel, debug, errorOutput, config)
 
-    // Register all steps
+    // Register all steps using their unique names
     for _, step := range steps {
-        manager.RegisterStep(step.Action)
+        manager.RegisterStep(step.GetStepName())
     }
 
     return &OrderedStepCallback{
@@ -808,9 +808,9 @@ func NewOrderedStepCallbackWithActions(steps []Step, verboseLevel int, debug boo
         manager.SetInterpolatedAction(stepName, action)
     }
 
-    // Register all steps
+    // Register all steps using their unique names
     for _, step := range steps {
-        manager.RegisterStep(step.Action)
+        manager.RegisterStep(step.GetStepName())
     }
 
     return &OrderedStepCallback{
@@ -1141,8 +1141,9 @@ func NewMultilineOutputManager(steps []Step, verboseLevel int, debug bool, error
     jobMap := make(map[string]*JobDisplay)
     
     for i, step := range steps {
+        stepName := step.GetStepName()
         job := JobDisplay{
-            Name:     step.Action,
+            Name:     stepName,
             Status:   JobStatusPending,
             Message:  "(pending)",
             Row:      i + 1, // 1-based row numbering
@@ -1150,7 +1151,7 @@ func NewMultilineOutputManager(steps []Step, verboseLevel int, debug bool, error
             Completed: false,
         }
         jobs[i] = job
-        jobMap[step.Action] = &jobs[i]
+        jobMap[stepName] = &jobs[i]
     }
 
     return &MultilineOutputManager{
@@ -1371,9 +1372,9 @@ func NewMultilineStepCallback(steps []Step, verboseLevel int, debug bool, errorO
     // Create fallback ordered manager for verbose mode or non-TTY environments
     fallbackManager := NewOrderedOutputManager(steps, verboseLevel, debug, errorOutput, config)
     
-    // Register all steps in the fallback manager
+    // Register all steps in the fallback manager using their unique names
     for _, step := range steps {
-        fallbackManager.RegisterStep(step.Action)
+        fallbackManager.RegisterStep(step.GetStepName())
     }
 
     return &MultilineStepCallback{
@@ -1401,9 +1402,9 @@ func NewMultilineStepCallbackWithActions(steps []Step, verboseLevel int, debug b
         fallbackManager.SetInterpolatedAction(stepName, action)
     }
     
-    // Register all steps in the fallback manager
+    // Register all steps in the fallback manager using their unique names
     for _, step := range steps {
-        fallbackManager.RegisterStep(step.Action)
+        fallbackManager.RegisterStep(step.GetStepName())
     }
 
     return &MultilineStepCallback{

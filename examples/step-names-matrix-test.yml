@@ -1,0 +1,36 @@
+project:
+  name: step-names-matrix-test
+  modules: []
+
+actions:
+  - name: echo-platform
+    description: Echo platform name
+    run: 'echo "Platform: ${{ platform }}"'
+
+stages:
+  test-matrix-with-name:
+    steps:
+      # Matrix step with custom name
+      - name: test-on-platform
+        action: echo-platform
+        matrix:
+          values:
+            platform: [linux, windows, macos]
+        # Should create: test-on-platform.linux, test-on-platform.windows, test-on-platform.macos
+      
+      # Regular step that depends on all matrix variants
+      - action: echo-platform
+        description: Final step after all platforms
+        variables:
+          platform: "all-platforms"
+        require: [test-on-platform.linux, test-on-platform.windows, test-on-platform.macos]
+
+  test-matrix-without-name:
+    steps:
+      # Matrix step without custom name (should use action name as base)
+      - action: echo-platform
+        matrix:
+          values:
+            platform: [ubuntu, debian, alpine]
+        # Should create: echo-platform.ubuntu, echo-platform.debian, echo-platform.alpine
+

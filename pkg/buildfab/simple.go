@@ -368,7 +368,7 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
     // Find the step
     var targetStep *Step
     for i, step := range stage.Steps {
-        if step.Action == stepName {
+        if step.GetStepName() == stepName {
             targetStep = &stage.Steps[i]
             break
         }
@@ -928,7 +928,7 @@ func (r *SimpleRunner) getSkippedSteps(stageName string, executedResults []StepR
 
     // Check each step in the stage
     for _, step := range stage.Steps {
-        stepName := step.Action
+        stepName := step.GetStepName()
 
         // Skip if already executed
         if executedSteps[stepName] {
