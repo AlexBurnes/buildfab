@@ -46,18 +46,19 @@ type SimpleRunner struct {
 
 // SimpleRunOptions configures simple stage execution
 type SimpleRunOptions struct {
-    ConfigPath  string            // Path to project.yml (default: ".project.yml")
-    MaxParallel int               // Maximum parallel execution (default: CPU count)
-    VerboseLevel int              // Verbosity level: 0=quiet, 1=-v, 2=-vv, 3=-vvv
-    Debug       bool              // Enable debug output
-    DryRun      bool              // Show what would be executed without running commands
-    Variables   map[string]string // Additional variables for interpolation
-    WorkingDir  string            // Working directory for execution
-    Input       io.Reader         // Input reader (default: nil for non-interactive)
-    Output      io.Writer         // Output writer (default: os.Stdout)
-    ErrorOutput io.Writer         // Error output writer (default: os.Stderr)
-    Only        []string          // Only run steps matching these labels
-    WithRequires bool             // Include required dependencies when running single step
+    ConfigPath         string            // Path to project.yml (default: ".project.yml")
+    MaxParallel        int               // Maximum parallel execution (default: CPU count)
+    VerboseLevel       int               // Verbosity level: 0=quiet, 1=-v, 2=-vv, 3=-vvv
+    Debug              bool              // Enable debug output
+    DryRun             bool              // Show what would be executed without running commands
+    Variables          map[string]string // Additional variables for interpolation
+    WorkingDir         string            // Working directory for execution
+    Input              io.Reader         // Input reader (default: nil for non-interactive)
+    Output             io.Writer         // Output writer (default: os.Stdout)
+    ErrorOutput        io.Writer         // Error output writer (default: os.Stderr)
+    Only               []string          // Only run steps matching these labels
+    WithRequires       bool              // Include required dependencies when running single step
+    BuildfabBinaryPath string            // Path to buildfab binary for run_action/run_stage (optional, auto-detected if not specified)
 }
 
 // DefaultSimpleRunOptions returns default simple run options
@@ -185,25 +186,31 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         // Set variables for interpolation
         stepCallback.(*OrderedStepCallback).manager.SetVariables(r.opts.Variables)
         
+        // Set buildfab binary path for run_action/run_stage
+        if r.opts.BuildfabBinaryPath != "" {
+            stepCallback.(*OrderedStepCallback).manager.SetBuildfabBinaryPath(r.opts.BuildfabBinaryPath)
+        }
+        
         // Update interpolated actions in the step callback
         stepCallback.(*OrderedStepCallback).UpdateInterpolatedActions(interpolatedActions)
     }
 
     // Convert to complex options for internal executor
     complexOpts := &RunOptions{
-        ConfigPath:   r.opts.ConfigPath,
-        MaxParallel:  r.opts.MaxParallel,
-        VerboseLevel: r.opts.VerboseLevel,
-        Debug:        r.opts.Debug,
-        DryRun:       r.opts.DryRun,
-        Variables:    r.opts.Variables,
-        WorkingDir:   r.opts.WorkingDir,
-        Input:        r.opts.Input,
-        Output:       r.opts.Output,
-        ErrorOutput:  r.opts.ErrorOutput,
-        Only:         r.opts.Only,
-        WithRequires: r.opts.WithRequires,
-        StepCallback: stepCallback,
+        ConfigPath:         r.opts.ConfigPath,
+        MaxParallel:        r.opts.MaxParallel,
+        VerboseLevel:       r.opts.VerboseLevel,
+        Debug:              r.opts.Debug,
+        DryRun:             r.opts.DryRun,
+        Variables:          r.opts.Variables,
+        WorkingDir:         r.opts.WorkingDir,
+        Input:              r.opts.Input,
+        Output:             r.opts.Output,
+        ErrorOutput:        r.opts.ErrorOutput,
+        Only:               r.opts.Only,
+        WithRequires:       r.opts.WithRequires,
+        BuildfabBinaryPath: r.opts.BuildfabBinaryPath,
+        StepCallback:       stepCallback,
     }
 
     runner := NewRunner(r.config, complexOpts)
@@ -289,19 +296,20 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
 
     // Convert to complex options and use internal runner
     complexOpts := &RunOptions{
-        ConfigPath:   r.opts.ConfigPath,
-        MaxParallel:  r.opts.MaxParallel,
-        VerboseLevel: r.opts.VerboseLevel,
-        Debug:        r.opts.Debug,
-        DryRun:       r.opts.DryRun,
-        Variables:    r.opts.Variables,
-        WorkingDir:   r.opts.WorkingDir,
-        Input:        r.opts.Input,
-        Output:       r.opts.Output,
-        ErrorOutput:  r.opts.ErrorOutput,
-        Only:         r.opts.Only,
-        WithRequires: r.opts.WithRequires,
-        StepCallback: stepCallback,
+        ConfigPath:         r.opts.ConfigPath,
+        MaxParallel:        r.opts.MaxParallel,
+        VerboseLevel:       r.opts.VerboseLevel,
+        Debug:              r.opts.Debug,
+        DryRun:             r.opts.DryRun,
+        Variables:          r.opts.Variables,
+        WorkingDir:         r.opts.WorkingDir,
+        Input:              r.opts.Input,
+        Output:             r.opts.Output,
+        ErrorOutput:        r.opts.ErrorOutput,
+        Only:               r.opts.Only,
+        WithRequires:       r.opts.WithRequires,
+        BuildfabBinaryPath: r.opts.BuildfabBinaryPath,
+        StepCallback:       stepCallback,
     }
 
     runner := NewRunner(r.config, complexOpts)
@@ -369,19 +377,20 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
 
     // Convert to complex options and use internal runner
     complexOpts := &RunOptions{
-        ConfigPath:   r.opts.ConfigPath,
-        MaxParallel:  r.opts.MaxParallel,
-        VerboseLevel: r.opts.VerboseLevel,
-        Debug:        r.opts.Debug,
-        DryRun:       r.opts.DryRun,
-        Variables:    r.opts.Variables,
-        WorkingDir:   r.opts.WorkingDir,
-        Input:        r.opts.Input,
-        Output:       r.opts.Output,
-        ErrorOutput:  r.opts.ErrorOutput,
-        Only:         r.opts.Only,
-        WithRequires: r.opts.WithRequires,
-        StepCallback: &SimpleStepCallback{
+        ConfigPath:         r.opts.ConfigPath,
+        MaxParallel:        r.opts.MaxParallel,
+        VerboseLevel:       r.opts.VerboseLevel,
+        Debug:              r.opts.Debug,
+        DryRun:             r.opts.DryRun,
+        Variables:          r.opts.Variables,
+        WorkingDir:         r.opts.WorkingDir,
+        Input:              r.opts.Input,
+        Output:             r.opts.Output,
+        ErrorOutput:        r.opts.ErrorOutput,
+        Only:               r.opts.Only,
+        WithRequires:       r.opts.WithRequires,
+        BuildfabBinaryPath: r.opts.BuildfabBinaryPath,
+        StepCallback:       &SimpleStepCallback{
             verboseLevel: r.opts.VerboseLevel,
             debug:   r.opts.Debug,
             output:  r.opts.ErrorOutput,  // Use errorOutput for step results

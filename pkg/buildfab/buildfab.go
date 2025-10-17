@@ -181,19 +181,20 @@ func (s Status) String() string {
 
 // RunOptions configures stage execution
 type RunOptions struct {
-	ConfigPath  string            // Path to project.yml (default: ".project.yml")
-	MaxParallel int               // Maximum parallel execution (default: CPU count)
-	VerboseLevel int              // Verbosity level: 0=quiet, 1=-v, 2=-vv, 3=-vvv
-	Debug       bool              // Enable debug output
-	DryRun      bool              // Show what would be executed without running commands
-	Variables   map[string]string // Additional variables for interpolation
-	WorkingDir  string            // Working directory for execution
-	Input       io.Reader         // Input reader (default: nil for non-interactive)
-	Output      io.Writer         // Output writer (default: os.Stdout)
-	ErrorOutput io.Writer         // Error output writer (default: os.Stderr)
-	Only        []string          // Only run steps matching these labels
-	WithRequires bool             // Include required dependencies when running single step
-	StepCallback StepCallback     // Optional callback for step execution events
+	ConfigPath         string            // Path to project.yml (default: ".project.yml")
+	MaxParallel        int               // Maximum parallel execution (default: CPU count)
+	VerboseLevel       int               // Verbosity level: 0=quiet, 1=-v, 2=-vv, 3=-vvv
+	Debug              bool              // Enable debug output
+	DryRun             bool              // Show what would be executed without running commands
+	Variables          map[string]string // Additional variables for interpolation
+	WorkingDir         string            // Working directory for execution
+	Input              io.Reader         // Input reader (default: nil for non-interactive)
+	Output             io.Writer         // Output writer (default: os.Stdout)
+	ErrorOutput        io.Writer         // Error output writer (default: os.Stderr)
+	Only               []string          // Only run steps matching these labels
+	WithRequires       bool              // Include required dependencies when running single step
+	BuildfabBinaryPath string            // Path to buildfab binary for run_action/run_stage (optional, auto-detected if not specified)
+	StepCallback       StepCallback      // Optional callback for step execution events
 	InterpolatedActions map[string]*Action // Interpolated actions from matrix expansion (internal use)
 }
 
@@ -3503,12 +3504,14 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 		if err == nil {
 			runner.VerbosityLevel = r.opts.VerboseLevel
 			runner.Stdin = r.opts.Input
+			runner.SetBuildfabPath(r.opts.BuildfabBinaryPath)
 		}
 	} else {
 		// Use default engine (Podman)
 		runner, err = containerRunner.NewContainerRunnerWithVerbosity(r.opts.VerboseLevel)
 		if err == nil {
 			runner.Stdin = r.opts.Input
+			runner.SetBuildfabPath(r.opts.BuildfabBinaryPath)
 		}
 	}
 	

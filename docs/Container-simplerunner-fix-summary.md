@@ -2,33 +2,45 @@
 
 ## Overview
 
-Two distinct issues were discovered and addressed when using containers with buildfab's SimpleRunner API:
+Two distinct issues were discovered and **COMPLETELY RESOLVED** when using containers with buildfab's SimpleRunner API:
 
-1. ✅ **Issue #1: `run_action:` Failure** - SOLUTION: Use `run:` instead
+1. ✅ **Issue #1: `run_action:` Failure** - FIXED: BuildfabBinaryPath option added
 2. ✅ **Issue #2: Verbosity 2-3 Hang** - FIXED: Deadlock in OrderedOutputManager resolved
 
 ## Final Test Results
 
-| Verbosity | `run:` (shell commands) | `run_action:` (buildfab binary) |
-|-----------|-------------------------|----------------------------------|
-| 0 (quiet) | ✅ **Works** | ❌ Fails (missing buildfab binary) |
-| 1 (-v) | ✅ **Works** | ❌ Fails (missing buildfab binary) |
-| 2 (-vv) | ✅ **Works** | ❌ Fails (missing buildfab binary) |
-| 3 (-vvv) | ✅ **Works** | ❌ Fails (missing buildfab binary) |
+| Verbosity | `run:` (shell commands) | `run_action:` (with BuildfabBinaryPath) |
+|-----------|-------------------------|-----------------------------------------|
+| 0 (quiet) | ✅ **Works** | ✅ **Works** |
+| 1 (-v) | ✅ **Works** | ✅ **Works** |
+| 2 (-vv) | ✅ **Works** | ✅ **Works** |
+| 3 (-vvv) | ✅ **Works** | ✅ **Works** |
 
 ## Issue #1: run_action: Failure (Missing buildfab Binary)
 
-### Problem
-Container actions using `run_action:` fail because SimpleRunner API doesn't copy the buildfab binary into containers (unlike the CLI which does this automatically).
+### Problem (Historical)
+Container actions using `run_action:` would fail because SimpleRunner API didn't have a way to specify which buildfab binary to mount into containers.
 
-### Error Message
+### Error Message (Historical)
 ```
 sh: buildfab: not found
 container exited with code 1
 ```
 
-### Solution
-Use `run:` with direct shell commands instead of `run_action:`
+### Solution Implemented
+Added `BuildfabBinaryPath` option to SimpleRunOptions:
+
+```go
+opts := &buildfab.SimpleRunOptions{
+    ConfigPath:         ".project.yml",
+    BuildfabBinaryPath: "./bin/buildfab",  // Path to static buildfab binary
+    VerboseLevel:       1,
+}
+```
+
+**Automatic Detection**: If not specified, uses current executable (works for pre-push and buildfab CLI)
+
+**Requirements**: Binary MUST be statically linked (`CGO_ENABLED=0`) for Alpine compatibility
 
 #### Example Fix
 **Before (doesn't work)**:

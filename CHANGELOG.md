@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.26.0] - 2025-10-17
+
+### Added
+- **BuildfabBinaryPath Option**: Added `BuildfabBinaryPath` field to `SimpleRunOptions` and `RunOptions` to enable `run_action` and `run_stage` in containers when using SimpleRunner API
+  - Automatic binary detection: uses current executable by default (works for pre-push, buildfab CLI)
+  - Explicit path support: allows specifying exact buildfab binary to use
+  - Smart search fallback: searches PATH and common locations if current executable not suitable
+  - Binary name detection: uses actual binary name (pre-push, buildfab, etc.) in container commands
+  - Enhanced error messages with helpful solutions and requirements
+  - Container now mounts binary directory and uses correct binary name
+  - Works for any app that embeds buildfab library and implements CLI interface
+  - Requires statically-linked binary (`CGO_ENABLED=0`) for Alpine container compatibility
+  - Complete feature parity: SimpleRunner now supports everything CLI does for containers
+
+### Documentation
+- **Complete Container Fix Documentation**: Added comprehensive documentation for all container fixes
+  - `docs/Container-run-action-complete-solution.md` - Complete run_action/run_stage solution
+  - `docs/Container-run-action-solution-design.md` - Solution design and alternatives
+  - `docs/Container-complete-fix-summary.md` - Summary of all container fixes
+
 ## [0.25.3] - 2025-10-17
 
 ### Fixed

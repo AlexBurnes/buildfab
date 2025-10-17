@@ -19,6 +19,7 @@ type ContainerRunner struct {
     manager        *container.Manager
     VerbosityLevel int
     Stdin          io.Reader // Stdin for container processes (nil for non-interactive)
+    buildfabPath   string    // Path to buildfab binary (optional, auto-detected if empty)
 }
 
 // NewContainerRunner creates a new container runner
@@ -101,6 +102,11 @@ func (r *ContainerRunner) GetManager() *container.Manager {
     return r.manager
 }
 
+// SetBuildfabPath sets the explicit path to the buildfab binary
+func (r *ContainerRunner) SetBuildfabPath(path string) {
+    r.buildfabPath = path
+}
+
 // PrepareContainerConfig prepares the container configuration for run_action or run_stage
 func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfig, configFile string) (container.ContainerConfig, error) {
     // Create a copy of the config
@@ -117,8 +123,12 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 
         binPath, err := r.getBuildfabBinaryPath()
         if err != nil {
-            return config, fmt.Errorf("failed to find buildfab binary for container mount: %w", err)
+            return config, fmt.Errorf("failed to find buildfab-compatible binary for container mount: %w", err)
         }
+
+        // Get the binary name (e.g., "buildfab", "pre-push", "test-api")
+        binName := filepath.Base(binPath)
+        binDir := filepath.Dir(binPath)
 
         // Create temporary directory names for mounting
         tempDirName := "buildfab-workspace"
@@ -132,10 +142,10 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
             RO:     true,
         }
 
-        // Mount buildfab binary directory as /tmp/buildfab-bin (read-only for binary)
+        // Mount binary directory as /tmp/buildfab-bin (read-only for binary)
         binMount := container.ContainerMount{
             Type:   "bind",
-            Source: filepath.Dir(binPath),
+            Source: binDir,
             Target: fmt.Sprintf("/tmp/%s", tempBinDirName),
             RO:     true,
         }
@@ -168,20 +178,22 @@ func (r *ContainerRunner) PrepareContainerConfig(config container.ContainerConfi
 			verbosityFlags = "-v"
 		}
 
+        // Build command using the actual binary name (not hardcoded "buildfab")
+        // This allows pre-push, test-api, or any app embedding buildfab to work
         var command string
         if config.RunAction != "" {
-            command = fmt.Sprintf(`buildfab -c %s action %s %s`, configFilePath, config.RunAction, verbosityFlags)
+            command = fmt.Sprintf(`%s -c %s action %s %s`, binName, configFilePath, config.RunAction, verbosityFlags)
         } else if config.RunStage != "" {
-            command = fmt.Sprintf(`buildfab -c %s run %s %s`, configFilePath, config.RunStage, verbosityFlags)
+            command = fmt.Sprintf(`%s -c %s run %s %s`, binName, configFilePath, config.RunStage, verbosityFlags)
         }
 
         // Build the complete command in the correct order:
-        // 1. alias buildfab
+        // 1. Add binary directory to PATH
         // 2. source env file (creates directories)
         // 3. cd to workdir (after directories are created)
-        // 4. exec buildfab command
+        // 4. exec command
 
-        // Start with alias
+        // Start by adding binary directory to PATH
         finalCommand := fmt.Sprintf("export PATH=${PATH}:/tmp/%s && ", tempBinDirName)
 
         // Add environment file loading (creates /buildfab directory)
@@ -240,21 +252,51 @@ func (r *ContainerRunner) getCurrentWorkingDir() (string, error) {
     return wd, nil
 }
 
-// getBuildfabBinaryPath returns the path to the buildfab binary
+// getBuildfabBinaryPath returns the path to the buildfab-compatible binary
+// This can be the actual buildfab binary, or any binary that embeds the buildfab library
+// (like pre-push, test applications, etc.)
+//
+// Search order:
+// 1. Explicit path from opts.BuildfabBinaryPath (if provided) - user specifies exact binary
+// 2. Current executable (default) - works for buildfab CLI, pre-push, and any app using buildfab library
+// 3. Search PATH and common locations (fallback)
 func (r *ContainerRunner) getBuildfabBinaryPath() (string, error) {
-    // First, try to get the current executable's path
+    // 1. Check if explicit path provided via options (highest priority)
+    if r.buildfabPath != "" {
+        absPath, err := filepath.Abs(r.buildfabPath)
+        if err == nil {
+            if _, err := os.Stat(absPath); err == nil {
+                return absPath, nil
+            }
+        }
+        // Try the path as-is
+        if _, err := os.Stat(r.buildfabPath); err == nil {
+            return r.buildfabPath, nil
+        }
+        return "", fmt.Errorf("specified buildfab-compatible binary not found: %s (also tried absolute: %s)", r.buildfabPath, absPath)
+    }
+
+    // 2. Use current executable (default)
+    // This works for:
+    // - buildfab CLI (obviously)
+    // - pre-push (embeds buildfab library, can handle buildfab commands)
+    // - test-api and other apps using buildfab library
     if currentBinaryPath, err := r.getCurrentExecutablePath(); err == nil {
-        // If we found the current executable, use it
+        // Always use current executable if we can get it
+        // The binary must be statically linked to work in containers (Alpine uses musl libc)
         return currentBinaryPath, nil
     }
 
-    // If we can't get the current executable path, fall back to searching common locations
+    // 3. Search in PATH and common locations (fallback if we can't get current executable)
+    if pathBinary, err := exec.LookPath("buildfab"); err == nil {
+        return pathBinary, nil
+    }
+
     wd, err := r.getCurrentWorkingDir()
     if err != nil {
         return "", err
     }
 
-    // Search paths in order of preference
     searchPaths := []string{
         filepath.Join(wd, "bin", "buildfab"),     // Development: ./bin/buildfab
         filepath.Join(wd, "buildfab"),            // Development: ./buildfab
@@ -268,7 +310,29 @@ func (r *ContainerRunner) getBuildfabBinaryPath() (string, error) {
         }
     }
 
-    return "", fmt.Errorf("buildfab binary not found in any of the following locations: %v, working dir: %s", searchPaths, wd)
+    return "", fmt.Errorf(`buildfab-compatible binary not found for run_action/run_stage
+
+The container needs a buildfab-compatible binary to execute run_action and run_stage.
+
+Requirements:
+- Binary MUST be statically linked (CGO_ENABLED=0) to work in Alpine containers
+- Binary can be buildfab CLI or any app that embeds buildfab library (pre-push, etc.)
+
+Solutions:
+1. The current executable should work automatically (if statically linked)
+
+2. Specify explicit path to a statically-linked binary:
+   opts.BuildfabBinaryPath = "./bin/buildfab"
+
+3. Build static binary:
+   CGO_ENABLED=0 go build -ldflags "-extldflags '-static'" -o bin/buildfab ./cmd/buildfab
+
+4. Use 'run:' instead of 'run_action:' (doesn't need binary):
+   container:
+     run: |
+       echo "Direct commands work without any binary"
+
+Searched locations: PATH, %s`, strings.Join(searchPaths, ", "))
 }
 
 // getCurrentExecutablePath returns the path to the current buildfab executable

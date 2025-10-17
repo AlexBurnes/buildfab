@@ -21,18 +21,19 @@ import (
 // 3. Step execution reports to manager, not UI directly
 // 4. Manager outputs step start → step output → step result in sequence
 type OrderedOutputManager struct {
-    steps       []Step                     // Steps in declaration order
-    stepData    map[string]*StepOutputData // Buffered data for each step
-    currentStep string                     // Currently active step for output
-    mu          *sync.Mutex
-    verboseLevel int
-    debug       bool
-    errorOutput io.Writer
-    config      *Config                    // Configuration for command extraction
-    configPath  string                     // Configuration file path for container commands
-    interpolatedActions map[string]*Action // Interpolated actions for matrix steps
-    variables   map[string]string          // Global variables for interpolation
-    stepVariables map[string]map[string]string // Step-specific variables for interpolation
+    steps              []Step                           // Steps in declaration order
+    stepData           map[string]*StepOutputData       // Buffered data for each step
+    currentStep        string                           // Currently active step for output
+    mu                 *sync.Mutex
+    verboseLevel       int
+    debug              bool
+    errorOutput        io.Writer
+    config             *Config                          // Configuration for command extraction
+    configPath         string                           // Configuration file path for container commands
+    interpolatedActions map[string]*Action              // Interpolated actions for matrix steps
+    variables          map[string]string                // Global variables for interpolation
+    stepVariables      map[string]map[string]string    // Step-specific variables for interpolation
+    buildfabBinaryPath string                           // Path to buildfab binary for run_action/run_stage
 }
 
 // StepOutputData contains all output data for a step
@@ -71,6 +72,11 @@ func (o *OrderedOutputManager) SetConfigPath(configPath string) {
 // SetVariables sets the global variables for interpolation
 func (o *OrderedOutputManager) SetVariables(variables map[string]string) {
     o.variables = variables
+}
+
+// SetBuildfabBinaryPath sets the buildfab binary path for run_action/run_stage
+func (o *OrderedOutputManager) SetBuildfabBinaryPath(path string) {
+    o.buildfabBinaryPath = path
 }
 
 // SetStepVariables sets the step-specific variables for interpolation
@@ -452,6 +458,11 @@ func (o *OrderedOutputManager) showContainerCommand(stepName string) {
     if err != nil {
         // Silently ignore runner creation errors for display purposes
         return
+    }
+    
+    // Set the buildfab binary path for run_action/run_stage
+    if o.buildfabBinaryPath != "" {
+        tempRunner.SetBuildfabPath(o.buildfabBinaryPath)
     }
     
     // Use the actual config path

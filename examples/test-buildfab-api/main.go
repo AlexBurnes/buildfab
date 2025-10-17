@@ -36,12 +36,15 @@ func main() {
 	}
 	
 	opts := &buildfab.SimpleRunOptions{
-		ConfigPath:   configPath,
-		VerboseLevel: verboseLevel,
-		Debug:        verboseLevel > 0,
-		WorkingDir:   ".",
-		Output:       os.Stdout,
-		ErrorOutput:  os.Stderr,
+		ConfigPath:         configPath,
+		VerboseLevel:       verboseLevel,
+		Debug:              verboseLevel > 0,
+		WorkingDir:         ".",
+		Output:             os.Stdout,
+		ErrorOutput:        os.Stderr,
+		BuildfabBinaryPath: "../../bin/buildfab",  // Explicit path (test-api doesn't implement CLI commands)
+		// Note: For apps that implement full buildfab CLI interface (like pre-push),
+		// BuildfabBinaryPath can be omitted and current executable will be used automatically
 	}
 
 	// Create simple runner

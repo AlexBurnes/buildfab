@@ -2,6 +2,19 @@
 
 ## What Works
 
+- **BuildfabBinaryPath Option for run_action/run_stage** (v0.26.0 - October 17, 2025): Successfully implemented BuildfabBinaryPath option to enable run_action and run_stage in containers when using SimpleRunner API (100% complete)
+  - **Problem Solved** - Container actions with run_action/run_stage failed with "buildfab: not found" when using SimpleRunner API
+  - **User Impact** - pre-push and custom apps couldn't reuse existing actions in containers, limiting flexibility
+  - **Root Cause** - Binary detection returned calling app (pre-push, test-api) not buildfab, container couldn't find "buildfab" command
+  - **Solution Implemented** - (1) Added BuildfabBinaryPath to SimpleRunOptions/RunOptions, (2) Smart binary detection with 4-level fallback, (3) Use actual binary name in commands, (4) Enhanced error messages
+  - **Binary Detection** - Explicit path (highest priority) → current executable (default) → PATH → common locations
+  - **Smart Mounting** - Mounts binary's directory, uses actual binary name (pre-push, buildfab, etc.)
+  - **Static Linking Required** - Binary MUST be statically linked (CGO_ENABLED=0) for Alpine containers
+  - **Files Modified** - `pkg/buildfab/simple.go`, `pkg/buildfab/buildfab.go`, `pkg/buildfab/ordered_output.go`, `internal/container/runner.go`
+  - **Testing Complete** - All tests pass with race detector, verified run_action works at all verbosity levels (0-3)
+  - **Documentation** - `docs/Container-run-action-complete-solution.md`, `docs/Container-run-action-solution-design.md`, `docs/Container-complete-fix-summary.md`
+  - **Production Ready** - Complete feature parity for containers, pre-push fully supports run_action/run_stage with zero configuration
+
 - **Critical Deadlock Fix in OrderedOutputManager** (v0.25.3 - October 17, 2025): Successfully fixed deadlock that caused container actions to hang at verbosity levels 2-3 when using SimpleRunner API (100% complete)
   - **Problem Identified** - Container actions would hang indefinitely at verbosity levels 2-3 when executed via SimpleRunner (pre-push utility), making debug impossible
   - **User Impact** - PRE_PUSH_VERBOSE=2 or PRE_PUSH_VERBOSE=3 would hang forever on container actions, requiring Ctrl+C to stop

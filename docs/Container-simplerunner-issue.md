@@ -1,11 +1,18 @@
 # Container Issues with SimpleRunner API
 
+## Status: ✅ **ALL ISSUES FIXED**
+
+Both container issues with SimpleRunner API have been completely resolved:
+
+1. ✅ **`run_action:` Issue**: FIXED - BuildfabBinaryPath option added
+2. ✅ **Verbosity Level 2-3 Hang Issue**: FIXED - Deadlock resolved (see `Container-simplerunner-verbosity-issue.md`)
+
 ## Overview
 
-There are **TWO DISTINCT ISSUES** when using containers with SimpleRunner API:
+There were **TWO DISTINCT ISSUES** when using containers with SimpleRunner API:
 
-1. **`run_action:` Issue**: Container actions fail because buildfab binary is not copied into containers
-2. **Verbosity Level 2-3 Hang Issue**: ALL container actions hang at verbosity levels 2-3 (see `Container-simplerunner-verbosity-issue.md`)
+1. **`run_action:` Issue**: Container actions failed because buildfab binary was not available in containers
+2. **Verbosity Level 2-3 Hang Issue**: ALL container actions would hang at verbosity levels 2-3
 
 ## Issue 1: run_action: Fails (Missing buildfab Binary)
 
@@ -55,11 +62,43 @@ buildfab -vvv pre-push
 
 ## Solution (for run_action: Issue)
 
-**Use `run:` with shell commands instead of `run_action:`**
+### Option 1: Use BuildfabBinaryPath (Recommended - Full Feature Support)
+
+Specify the path to buildfab binary in SimpleRunOptions:
+
+```go
+opts := &buildfab.SimpleRunOptions{
+    ConfigPath:         ".project.yml",
+    BuildfabBinaryPath: "./bin/buildfab",  // Path to statically-linked buildfab
+    VerboseLevel:       1,
+}
+```
+
+**Requirements:**
+- Buildfab binary MUST be statically linked (`CGO_ENABLED=0`)
+- Use explicit path or ensure buildfab is in PATH
+
+**Build static binary:**
+```bash
+VERSION=$(cat VERSION)
+CGO_ENABLED=0 go build -ldflags "-X main.appVersion=${VERSION} -s -w -extldflags '-static'" -o bin/buildfab ./cmd/buildfab
+```
+
+### Option 2: Use `run:` with shell commands (Simpler - No buildfab needed)
+
+Use direct shell commands instead of `run_action:`:
+
+```yaml
+container:
+  image:
+    from: alpine:latest
+  run: |
+    echo "Direct shell commands work without buildfab binary"
+```
 
 This approach works because it doesn't depend on the buildfab binary being present in the container.
 
-✅ **Note**: The verbosity level 2-3 hang issue has been fixed. Containers now work at all verbosity levels when using `run:` (see `Container-simplerunner-verbosity-issue.md`).
+✅ **Note**: Both approaches now work at all verbosity levels (0-3). The verbosity hang issue has been fixed (see `Container-simplerunner-verbosity-issue.md`).
 
 ### Before (Doesn't Work with SimpleRunner)
 
