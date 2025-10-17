@@ -1,0 +1,29 @@
+project:
+  name: test-buildfab-api-run-action
+  
+# Test configuration to demonstrate the run_action issue with SimpleRunner
+
+actions:
+  # Simple action that will be called from container
+  - name: platform-view
+    description: Display platform information
+    run: |
+      echo "=== Platform Detection Test ==="
+      echo "Platform: $(uname -s)"
+      echo "Architecture: $(uname -m)"
+      echo "================================"
+
+  # Container action using run_action (PROBLEMATIC with SimpleRunner)
+  - name: container-platform-view-run-action
+    description: Test platform detection using run_action (will hang/fail)
+    container:
+      image:
+        from: alpine:latest
+      run_action: platform-view  # This requires buildfab binary in container
+
+stages:
+  test:
+    steps:
+      - action: platform-view  # This works (local)
+      - action: container-platform-view-run-action  # This will hang with SimpleRunner
+

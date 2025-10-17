@@ -1,0 +1,33 @@
+project:
+  name: test-buildfab-api-run-command
+  
+# Test configuration with WORKING solution using run: instead of run_action:
+
+actions:
+  # Simple action (for comparison)
+  - name: platform-view
+    description: Display platform information
+    run: |
+      echo "=== Platform Detection Test ==="
+      echo "Platform: $(uname -s)"
+      echo "Architecture: $(uname -m)"
+      echo "================================"
+
+  # Container action using run: with shell commands (WORKS with SimpleRunner)
+  - name: container-platform-view-run-command
+    description: Test platform detection using run command (works correctly)
+    container:
+      image:
+        from: alpine:latest
+      run: |
+        echo "=== Container Platform Detection Test ==="
+        echo "Platform: $(uname -s)"
+        echo "Architecture: $(uname -m)"
+        echo "================================"
+
+stages:
+  test:
+    steps:
+      - action: platform-view  # This works (local)
+      - action: container-platform-view-run-command  # This works with SimpleRunner
+

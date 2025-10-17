@@ -2,6 +2,19 @@
 
 ## What Works
 
+- **Critical Deadlock Fix in OrderedOutputManager** (v0.25.3 - October 17, 2025): Successfully fixed deadlock that caused container actions to hang at verbosity levels 2-3 when using SimpleRunner API (100% complete)
+  - **Problem Identified** - Container actions would hang indefinitely at verbosity levels 2-3 when executed via SimpleRunner (pre-push utility), making debug impossible
+  - **User Impact** - PRE_PUSH_VERBOSE=2 or PRE_PUSH_VERBOSE=3 would hang forever on container actions, requiring Ctrl+C to stop
+  - **Root Cause** - Deadlock in OrderedOutputManager where methods held mutex while performing blocking I/O operations, preventing container output callbacks from acquiring same mutex
+  - **Deadlock Flow** - OnStepComplete (holds mutex) → checkAndShowNextStep → showStepStart → showContainerCommand (does I/O) → Container outputs line → OnStepOutput (tries to get mutex) → DEADLOCK
+  - **Solution Implemented** - (1) Modified OnStepOutput to release mutex before I/O, (2) Modified OnStepComplete to release mutex before calling methods that do I/O, (3) Modified checkAndShowCompletedSteps and checkAndShowNextStep to acquire/release mutex properly around I/O
+  - **Go Best Practice** - Never hold mutex while performing I/O operations, keep critical sections minimal, release lock before blocking operations
+  - **Files Modified** - `pkg/buildfab/ordered_output.go` (fixed OnStepOutput, OnStepComplete, checkAndShowCompletedSteps, checkAndShowNextStep with proper mutex management)
+  - **Testing Complete** - All tests pass with race detector (go test ./... -race), verified at all verbosity levels (0/1/2/3), confirmed pre-push works at all levels
+  - **Test Application Created** - `examples/test-buildfab-api/` with test configurations demonstrating issue and fix
+  - **Documentation Created** - `docs/Container-simplerunner-verbosity-issue.md` (issue details), `docs/Deadlock-fix-complete.md` (implementation), `docs/Container-simplerunner-fix-summary.md` (summary), `docs/Container-simplerunner-issue.md` (run_action issue)
+  - **Production Ready** - Container actions work at ALL verbosity levels (0-3), no race conditions, pre-push fully functional with containers
+
 - **Container Stdin Hang Issue Fixed** (v0.25.2 - October 17, 2025): Successfully fixed container actions hanging indefinitely when executed via SimpleRunner (pre-push utility) (100% complete)
   - **Problem Identified** - Container actions were hanging when called programmatically via SimpleRunner because containers were waiting for stdin input that was never provided
   - **User Impact** - `pre-push test` command would hang indefinitely when container actions were present, making the pre-push utility unusable with containers

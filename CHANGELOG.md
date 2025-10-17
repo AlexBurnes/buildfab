@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.3] - 2025-10-17
+
+### Fixed
+- **Critical Deadlock Fix**: Fixed deadlock in `OrderedOutputManager` that caused container actions to hang indefinitely at verbosity levels 2-3 when using SimpleRunner API
+  - Modified `OnStepOutput` to release mutex before performing I/O operations
+  - Modified `OnStepComplete` to release mutex before calling methods that do I/O
+  - Modified `checkAndShowCompletedSteps` and `checkAndShowNextStep` to properly acquire/release mutex around I/O operations
+  - Container actions now work correctly at all verbosity levels (0-3)
+  - Verified with race detector: no race conditions introduced
+  - Fixes pre-push hanging when using containers with verbose mode enabled
+
+### Documentation
+- **Container SimpleRunner Issues**: Added comprehensive documentation for container issues with SimpleRunner API
+  - `docs/Container-simplerunner-issue.md` - Documents `run_action:` failure due to missing buildfab binary
+  - `docs/Container-simplerunner-verbosity-issue.md` - Documents verbosity level 2-3 hang issue (now fixed)
+  - `docs/Container-simplerunner-fix-summary.md` - Complete summary of both issues and fixes
+  - `docs/Deadlock-fix-complete.md` - Detailed implementation of deadlock fix
+  - `examples/test-buildfab-api/` - Test application to reproduce and verify issues
+
 ## [0.25.2] - 2025-10-17
 
 ### Fixed

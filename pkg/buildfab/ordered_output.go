@@ -136,7 +136,6 @@ func (o *OrderedOutputManager) OnStepStart(ctx context.Context, stepName string)
 // OnStepComplete handles step completion events from executor
 func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
     o.mu.Lock()
-    defer o.mu.Unlock()
 
     if o.debug {
         fmt.Fprintf(o.errorOutput, "[DEBUG] OnStepComplete: %s (status: %s)\n", stepName, status)
@@ -166,6 +165,11 @@ func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName stri
         }
     }
 
+    // Release mutex BEFORE checking for next steps to avoid deadlock
+    // (checkAndShowCompletedSteps and checkAndShowNextStep may call showStepStart
+    //  which does I/O and may try to acquire the mutex again)
+    o.mu.Unlock()
+
     // Check if any completed steps can now be shown in order
     o.checkAndShowCompletedSteps()
 
@@ -175,28 +179,44 @@ func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName stri
 
 // OnStepOutput handles step output events from executor
 func (o *OrderedOutputManager) OnStepOutput(ctx context.Context, stepName string, output string) {
+    // Determine what to do while holding the lock, then release before I/O
+    var shouldStream bool
+    var linesToPrint []string
+    var debugMsg string
+    
     o.mu.Lock()
-    defer o.mu.Unlock()
-
+    
     // For matrix steps, show output immediately if it's the current step
     // This enables real-time streaming for matrix execution
-    if o.shouldStreamOutput(stepName) {
+    shouldStream = o.shouldStreamOutput(stepName)
+    
+    if shouldStream {
+        // Prepare lines to print (but don't print yet - release lock first)
         lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
         for _, line := range lines {
             if line != "" {
-                fmt.Fprintf(o.errorOutput, "    %s\n", line)
+                linesToPrint = append(linesToPrint, line)
             }
         }
-        // Don't buffer output when streaming - it's already displayed
-        return
-    }
-
-    // Otherwise, buffer output for later display when step completes
-    if data, exists := o.stepData[stepName]; exists {
-        data.Output = append(data.Output, output)
-        if o.debug {
-            fmt.Fprintf(o.errorOutput, "[DEBUG] Buffered output for %s: %s\n", stepName, output)
+    } else {
+        // Buffer output for later display when step completes
+        if data, exists := o.stepData[stepName]; exists {
+            data.Output = append(data.Output, output)
+            if o.debug {
+                debugMsg = fmt.Sprintf("[DEBUG] Buffered output for %s: %s\n", stepName, output)
+            }
         }
+    }
+    
+    o.mu.Unlock()
+    
+    // Now do I/O operations WITHOUT holding the lock to avoid deadlock
+    if shouldStream {
+        for _, line := range linesToPrint {
+            fmt.Fprintf(o.errorOutput, "    %s\n", line)
+        }
+    } else if debugMsg != "" {
+        fmt.Fprint(o.errorOutput, debugMsg)
     }
 }
 
@@ -295,6 +315,10 @@ func (o *OrderedOutputManager) checkAndShowCompletedSteps() {
     shownAny := true
     for shownAny {
         shownAny = false
+        
+        // Acquire mutex to check state
+        o.mu.Lock()
+        var stepToShow string
         for _, step := range o.steps {
             stepName := step.Action
             if data, exists := o.stepData[stepName]; exists && data.Completed && !data.Shown {
@@ -312,27 +336,37 @@ func (o *OrderedOutputManager) checkAndShowCompletedSteps() {
                 }
 
                 if canShow {
-                    if o.debug {
-                        fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowCompletedSteps: showing completed step: %s\n", stepName)
-                    }
-                    o.showStepStart(stepName)
+                    stepToShow = stepName
                     o.stepData[stepName].Shown = true
                     o.currentStep = stepName
-
-                    // Flush any buffered output for this step
-                    o.flushBufferedOutput(stepName)
-
-                    o.showStepCompletion(stepName)
-
-                    // Flush any remaining buffered output after step completion
-                    o.flushBufferedOutput(stepName)
-
-                    o.currentStep = ""
-
                     shownAny = true
                     break // Start over to check for more steps that can now be shown
                 }
             }
+        }
+        o.mu.Unlock()
+        
+        // Show step WITHOUT holding mutex to avoid deadlock
+        if stepToShow != "" {
+            if o.debug {
+                fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowCompletedSteps: showing completed step: %s\n", stepToShow)
+            }
+            o.showStepStart(stepToShow)
+
+            // Re-acquire mutex for state updates
+            o.mu.Lock()
+            // Flush any buffered output for this step
+            o.flushBufferedOutput(stepToShow)
+            o.mu.Unlock()
+
+            o.showStepCompletion(stepToShow)
+
+            // Re-acquire mutex for final state updates
+            o.mu.Lock()
+            // Flush any remaining buffered output after step completion
+            o.flushBufferedOutput(stepToShow)
+            o.currentStep = ""
+            o.mu.Unlock()
         }
     }
 }
@@ -343,23 +377,36 @@ func (o *OrderedOutputManager) checkAndShowNextStep() {
         fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowNextStep: checking for next step to show\n")
     }
 
+    // Acquire mutex to check state
+    o.mu.Lock()
+    var stepToShow string
+    
     // Find the next step that can be shown
     for _, step := range o.steps {
         stepName := step.Action
         if data, exists := o.stepData[stepName]; exists && data.Started && !data.Completed && !data.Shown {
             if o.canShowStepStart(stepName) {
-                if o.debug {
-                    fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowNextStep: showing next step: %s\n", stepName)
-                }
-                o.showStepStart(stepName)
+                stepToShow = stepName
                 o.stepData[stepName].Shown = true
                 o.currentStep = stepName
-
-                // Flush any buffered output for this step
-                o.flushBufferedOutput(stepName)
                 break
             }
         }
+    }
+    o.mu.Unlock()
+    
+    // Show step WITHOUT holding mutex to avoid deadlock
+    if stepToShow != "" {
+        if o.debug {
+            fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowNextStep: showing next step: %s\n", stepToShow)
+        }
+        o.showStepStart(stepToShow)
+
+        // Re-acquire mutex to flush buffered output
+        o.mu.Lock()
+        // Flush any buffered output for this step
+        o.flushBufferedOutput(stepToShow)
+        o.mu.Unlock()
     }
 }
 
