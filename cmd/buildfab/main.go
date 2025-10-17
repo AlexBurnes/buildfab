@@ -356,7 +356,8 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		   strings.Contains(err.Error(), "field") && strings.Contains(err.Error(), "not found") ||
 		   strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
 		   strings.Contains(err.Error(), "duplicate action name") ||
-		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") ||
+		   strings.Contains(err.Error(), "invalid dependency") {
 			// In test mode, return the error instead of exiting
 			if testing.Testing() {
 				return err
@@ -412,7 +413,8 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 		   strings.Contains(err.Error(), "field") && strings.Contains(err.Error(), "not found") ||
 		   strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
 		   strings.Contains(err.Error(), "duplicate action name") ||
-		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") ||
+		   strings.Contains(err.Error(), "invalid dependency") {
 			// In test mode, return the error instead of exiting
 			if testing.Testing() {
 				return err
@@ -422,7 +424,12 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
 			os.Exit(1)
 		}
-		return fmt.Errorf("failed to load configuration: %w", err)
+		// For other configuration errors, print and exit without usage
+		if testing.Testing() {
+			return fmt.Errorf("failed to load configuration: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "\033[31mError: failed to load configuration: %v\033[0m\n", err)
+		os.Exit(1)
 	}
 	
 	stageName := args[0]
@@ -547,7 +554,8 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 		// Check if it's a validation error
 		if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
 		   strings.Contains(err.Error(), "duplicate action name") ||
-		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") ||
+		   strings.Contains(err.Error(), "invalid dependency") {
 			// In test mode, return the error instead of exiting
 			if testing.Testing() {
 				return err
@@ -557,7 +565,12 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
 			os.Exit(1)
 		}
-		return fmt.Errorf("failed to load configuration: %w", err)
+		// For other configuration errors, print and exit without usage
+		if testing.Testing() {
+			return fmt.Errorf("failed to load configuration: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "\033[31mError: failed to load configuration: %v\033[0m\n", err)
+		os.Exit(1)
 	}
 	
 	// Create variables map from environment variables
@@ -705,7 +718,8 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		// Check if it's a validation error
 		if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
 		   strings.Contains(err.Error(), "duplicate action name") ||
-		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+		   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") ||
+		   strings.Contains(err.Error(), "invalid dependency") {
 			// In test mode, return the error instead of exiting
 			if testing.Testing() {
 				return err
@@ -715,7 +729,12 @@ func runValidate(cmd *cobra.Command, args []string) error {
 			fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
 			os.Exit(1)
 		}
-		return fmt.Errorf("configuration validation failed: %w", err)
+		// For other configuration errors, print and exit without usage
+		if testing.Testing() {
+			return fmt.Errorf("configuration validation failed: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "\033[31mError: configuration validation failed: %v\033[0m\n", err)
+		os.Exit(1)
 	}
 	
 	fmt.Printf("Configuration is valid: %s\n", configPath)
@@ -924,7 +943,8 @@ func handleConfigLoadError(configPath string, err error) error {
 	// Check if it's a validation error
 	if strings.Contains(err.Error(), "step") && strings.Contains(err.Error(), "must have an action") ||
 	   strings.Contains(err.Error(), "duplicate action name") ||
-	   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") {
+	   strings.Contains(err.Error(), "stage") && strings.Contains(err.Error(), "must have at least one step") ||
+	   strings.Contains(err.Error(), "invalid dependency") {
 		// In test mode, return the error instead of exiting
 		if testing.Testing() {
 			return err
@@ -934,7 +954,13 @@ func handleConfigLoadError(configPath string, err error) error {
 		fmt.Fprintf(os.Stderr, "\033[31mError: %v\033[0m\n", enhancedError)
 		os.Exit(1)
 	}
-	return fmt.Errorf("failed to load configuration: %w", err)
+	// For other configuration errors, print and exit without usage
+	if testing.Testing() {
+		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "\033[31mError: failed to load configuration: %v\033[0m\n", err)
+	os.Exit(1)
+	return nil // Never reached but required for compilation
 }
 
 // enhanceValidationError adds line number information to validation errors

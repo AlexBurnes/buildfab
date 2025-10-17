@@ -2,6 +2,21 @@
 
 ## What Works
 
+- **Missing Dependency Validation and Usage Display Fixes** (October 17, 2025): Successfully fixed silent failure when step references non-existing dependency and inappropriate usage display on errors (100% complete)
+  - **Problem 1 Identified** - When a step in a stage referenced a non-existing step in its `require` field, buildfab would fail silently without displaying any error message, only showing "💥 FAILED - docker-build in 0.000s" with exit code 1
+  - **Problem 2 Identified** - Usage information was being displayed for all errors (configuration, execution) when it should only be shown for CLI argument errors (wrong flags, missing arguments)
+  - **User Impact** - Users couldn't understand why their stages were failing (no error message), and when errors were shown, they were cluttered with irrelevant usage information
+  - **Root Cause 1 Found** - Error from `buildDAG()` function (which validates dependencies) was not being printed because code assumed all errors were handled by step callbacks, but dependency validation errors occur before step execution starts
+  - **Root Cause 2 Found** - Error handling functions were returning errors to Cobra which automatically prints usage, instead of exiting directly with os.Exit(1)
+  - **Solution Implemented** - (1) Added dependency validation in `Config.Validate()` to check that all dependencies exist in the stage during configuration loading, (2) Added error printing in `SimpleRunner.RunStage()` for pre-execution errors like buildDAG failures, (3) Changed all configuration and execution error handlers to exit directly instead of returning errors to Cobra
+  - **Validation Enhanced** - Both `require` and `depends_on` fields are now validated to ensure all referenced steps exist in the stage
+  - **Error Messages** - Clear error messages now indicate which step has invalid dependency and which dependency is missing: `step 2 'slim-docker-image' in stage docker-build has invalid dependency: 'unexists-build-docker-image' (step not found in stage)`
+  - **Usage Display Fixed** - Usage information is now only shown for CLI argument errors (unknown flags, missing arguments), configuration errors and execution errors show only the error message without usage clutter
+  - **Early Detection** - Errors are caught during configuration validation (both `validate` and `run` commands), preventing silent failures
+  - **Files Modified** - `pkg/buildfab/buildfab.go` (added dependency validation in Validate function for both require and depends_on fields), `pkg/buildfab/simple.go` (added error printing for buildDAG errors before summary), `cmd/buildfab/main.go` (changed error handling in runStageDirect, runActionDirect, runValidate, handleConfigLoadError to exit directly)
+  - **Comprehensive Testing** - Verified with `examples/container-docker-build-failed.yml` that errors are caught with clear messages without usage clutter, confirmed CLI argument errors still show usage, verified both validate and run commands report errors properly
+  - **Production Ready** - Dependency validation now catches all missing dependencies with helpful error messages, usage display is now contextually appropriate, no more silent failures or cluttered error output
+
 - **List Variables Command and YAML Fixes** (v0.25.0 - October 16, 2025): Successfully added new list-variables command and fixed critical YAML validation issues (100% complete)
   - **New list-variables Command** - Added `buildfab list-variables` command that displays all available variables with their values sorted alphabetically
   - **Variable Types Included** - Platform variables (os, arch, cpu, platform, os_version), version variables (version.*, branch, commit), project variables (project, module), CLI environment variables (--env), OS environment variables with env. prefix (env.PATH, env.HOME, env.USER, env.SHELL, env.LANG, env.PWD, env.GOPATH, env.GOROOT)

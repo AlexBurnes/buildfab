@@ -222,6 +222,21 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     
     err = runner.RunStageWithSteps(ctx, stageName, expandedSteps)
 
+    // If there was an error before step execution (e.g., buildDAG error), print it immediately
+    if err != nil {
+        // Check if this is a pre-execution error (dependency validation, DAG building, etc.)
+        // These errors occur before any step callbacks are called
+        if strings.Contains(err.Error(), "failed to build execution DAG") ||
+           strings.Contains(err.Error(), "dependency not found") {
+            fmt.Fprintf(r.opts.ErrorOutput, "\n")
+            fmt.Fprintf(r.opts.ErrorOutput, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+            fmt.Fprintf(r.opts.ErrorOutput, "\033[31m💥 FAILED\033[0m - %s in 0.000s\n", stageName)
+            fmt.Fprintf(r.opts.ErrorOutput, "\n")
+            fmt.Fprintf(r.opts.ErrorOutput, "\033[31mError: %v\033[0m\n", err)
+            return err
+        }
+    }
+
     // Calculate stage execution duration
     stageDuration := time.Since(stageStart)
 

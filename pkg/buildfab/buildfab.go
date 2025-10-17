@@ -660,6 +660,12 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("stage %s must have at least one step", stageName)
 		}
 		
+		// Build a map of step names for dependency validation
+		stepNames := make(map[string]bool)
+		for _, step := range stage.Steps {
+			stepNames[step.Action] = true
+		}
+		
 		for i, step := range stage.Steps {
 			if step.Action == "" {
 				return fmt.Errorf("step %d in stage %s must have an action", i+1, stageName)
@@ -677,6 +683,20 @@ func (c *Config) Validate() error {
 			for _, onlyValue := range step.Only {
 				if onlyValue != "release" && onlyValue != "prerelease" && onlyValue != "patch" && onlyValue != "minor" && onlyValue != "major" {
 					return fmt.Errorf("step %d in stage %s has invalid only value: %s (must be 'release', 'prerelease', 'patch', 'minor', or 'major')", i+1, stageName, onlyValue)
+				}
+			}
+			
+			// Validate require dependencies exist in the stage
+			for _, dep := range step.Require {
+				if !stepNames[dep] {
+					return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, step.Action, stageName, dep)
+				}
+			}
+			
+			// Validate depends_on dependencies exist in the stage
+			for _, dep := range step.DependsOn {
+				if !stepNames[dep] {
+					return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, step.Action, stageName, dep)
 				}
 			}
 		}

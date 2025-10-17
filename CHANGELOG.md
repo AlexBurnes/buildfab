@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.1] - 2025-10-17
+
+### Fixed
+- **Missing Dependency Validation**: Fixed silent failure when step references non-existing dependency in `require` or `depends_on` field
+  - Added validation in `Config.Validate()` to check that all dependencies exist in the stage
+  - Error message now clearly indicates which step has invalid dependency and which dependency is missing
+  - Example: `step 2 'slim-docker-image' in stage docker-build has invalid dependency: 'unexists-build-docker-image' (step not found in stage)`
+  - Errors are caught during configuration validation and stage execution
+  - Fixed silent failure mode where buildfab would exit with error code but no error message
+  - Both `validate` and `run` commands now properly report dependency validation errors
+- **Usage Display on Errors**: Fixed inappropriate usage information display for configuration and execution errors
+  - Usage is now only shown for CLI argument errors (wrong flags, missing arguments)
+  - Configuration errors (validation, parsing) no longer show usage information
+  - Execution errors (stage not found, action failed) no longer show usage information
+  - Makes error messages cleaner and more focused on the actual problem
+  - Updated error handling in `runStageDirect`, `runActionDirect`, `runValidate`, and `handleConfigLoadError`
+
 ## [0.25.0] - 2025-10-16
 
 ### Added

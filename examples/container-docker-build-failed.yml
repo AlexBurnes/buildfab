@@ -1,0 +1,43 @@
+project:
+  name: container-docker-build-example
+
+stages:
+  docker-build:
+    steps:
+      - action: build-docker-image
+      - action: slim-docker-image
+        require: [unexists-build-docker-image]
+
+actions:
+  # Build docker container using buildfab container feature
+  - name: build-docker-image
+    description: Build docker container with buildfab container feature
+    container:
+      engine: docker
+      image:
+        build:
+          dockerfile: Dockerfile
+          context: .
+          args:
+            VERSION: ${{version}}
+          tags:
+            - ${{project}}:${{version}}
+            - ${{project}}:latest
+          network: host
+          progress: plain
+      # No need for from, workdir, env, or run - buildfab handles the build locally
+
+  # Make slim version using buildfab container feature  
+  - name: slim-docker-image
+    description: Make slim version of docker container with buildfab container feature
+    container:
+      engine: docker
+      image:
+        slim:
+          target: ${{project}}:${{version}}  # Target the image built in the previous step
+          tags:
+            - ${{project}}:${{version}}-slim
+            - ${{project}}:latest-slim
+          network: host
+          http_probe: false
+          exec: "/usr/local/bin/${{version.modules}} --version"  # Test command for slim tool
