@@ -145,6 +145,8 @@ func (d *DockerEngine) RunContainer(ctx context.Context, config container.Contai
 	
 	// Execute docker run command
 	cmd := exec.CommandContext(ctx, d.binary, args...)
+	// Set stdin to nil for non-interactive mode (prevents hanging)
+	cmd.Stdin = nil
 	output, err := cmd.CombinedOutput()
 	
 	result := &container.ContainerResult{

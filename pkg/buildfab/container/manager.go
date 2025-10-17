@@ -3,6 +3,7 @@ package container
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -96,7 +97,7 @@ func (m *Manager) ExecuteAction(ctx context.Context, config ContainerConfig) (*C
 }
 
 // ExecuteActionWithCallback executes a container action with streaming callback
-func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string)) (*ContainerResult, error) {
+func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string), stdin io.Reader) (*ContainerResult, error) {
 	// Validate configuration
 	if err := m.validateConfig(config); err != nil {
 		return nil, err
@@ -148,7 +149,7 @@ func (m *Manager) ExecuteActionWithCallback(ctx context.Context, config Containe
 	}
 	
 	// Run container with callback
-	return m.engine.RunContainerWithCallback(ctx, config, outputCallback)
+	return m.engine.RunContainerWithCallback(ctx, config, outputCallback, stdin)
 }
 
 // GetEngineName returns the name of the current engine

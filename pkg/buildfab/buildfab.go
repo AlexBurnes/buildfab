@@ -188,6 +188,7 @@ type RunOptions struct {
 	DryRun      bool              // Show what would be executed without running commands
 	Variables   map[string]string // Additional variables for interpolation
 	WorkingDir  string            // Working directory for execution
+	Input       io.Reader         // Input reader (default: nil for non-interactive)
 	Output      io.Writer         // Output writer (default: os.Stdout)
 	ErrorOutput io.Writer         // Error output writer (default: os.Stderr)
 	Only        []string          // Only run steps matching these labels
@@ -3501,10 +3502,14 @@ func (r *Runner) runContainerAction(ctx context.Context, action Action) (Result,
 		runner, err = containerRunner.NewContainerRunnerWithEngine(interpolatedAction.Container.Engine)
 		if err == nil {
 			runner.VerbosityLevel = r.opts.VerboseLevel
+			runner.Stdin = r.opts.Input
 		}
 	} else {
 		// Use default engine (Podman)
 		runner, err = containerRunner.NewContainerRunnerWithVerbosity(r.opts.VerboseLevel)
+		if err == nil {
+			runner.Stdin = r.opts.Input
+		}
 	}
 	
 	if err != nil {

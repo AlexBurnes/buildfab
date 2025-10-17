@@ -3,6 +3,7 @@ package container
 import (
     "context"
     "fmt"
+    "io"
     "math/rand"
     "os"
     "os/exec"
@@ -17,6 +18,7 @@ import (
 type ContainerRunner struct {
     manager        *container.Manager
     VerbosityLevel int
+    Stdin          io.Reader // Stdin for container processes (nil for non-interactive)
 }
 
 // NewContainerRunner creates a new container runner
@@ -58,11 +60,11 @@ func (r *ContainerRunner) RunAction(ctx context.Context, config container.Contai
         return nil, err
     }
 
-    // Execute container with callback (for streaming output)
-    result, err := r.manager.ExecuteActionWithCallback(ctx, preparedConfig, nil)
-    if err != nil {
-        return nil, err
-    }
+	// Execute container with callback (for streaming output)
+	result, err := r.manager.ExecuteActionWithCallback(ctx, preparedConfig, nil, r.Stdin)
+	if err != nil {
+		return nil, err
+	}
 
     // Collect artifacts
     if err := r.collectArtifacts(result, preparedConfig); err != nil {
@@ -80,11 +82,11 @@ func (r *ContainerRunner) RunActionWithCallback(ctx context.Context, config cont
         return nil, err
     }
 
-    // Execute container with callback
-    result, err := r.manager.ExecuteActionWithCallback(ctx, preparedConfig, outputCallback)
-    if err != nil {
-        return nil, err
-    }
+	// Execute container with callback
+	result, err := r.manager.ExecuteActionWithCallback(ctx, preparedConfig, outputCallback, r.Stdin)
+	if err != nil {
+		return nil, err
+	}
 
     // Collect artifacts
     if err := r.collectArtifacts(result, preparedConfig); err != nil {

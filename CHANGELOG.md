@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.25.2] - 2025-10-17
+
+### Fixed
+- **Container Stdin Hang Issue**: Fixed container actions hanging indefinitely when executed via SimpleRunner (pre-push utility)
+  - Added `Input io.Reader` field to `SimpleRunOptions` and `RunOptions` for stdin control
+  - Updated container execution chain to properly handle stdin (ContainerRunner, Manager, Engine interface)
+  - Docker and Podman engines now set `cmd.Stdin = stdin` for non-interactive mode
+  - When `Input` is `nil` (default), containers run without waiting for stdin
+  - Resolves issue where `pre-push test` would hang on container actions
+  - All container tests pass without hanging (TestContainerActionExecution, TestContainerRunStageExecution)
+  - Backward compatible - no breaking changes, sensible defaults
+  - Users can optionally provide custom stdin via `opts.Input` if interactive mode is needed
+  - Created documentation: `docs/Container-stdin-fix.md` with complete fix details
+
 ## [0.25.1] - 2025-10-17
 
 ### Fixed

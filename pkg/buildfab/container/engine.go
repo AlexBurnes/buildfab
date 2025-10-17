@@ -2,6 +2,7 @@ package container
 
 import (
 	"context"
+	"io"
 )
 
 // Engine represents a container engine interface
@@ -17,7 +18,7 @@ type Engine interface {
 	
 	// Container operations
 	RunContainer(ctx context.Context, config ContainerConfig) (*ContainerResult, error)
-	RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string)) (*ContainerResult, error)
+	RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string), stdin io.Reader) (*ContainerResult, error)
 	StopContainer(ctx context.Context, containerID string) error
 	RemoveContainer(ctx context.Context, containerID string) error
 	

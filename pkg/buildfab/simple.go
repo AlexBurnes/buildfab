@@ -53,6 +53,7 @@ type SimpleRunOptions struct {
     DryRun      bool              // Show what would be executed without running commands
     Variables   map[string]string // Additional variables for interpolation
     WorkingDir  string            // Working directory for execution
+    Input       io.Reader         // Input reader (default: nil for non-interactive)
     Output      io.Writer         // Output writer (default: os.Stdout)
     ErrorOutput io.Writer         // Error output writer (default: os.Stderr)
     Only        []string          // Only run steps matching these labels
@@ -197,6 +198,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         DryRun:       r.opts.DryRun,
         Variables:    r.opts.Variables,
         WorkingDir:   r.opts.WorkingDir,
+        Input:        r.opts.Input,
         Output:       r.opts.Output,
         ErrorOutput:  r.opts.ErrorOutput,
         Only:         r.opts.Only,
@@ -294,6 +296,7 @@ func (r *SimpleRunner) RunAction(ctx context.Context, actionName string) error {
         DryRun:       r.opts.DryRun,
         Variables:    r.opts.Variables,
         WorkingDir:   r.opts.WorkingDir,
+        Input:        r.opts.Input,
         Output:       r.opts.Output,
         ErrorOutput:  r.opts.ErrorOutput,
         Only:         r.opts.Only,
@@ -373,6 +376,7 @@ func (r *SimpleRunner) RunStageStep(ctx context.Context, stageName, stepName str
         DryRun:       r.opts.DryRun,
         Variables:    r.opts.Variables,
         WorkingDir:   r.opts.WorkingDir,
+        Input:        r.opts.Input,
         Output:       r.opts.Output,
         ErrorOutput:  r.opts.ErrorOutput,
         Only:         r.opts.Only,

@@ -4,6 +4,7 @@ import (
     "bufio"
     "context"
     "fmt"
+    "io"
     "os/exec"
     "strings"
     "syscall"
@@ -442,7 +443,7 @@ func (d *dockerEngineImpl) RunContainer(ctx context.Context, config ContainerCon
 }
 
 // RunContainerWithCallback runs a Docker container with streaming output callback
-func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string)) (*ContainerResult, error) {
+func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string), stdin io.Reader) (*ContainerResult, error) {
     // Build docker run command (same as RunContainer)
     args := []string{"run", "--rm"}
 
@@ -530,6 +531,9 @@ func (d *dockerEngineImpl) RunContainerWithCallback(ctx context.Context, config 
 
     // Execute docker run command with streaming
     cmd := exec.CommandContext(ctx, d.binary, args...)
+    
+    // Set stdin: use provided stdin or nil for non-interactive mode
+    cmd.Stdin = stdin
 
     // Set up streaming pipes
     stdout, err := cmd.StdoutPipe()
@@ -1060,7 +1064,7 @@ func (p *podmanEngineImpl) RunContainer(ctx context.Context, config ContainerCon
 }
 
 // RunContainerWithCallback runs a Podman container with streaming output callback
-func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string)) (*ContainerResult, error) {
+func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config ContainerConfig, outputCallback func(string), stdin io.Reader) (*ContainerResult, error) {
     // Build podman run command (same as RunContainer)
     args := []string{"run", "--rm"}
 
@@ -1142,6 +1146,9 @@ func (p *podmanEngineImpl) RunContainerWithCallback(ctx context.Context, config 
 
     // Execute podman run command with streaming
     cmd := exec.CommandContext(ctx, p.binary, args...)
+    
+    // Set stdin: use provided stdin or nil for non-interactive mode
+    cmd.Stdin = stdin
 
     // Set up streaming pipes
     stdout, err := cmd.StdoutPipe()

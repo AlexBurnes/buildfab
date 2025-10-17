@@ -2,6 +2,20 @@
 
 ## What Works
 
+- **Container Stdin Hang Issue Fixed** (v0.25.2 - October 17, 2025): Successfully fixed container actions hanging indefinitely when executed via SimpleRunner (pre-push utility) (100% complete)
+  - **Problem Identified** - Container actions were hanging when called programmatically via SimpleRunner because containers were waiting for stdin input that was never provided
+  - **User Impact** - `pre-push test` command would hang indefinitely when container actions were present, making the pre-push utility unusable with containers
+  - **Root Cause** - When containers started with `exec.CommandContext`, stdin was implicitly connected by default, but SimpleRunner didn't provide stdin, causing wait
+  - **Solution Implemented** - (1) Added `Input io.Reader` field to `SimpleRunOptions` and `RunOptions` for stdin control, (2) Updated container execution chain (ContainerRunner, Manager, Engine), (3) Modified Docker and Podman engines to set `cmd.Stdin = stdin`, (4) Default `nil` value runs containers in non-interactive mode
+  - **Execution Chain** - SimpleRunner → RunOptions → ContainerRunner → Manager → Engine (Docker/Podman) with stdin passed through entire chain
+  - **Default Behavior** - When `Input` is `nil` (default for programmatic usage), containers run without waiting for stdin (non-interactive mode)
+  - **Optional Feature** - Users can optionally provide custom stdin via `opts.Input = os.Stdin` or any `io.Reader` if interactive mode is needed
+  - **Files Modified** - `pkg/buildfab/simple.go` (added Input to SimpleRunOptions), `pkg/buildfab/buildfab.go` (added Input to RunOptions, passed to ContainerRunner), `internal/container/runner.go` (added Stdin field, passed to Manager), `pkg/buildfab/container/manager.go` (updated ExecuteActionWithCallback signature), `pkg/buildfab/container/engine.go` (updated Engine interface), `pkg/buildfab/container/engines.go` (updated Docker and Podman RunContainerWithCallback), `internal/container/docker.go` (removed unused import)
+  - **Testing Complete** - All container tests pass without hanging: TestContainerActionExecution (0.69s), TestContainerRunStageExecution (0.69s), TestSimpleContainerExecution (0.80s), verified with pre-push stage execution
+  - **Documentation Created** - Comprehensive fix documentation in `docs/Container-stdin-fix.md` with problem analysis, root cause, solution details, usage examples, and impact
+  - **Backward Compatible** - No breaking changes, sensible defaults (nil = non-interactive), optional stdin control for advanced users
+  - **Production Ready** - Container actions now complete normally when executed via SimpleRunner API, pre-push utility works perfectly with container tests
+
 - **Missing Dependency Validation and Usage Display Fixes** (October 17, 2025): Successfully fixed silent failure when step references non-existing dependency and inappropriate usage display on errors (100% complete)
   - **Problem 1 Identified** - When a step in a stage referenced a non-existing step in its `require` field, buildfab would fail silently without displaying any error message, only showing "💥 FAILED - docker-build in 0.000s" with exit code 1
   - **Problem 2 Identified** - Usage information was being displayed for all errors (configuration, execution) when it should only be shown for CLI argument errors (wrong flags, missing arguments)
