@@ -157,7 +157,8 @@ type Stage struct {
 
 // Step represents a single step in a stage
 type Step struct {
-	Action  string   `yaml:"action"`
+	Action  string   `yaml:"action,omitempty"`
+	Stage   string   `yaml:"stage,omitempty"`
 	Require []string `yaml:"require,omitempty"`
 	OnError string   `yaml:"onerror,omitempty"`
 	If      string   `yaml:"if,omitempty"`

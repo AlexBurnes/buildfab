@@ -8,6 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.27.0] - 2025-10-17
+
+### Added
+- **Stage References in Steps**: Steps can now reference other stages to create reusable, composable workflows
+  - New `stage:` field in step configuration (mutually exclusive with `action:`)
+  - Nested stage references: stages can reference stages that reference other stages
+  - Variable inheritance: variables from stage steps are inherited by all steps in referenced stages
+  - Condition inheritance: `if` conditions are combined when stages reference other stages
+  - Error policy inheritance: `onerror` settings cascade to referenced stage steps
+  - Stage references work with dependencies, conditions, and all other step features
+  
+- **Circular Dependency Detection**: Comprehensive cycle detection for dependencies and stage references
+  - Detects circular dependencies in step `require` and `depends_on` chains
+  - Detects circular stage references across all stages
+  - Clear error messages with complete cycle path for debugging
+  - Validation happens at configuration load time before execution
+  - Prevents infinite loops and stack overflow from recursive stage references
+
+### Changed
+- **Step Structure**: `action:` field is now optional (was required), as steps can now use `stage:` instead
+- **Validation**: Enhanced validation to check for mutually exclusive `action` and `stage` fields
+- **Stage Expansion**: Stages are now expanded before matrix expansion in execution pipeline
+
+### Documentation
+- **YAML Syntax Reference**: Updated with comprehensive stage reference documentation and examples
+  - Basic stage reference syntax and usage patterns
+  - Nested stage references with multi-level nesting
+  - Stage references with variable inheritance
+  - Stage references with dependencies
+  - Cycle detection error examples
+  
+- **Example Configurations**: Added two new example files demonstrating stage references
+  - `examples/stage-references.yml` - Basic stage references and composition
+  - `examples/nested-stage-references.yml` - Multi-level nesting and variable inheritance
+
+### Testing
+- **Comprehensive Test Suite**: Added 11 new tests for stage references and cycle detection
+  - Stage reference expansion and nested expansion
+  - Self-reference prevention
+  - Unknown stage detection
+  - Mutual exclusivity validation (action vs stage)
+  - Variable inheritance from stage references
+  - Circular dependency detection
+  - Circular stage reference detection
+  - Valid dependency graph verification
+
 ## [0.26.0] - 2025-10-17
 
 ### Added

@@ -117,9 +117,15 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         }
     }
 
+    // First, expand stage references into their constituent steps
+    stepsWithExpandedStages, err := r.expandStageReferences(stage.Steps)
+    if err != nil {
+        return fmt.Errorf("failed to expand stage references: %w", err)
+    }
+
     // Handle dry-run mode differently
     if r.opts.DryRun {
-        return r.executeStageDryRun(ctx, stageName, stage.Steps)
+        return r.executeStageDryRun(ctx, stageName, stepsWithExpandedStages)
     }
 
     // Print stage start message
@@ -129,7 +135,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     stageStart := time.Now()
 
     // Expand matrix steps into individual steps before creating output manager
-    expandedSteps, err := r.expandMatrixSteps(stage.Steps)
+    expandedSteps, err := r.expandMatrixSteps(stepsWithExpandedStages)
     if err != nil {
         return fmt.Errorf("failed to expand matrix steps: %w", err)
     }
@@ -1377,6 +1383,94 @@ func RunActionSimple(ctx context.Context, configPath, actionName string, verbose
 }
 
 // expandMatrixSteps expands matrix steps into individual steps for DAG execution
+// expandStageReferences expands stage references in steps to their actual steps
+func (r *SimpleRunner) expandStageReferences(steps []Step) ([]Step, error) {
+    var expandedSteps []Step
+    
+    var expandStep func(step Step, depth int) ([]Step, error)
+    expandStep = func(step Step, depth int) ([]Step, error) {
+        // Check recursion depth to prevent stack overflow
+        if depth > 100 {
+            return nil, fmt.Errorf("maximum recursion depth exceeded when expanding stage references")
+        }
+        
+        // If step references an action, return it as-is
+        if step.Action != "" {
+            return []Step{step}, nil
+        }
+        
+        // If step references a stage, expand it
+        if step.Stage != "" {
+            // Get the referenced stage
+            referencedStage, exists := r.config.GetStage(step.Stage)
+            if !exists {
+                return nil, fmt.Errorf("referenced stage not found: %s", step.Stage)
+            }
+            
+            var stageSteps []Step
+            for _, refStep := range referencedStage.Steps {
+                // Recursively expand nested stage references
+                subSteps, err := expandStep(refStep, depth+1)
+                if err != nil {
+                    return nil, err
+                }
+                
+                // Inherit properties from the parent step where appropriate
+                for i := range subSteps {
+                    // If parent step has variables, merge with child (parent takes precedence)
+                    if len(step.Variables) > 0 {
+                        if subSteps[i].Variables == nil {
+                            subSteps[i].Variables = make(map[string]string)
+                        }
+                        for k, v := range step.Variables {
+                            if _, exists := subSteps[i].Variables[k]; !exists {
+                                subSteps[i].Variables[k] = v
+                            }
+                        }
+                    }
+                    
+                    // Inherit onerror if not set in child
+                    if step.OnError != "" && subSteps[i].OnError == "" {
+                        subSteps[i].OnError = step.OnError
+                    }
+                    
+                    // Inherit if condition if not set in child (combine with AND)
+                    if step.If != "" {
+                        if subSteps[i].If == "" {
+                            subSteps[i].If = step.If
+                        } else {
+                            subSteps[i].If = fmt.Sprintf("(%s) && (%s)", step.If, subSteps[i].If)
+                        }
+                    }
+                }
+                
+                stageSteps = append(stageSteps, subSteps...)
+            }
+            
+            return stageSteps, nil
+        }
+        
+        // Should not reach here (validation ensures action or stage is set)
+        return nil, fmt.Errorf("step has neither action nor stage")
+    }
+    
+    // Expand each step
+    for _, step := range steps {
+        expanded, err := expandStep(step, 0)
+        if err != nil {
+            return nil, err
+        }
+        expandedSteps = append(expandedSteps, expanded...)
+    }
+    
+    if r.opts.Debug {
+        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandStageReferences: %d steps → %d expanded steps\n", 
+            len(steps), len(expandedSteps))
+    }
+    
+    return expandedSteps, nil
+}
+
 func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
     var expandedSteps []Step
 

@@ -202,20 +202,38 @@ actions:
 
 ## Stages and Steps
 
-Stages define workflows composed of steps that reference actions:
+Stages define workflows composed of steps that can reference either actions or other stages:
 
 ```yaml
 stages:
   stage-name:                     # Stage identifier
     steps:
-      - action: "action-name"     # Required: Action to execute
-        require: ["dep1", "dep2"] # Optional: Dependencies (list of action names)
+      - action: "action-name"     # Option 1: Action to execute (mutually exclusive with stage)
+        require: ["dep1", "dep2"] # Optional: Dependencies (list of action/stage names)
         onerror: "warn"           # Optional: Error policy (warn|stop, default: stop)
         only: ["label1", "label2"] # Optional: Execution labels (list)
         if: "condition"           # Optional: Conditional expression (string)
-        variables:                # Optional: Step-level variable overrides (map[string]string)
+        variables:                # Optional: Step-level variable overrides (map[string]string]
+          key: "value"
+      
+      - stage: "stage-name"       # Option 2: Stage to execute (mutually exclusive with action)
+        require: ["dep1"]         # Optional: Dependencies work same as actions
+        onerror: "warn"           # Optional: Inherited by all steps in referenced stage
+        variables:                # Optional: Variables inherited by all steps in referenced stage
           key: "value"
 ```
+
+**Step Types:**
+- **Action Steps**: Execute a single action defined in the `actions:` section
+- **Stage Steps**: Execute all steps from another stage (composable workflows)
+- Steps must have either `action` or `stage`, but not both
+
+**Key Features:**
+- **Nested Stages**: Stages can reference other stages, which can reference more stages
+- **Cycle Detection**: Circular stage references and dependencies are automatically detected and rejected
+- **Variable Inheritance**: Variables from stage steps are inherited by all steps in the referenced stage
+- **Condition Inheritance**: `if` conditions from stage steps are combined with conditions in referenced steps
+- **Error Policy Inheritance**: `onerror` settings are inherited if not overridden in referenced steps
 
 ### Step Dependencies
 
@@ -270,6 +288,128 @@ stages:
         if: "env.TEST_LEVEL == 'integration'"
       - action: "e2e-tests"
         if: "os == 'linux' && cpu >= 4"
+```
+
+### Stage References
+
+Steps can reference other stages to create reusable, composable workflows:
+
+```yaml
+stages:
+  # Define reusable stage components
+  git-checks:
+    steps:
+      - action: "check-untracked"
+      - action: "check-uncommitted"
+  
+  build-checks:
+    steps:
+      - action: "check-version"
+      - action: "lint"
+  
+  # Compose workflows from reusable stages
+  pre-push:
+    steps:
+      - stage: "git-checks"        # Include all git checks
+      - stage: "build-checks"      # Include all build checks
+      - action: "run-tests"        # Add additional actions
+```
+
+**Nested Stage References:**
+
+```yaml
+stages:
+  unit-tests:
+    steps:
+      - action: "test-parser"
+      - action: "test-executor"
+  
+  integration-tests:
+    steps:
+      - action: "test-api"
+      - action: "test-cli"
+  
+  all-tests:
+    steps:
+      - stage: "unit-tests"        # Nested: includes test-parser, test-executor
+      - stage: "integration-tests" # Nested: includes test-api, test-cli
+  
+  ci-pipeline:
+    steps:
+      - action: "build"
+      - stage: "all-tests"         # Multi-level nesting
+      - action: "package"
+```
+
+**Stage References with Variables:**
+
+```yaml
+stages:
+  docker-build:
+    steps:
+      - action: "build-image"
+      - action: "push-image"
+  
+  build-production:
+    steps:
+      - stage: "docker-build"
+        variables:
+          REGISTRY: "registry.prod.com"
+          TAG: "latest"
+  
+  build-staging:
+    steps:
+      - stage: "docker-build"
+        variables:
+          REGISTRY: "registry.staging.com"
+          TAG: "dev"
+```
+
+**Stage References with Dependencies:**
+
+```yaml
+stages:
+  prepare:
+    steps:
+      - action: "setup"
+      - action: "install-deps"
+  
+  build:
+    steps:
+      - action: "compile"
+  
+  test:
+    steps:
+      - action: "unit-test"
+      - action: "integration-test"
+  
+  full-workflow:
+    steps:
+      - stage: "prepare"
+      - stage: "build"
+        require: ["setup", "install-deps"]  # Depends on prepare stage steps
+      - stage: "test"
+        require: ["compile"]                # Depends on build stage steps
+```
+
+**Cycle Detection:**
+
+```yaml
+# This configuration will be rejected with a clear error message:
+stages:
+  stage-a:
+    steps:
+      - stage: "stage-b"  # ❌ Creates cycle
+  
+  stage-b:
+    steps:
+      - stage: "stage-c"
+  
+  stage-c:
+    steps:
+      - stage: "stage-a"  # ❌ Completes the cycle
+
+# Error: circular stage reference detected (cycle: [stage-a, stage-b, stage-c, stage-a])
 ```
 
 ### Step-Level Variables

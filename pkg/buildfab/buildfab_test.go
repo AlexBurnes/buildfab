@@ -281,7 +281,7 @@ func TestConfig_Validate(t *testing.T) {
 				},
 			},
 			wantErr: true,
-			errMsg:  "step 1 in stage stage1 must have an action",
+			errMsg:  "step 1 in stage stage1 must have either 'action' or 'stage'",
 		},
 		{
 			name: "step with unknown action",

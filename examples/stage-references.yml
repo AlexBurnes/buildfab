@@ -1,0 +1,75 @@
+project:
+  name: "stage-references-example"
+
+# Define reusable actions
+actions:
+  - name: "check-untracked"
+    run: |
+      echo "Checking for untracked files..."
+      if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+        echo "❌ Untracked files found"
+        exit 1
+      fi
+      echo "✅ No untracked files"
+
+  - name: "check-uncommitted"
+    run: |
+      echo "Checking for uncommitted changes..."
+      if [ -n "$(git status --porcelain)" ]; then
+        echo "❌ Uncommitted changes found"
+        exit 1
+      fi
+      echo "✅ No uncommitted changes"
+
+  - name: "check-version"
+    run: |
+      echo "Checking version format..."
+      if [ ! -f VERSION ]; then
+        echo "❌ VERSION file not found"
+        exit 1
+      fi
+      echo "✅ VERSION file exists"
+
+  - name: "lint"
+    run: |
+      echo "Running linter..."
+      echo "✅ Lint checks passed"
+
+  - name: "run-tests"
+    run: |
+      echo "Running tests..."
+      echo "✅ All tests passed"
+
+  - name: "build"
+    run: |
+      echo "Building project..."
+      echo "✅ Build successful"
+
+# Define reusable stage components
+stages:
+  # Git-related checks
+  git-checks:
+    steps:
+      - action: "check-untracked"
+      - action: "check-uncommitted"
+
+  # Build-related checks
+  build-checks:
+    steps:
+      - action: "check-version"
+      - action: "lint"
+
+  # Compose a pre-push workflow from reusable stages
+  pre-push:
+    steps:
+      - stage: "git-checks"      # Include all git checks
+      - stage: "build-checks"    # Include all build checks
+      - action: "run-tests"      # Add additional actions
+      - action: "build"
+
+  # Quick check (subset of pre-push)
+  quick-check:
+    steps:
+      - stage: "git-checks"      # Reuse git-checks stage
+      - action: "lint"           # Just lint, skip other checks
+

@@ -69,7 +69,8 @@ type Stage struct {
 
 // Step represents a single step in a stage
 type Step struct {
-	Action      string            `yaml:"action"`
+	Action      string            `yaml:"action,omitempty"`      // Action to execute (mutually exclusive with Stage)
+	Stage       string            `yaml:"stage,omitempty"`       // Stage to execute (mutually exclusive with Action)
 	Description string            `yaml:"description,omitempty"` // Step description for display
 	Require     []string          `yaml:"require,omitempty"`
 	DependsOn   []string          `yaml:"depends_on,omitempty"` // Alternative to require
@@ -657,24 +658,59 @@ func (c *Config) Validate() error {
 	}
 	
 	// Validate stages
+	stageNames := make(map[string]bool)
+	for stageName := range c.Stages {
+		stageNames[stageName] = true
+	}
+	
 	for stageName, stage := range c.Stages {
 		if len(stage.Steps) == 0 {
 			return fmt.Errorf("stage %s must have at least one step", stageName)
 		}
 		
-		// Build a map of step names for dependency validation
+		// Build a map of step identifiers for dependency validation
 		stepNames := make(map[string]bool)
 		for _, step := range stage.Steps {
-			stepNames[step.Action] = true
+			// Get step identifier (either action or stage name)
+			stepID := step.Action
+			if stepID == "" {
+				stepID = step.Stage
+			}
+			if stepID != "" {
+				stepNames[stepID] = true
+			}
 		}
 		
 		for i, step := range stage.Steps {
-			if step.Action == "" {
-				return fmt.Errorf("step %d in stage %s must have an action", i+1, stageName)
+			// Validate that step has either action OR stage, but not both or neither
+			hasAction := step.Action != ""
+			hasStage := step.Stage != ""
+			
+			if !hasAction && !hasStage {
+				return fmt.Errorf("step %d in stage %s must have either 'action' or 'stage'", i+1, stageName)
 			}
 			
-			if !actionNames[step.Action] {
-				return fmt.Errorf("step %d in stage %s references unknown action: %s", i+1, stageName, step.Action)
+			if hasAction && hasStage {
+				return fmt.Errorf("step %d in stage %s cannot have both 'action' and 'stage' (use one or the other)", i+1, stageName)
+			}
+			
+			// Validate action reference
+			if hasAction {
+				if !actionNames[step.Action] {
+					return fmt.Errorf("step %d in stage %s references unknown action: %s", i+1, stageName, step.Action)
+				}
+			}
+			
+			// Validate stage reference
+			if hasStage {
+				if !stageNames[step.Stage] {
+					return fmt.Errorf("step %d in stage %s references unknown stage: %s", i+1, stageName, step.Stage)
+				}
+				
+				// Prevent self-reference
+				if step.Stage == stageName {
+					return fmt.Errorf("step %d in stage %s cannot reference itself", i+1, stageName)
+				}
 			}
 			
 			if step.OnError != "" && step.OnError != "stop" && step.OnError != "warn" {
@@ -688,23 +724,263 @@ func (c *Config) Validate() error {
 				}
 			}
 			
+			// Get step identifier for error messages
+			stepID := step.Action
+			if stepID == "" {
+				stepID = step.Stage
+			}
+			
 			// Validate require dependencies exist in the stage
 			for _, dep := range step.Require {
 				if !stepNames[dep] {
-					return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, step.Action, stageName, dep)
+					return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, stepID, stageName, dep)
 				}
 			}
 			
 			// Validate depends_on dependencies exist in the stage
 			for _, dep := range step.DependsOn {
 				if !stepNames[dep] {
-					return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, step.Action, stageName, dep)
+					return fmt.Errorf("step %d '%s' in stage %s has invalid dependency: '%s' (step not found in stage)", i+1, stepID, stageName, dep)
 				}
+			}
+		}
+		
+		// Detect cycles within this stage
+		if err := detectCyclesInStage(stageName, stage, c.Stages); err != nil {
+			return err
+		}
+	}
+	
+	// Detect cycles across stage references
+	if err := detectCyclesInStages(c.Stages); err != nil {
+		return err
+	}
+	
+	return nil
+}
+
+// detectCyclesInStage detects circular dependencies in a stage
+func detectCyclesInStage(stageName string, stage Stage, allStages map[string]Stage) error {
+	// Build dependency graph for steps within the stage
+	stepGraph := make(map[string][]string)
+	stepExists := make(map[string]bool)
+	
+	for _, step := range stage.Steps {
+		// Get the step identifier (action or stage name)
+		stepID := step.Action
+		if stepID == "" {
+			stepID = step.Stage
+		}
+		stepExists[stepID] = true
+		
+		// Add dependencies from both require and depends_on
+		var deps []string
+		deps = append(deps, step.Require...)
+		deps = append(deps, step.DependsOn...)
+		stepGraph[stepID] = deps
+	}
+	
+	// Detect cycles using DFS
+	visited := make(map[string]bool)
+	recStack := make(map[string]bool)
+	
+	var detectCycle func(stepID string, path []string) error
+	detectCycle = func(stepID string, path []string) error {
+		visited[stepID] = true
+		recStack[stepID] = true
+		path = append(path, stepID)
+		
+		for _, dep := range stepGraph[stepID] {
+			if !visited[dep] {
+				if err := detectCycle(dep, path); err != nil {
+					return err
+				}
+			} else if recStack[dep] {
+				// Found a cycle - build the cycle path
+				cycleStart := -1
+				for i, p := range path {
+					if p == dep {
+						cycleStart = i
+						break
+					}
+				}
+				cyclePath := append(path[cycleStart:], dep)
+				return &DependencyError{
+					Message: fmt.Sprintf("circular dependency detected in stage '%s'", stageName),
+					Cycle:   cyclePath,
+				}
+			}
+		}
+		
+		recStack[stepID] = false
+		return nil
+	}
+	
+	// Check each step for cycles
+	for stepID := range stepExists {
+		if !visited[stepID] {
+			if err := detectCycle(stepID, []string{}); err != nil {
+				return err
 			}
 		}
 	}
 	
 	return nil
+}
+
+// detectCyclesInStages detects circular stage references across all stages
+func detectCyclesInStages(stages map[string]Stage) error {
+	// Build stage reference graph
+	stageGraph := make(map[string][]string)
+	
+	for stageName, stage := range stages {
+		var referencedStages []string
+		for _, step := range stage.Steps {
+			if step.Stage != "" {
+				referencedStages = append(referencedStages, step.Stage)
+			}
+		}
+		stageGraph[stageName] = referencedStages
+	}
+	
+	// Detect cycles using DFS
+	visited := make(map[string]bool)
+	recStack := make(map[string]bool)
+	
+	var detectCycle func(stageName string, path []string) error
+	detectCycle = func(stageName string, path []string) error {
+		visited[stageName] = true
+		recStack[stageName] = true
+		path = append(path, stageName)
+		
+		for _, refStage := range stageGraph[stageName] {
+			if !visited[refStage] {
+				if err := detectCycle(refStage, path); err != nil {
+					return err
+				}
+			} else if recStack[refStage] {
+				// Found a cycle - build the cycle path
+				cycleStart := -1
+				for i, p := range path {
+					if p == refStage {
+						cycleStart = i
+						break
+					}
+				}
+				cyclePath := append(path[cycleStart:], refStage)
+				return &DependencyError{
+					Message: "circular stage reference detected",
+					Cycle:   cyclePath,
+				}
+			}
+		}
+		
+		recStack[stageName] = false
+		return nil
+	}
+	
+	// Check each stage for cycles
+	for stageName := range stages {
+		if !visited[stageName] {
+			if err := detectCycle(stageName, []string{}); err != nil {
+				return err
+			}
+		}
+	}
+	
+	return nil
+}
+
+// expandStageReferences expands stage references in steps to their actual steps
+func (r *Runner) expandStageReferences(steps []Step) ([]Step, error) {
+	var expandedSteps []Step
+	visitedStages := make(map[string]bool) // Track visited stages to prevent infinite recursion
+	
+	var expandStep func(step Step, depth int) ([]Step, error)
+	expandStep = func(step Step, depth int) ([]Step, error) {
+		// Check recursion depth to prevent stack overflow
+		if depth > 100 {
+			return nil, fmt.Errorf("maximum recursion depth exceeded when expanding stage references")
+		}
+		
+		// If step references an action, return it as-is
+		if step.Action != "" {
+			return []Step{step}, nil
+		}
+		
+		// If step references a stage, expand it
+		if step.Stage != "" {
+			// Get the referenced stage
+			referencedStage, exists := r.config.GetStage(step.Stage)
+			if !exists {
+				return nil, fmt.Errorf("referenced stage not found: %s", step.Stage)
+			}
+			
+			// Mark this stage as visited
+			visitedStages[step.Stage] = true
+			
+			var stageSteps []Step
+			for _, refStep := range referencedStage.Steps {
+				// Recursively expand nested stage references
+				subSteps, err := expandStep(refStep, depth+1)
+				if err != nil {
+					return nil, err
+				}
+				
+				// Inherit properties from the parent step where appropriate
+				for i := range subSteps {
+					// If parent step has variables, merge with child (parent takes precedence)
+					if len(step.Variables) > 0 {
+						if subSteps[i].Variables == nil {
+							subSteps[i].Variables = make(map[string]string)
+						}
+						for k, v := range step.Variables {
+							if _, exists := subSteps[i].Variables[k]; !exists {
+								subSteps[i].Variables[k] = v
+							}
+						}
+					}
+					
+					// Inherit onerror if not set in child
+					if step.OnError != "" && subSteps[i].OnError == "" {
+						subSteps[i].OnError = step.OnError
+					}
+					
+					// Inherit if condition if not set in child (combine with AND)
+					if step.If != "" {
+						if subSteps[i].If == "" {
+							subSteps[i].If = step.If
+						} else {
+							subSteps[i].If = fmt.Sprintf("(%s) && (%s)", step.If, subSteps[i].If)
+						}
+					}
+				}
+				
+				stageSteps = append(stageSteps, subSteps...)
+			}
+			
+			return stageSteps, nil
+		}
+		
+		// Should not reach here (validation ensures action or stage is set)
+		return nil, fmt.Errorf("step has neither action nor stage")
+	}
+	
+	// Expand each step
+	for _, step := range steps {
+		expanded, err := expandStep(step, 0)
+		if err != nil {
+			return nil, err
+		}
+		expandedSteps = append(expandedSteps, expanded...)
+	}
+	
+	if r.opts.Debug {
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandStageReferences: %d steps → %d expanded steps\n", 
+			len(steps), len(expandedSteps))
+	}
+	
+	return expandedSteps, nil
 }
 
 // expandMatrixSteps expands matrix steps into individual steps for DAG execution
@@ -969,7 +1245,12 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	
 	// Handle dry-run mode for stages
 	if r.opts.DryRun {
-		return r.executeStageDryRun(ctx, stageName, stage.Steps)
+		// Expand stage references before dry-run execution
+		stepsWithExpandedStages, err := r.expandStageReferences(stage.Steps)
+		if err != nil {
+			return fmt.Errorf("failed to expand stage references: %w", err)
+		}
+		return r.executeStageDryRun(ctx, stageName, stepsWithExpandedStages)
 	}
 	
 	// Recreate pool manager with execution context for proper signal handling
@@ -982,8 +1263,14 @@ func (r *Runner) runStageInternal(ctx context.Context, stageName string) error {
 	}
 	r.poolManager = NewPoolManager(maxParallel, ctx)
 	
-	// Expand matrix steps with pool assignments and get pool configurations
-	expandedSteps, interpolatedActions, poolConfigs, err := r.expandMatrixStepsWithPools(stage.Steps)
+	// First, expand stage references into their constituent steps
+	stepsWithExpandedStages, err := r.expandStageReferences(stage.Steps)
+	if err != nil {
+		return fmt.Errorf("failed to expand stage references: %w", err)
+	}
+	
+	// Then expand matrix steps with pool assignments and get pool configurations
+	expandedSteps, interpolatedActions, poolConfigs, err := r.expandMatrixStepsWithPools(stepsWithExpandedStages)
 	if err != nil {
 		return fmt.Errorf("failed to expand matrix steps: %w", err)
 	}

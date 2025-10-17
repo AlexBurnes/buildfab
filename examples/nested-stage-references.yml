@@ -1,0 +1,81 @@
+project:
+  name: "nested-stage-references-example"
+
+# Define actions
+actions:
+  - name: "test-parser"
+    run: echo "Testing parser..."
+
+  - name: "test-executor"
+    run: echo "Testing executor..."
+
+  - name: "test-api"
+    run: echo "Testing API..."
+
+  - name: "test-cli"
+    run: echo "Testing CLI..."
+
+  - name: "build"
+    run: echo "Building project..."
+
+  - name: "package"
+    run: echo "Packaging artifacts..."
+
+  - name: "deploy"
+    run: |
+      echo "Deploying to ${{ env.ENVIRONMENT }}..."
+
+# Define stages with multiple levels of nesting
+stages:
+  # Level 1: Atomic test suites
+  unit-tests:
+    steps:
+      - action: "test-parser"
+      - action: "test-executor"
+
+  integration-tests:
+    steps:
+      - action: "test-api"
+      - action: "test-cli"
+
+  # Level 2: Composed test suites
+  all-tests:
+    steps:
+      - stage: "unit-tests"        # Nested: includes test-parser, test-executor
+      - stage: "integration-tests" # Nested: includes test-api, test-cli
+
+  # Level 3: Full CI pipeline with multi-level nesting
+  ci-pipeline:
+    steps:
+      - action: "build"
+      - stage: "all-tests"         # Multi-level nesting: unit + integration
+        require: ["build"]
+      - action: "package"
+        require: ["all-tests"]     # Depend on the stage reference, not individual actions
+
+  # Alternative pipeline with selective tests
+  quick-ci:
+    steps:
+      - action: "build"
+      - stage: "unit-tests"        # Only unit tests for quick feedback
+        require: ["build"]
+      - action: "package"
+        require: ["unit-tests"]    # Depend on the stage reference
+
+  # Stage references with variable inheritance
+  deploy-staging:
+    steps:
+      - stage: "ci-pipeline"
+      - action: "deploy"
+        variables:
+          ENVIRONMENT: "staging"
+        require: ["ci-pipeline"]   # Depend on the stage reference
+
+  deploy-production:
+    steps:
+      - stage: "ci-pipeline"
+      - action: "deploy"
+        variables:
+          ENVIRONMENT: "production"
+        require: ["ci-pipeline"]   # Depend on the stage reference
+
