@@ -411,22 +411,172 @@ matrix:
     db: ["pg", "my", "sq"]
 ```
 
+## Matrix on Stage Steps
+
+Matrix can now be applied to steps that reference other stages, allowing entire stages to be executed multiple times with different matrix values. This enables complex workflows like cross-compiler builds and multi-platform testing.
+
+### Basic Matrix Stage Step
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: conan-install
+        require: [check-conan, check-cmake]
+      - action: cmake-config
+        require: [conan-install]
+      - action: cmake-build
+        require: [cmake-config]
+      - action: cmake-test
+        require: [cmake-build]
+
+  compiler-build:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+          strategy:
+            max_parallel: 1
+```
+
+This configuration will:
+1. Run the entire `build` stage twice, once for each compiler
+2. Execute sequentially (`max_parallel: 1`) - the second compiler build starts after the first completes
+3. All steps within the build stage have access to `${{ matrix.compiler }}` variable
+
+### Sequential Execution (max_parallel: 1)
+
+When `max_parallel: 1`, matrix jobs run completely sequentially:
+
+```
+gcc:
+  check-conan | check-cmake
+    conan-install
+      cmake-config
+        cmake-build
+          cmake-test  ← completes
+
+clang:  ← starts after gcc completes
+  check-conan | check-cmake
+    conan-install
+      cmake-config
+        cmake-build
+          cmake-test
+```
+
+### Parallel Execution with Sliding Window (max_parallel: N)
+
+When `max_parallel: N` (where N > 1), matrix jobs use a sliding window dependency pattern to ensure at most N jobs run concurrently:
+
+```yaml
+stages:
+  multi-compiler:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang", "msvc", "icc"]
+          strategy:
+            max_parallel: 2
+```
+
+**Execution Timeline** (max_parallel: 2, 4 jobs):
+```
+Time:    [========] [========] [========] [========]
+gcc:     [running─────────────────────────]
+clang:              [running──────────────]
+msvc:                         [waiting──] [running──]
+icc:                                    [waiting─] [running─]
+```
+
+**Dependency Pattern**:
+- Job 0 (gcc): No dependency → starts immediately
+- Job 1 (clang): No dependency → starts immediately  
+- Job 2 (msvc): First step depends on last step of Job 0 → waits for gcc to complete
+- Job 3 (icc): First step depends on last step of Job 1 → waits for clang to complete
+
+This ensures that:
+- At most 2 jobs run concurrently
+- When one job completes, the next job starts immediately
+- Internal stage dependencies are preserved within each matrix job
+
+### Matrix Variables in Stage Steps
+
+Matrix variables are automatically propagated to all steps within the expanded stage:
+
+```yaml
+actions:
+  - name: configure-compiler
+    run: |
+      echo "Setting up ${{ matrix.compiler }}"
+      export CC=${{ matrix.compiler }}
+
+stages:
+  build:
+    steps:
+      - action: configure-compiler
+      - action: build-source
+
+  multi-compiler:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+```
+
+Each expanded step in the build stage has `matrix.compiler` available, and variable interpolation works in all action commands.
+
+### Advanced Example: Cross-Platform Build
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: setup-environment
+      - action: install-dependencies
+        require: [setup-environment]
+      - action: compile
+        require: [install-dependencies]
+      - action: package
+        require: [compile]
+      - action: test
+        require: [package]
+
+  cross-platform-build:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            platform: ["linux-amd64", "linux-arm64", "windows-amd64", "darwin-amd64", "darwin-arm64"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: true
+```
+
+This runs the complete build pipeline for each platform, with up to 2 platforms building concurrently.
+
 ## Limitations
 
 ### Current Limitations
 
 1. **Single-dimension only**: Multi-dimensional matrices are not yet supported
-2. **Stage-level only**: Matrix configuration is only supported at the stage level
-3. **No job dependencies**: Matrix jobs cannot depend on other matrix jobs
-4. **No job filtering**: Cannot filter matrix jobs at runtime
+2. **No explicit job dependencies**: Matrix jobs cannot explicitly depend on specific other matrix jobs (sliding window dependencies are automatic)
+3. **No job filtering**: Cannot filter matrix jobs at runtime
+4. **Matrix on action steps**: Matrix on action steps uses a different execution model (scheduler-based) compared to matrix on stage steps (DAG-based)
 
 ### Future Enhancements
 
 1. **Multi-dimensional matrices**: Support for multiple matrix dimensions
-2. **Job dependencies**: Allow matrix jobs to depend on other jobs
+2. **Explicit job dependencies**: Allow matrix jobs to explicitly depend on specific other matrix jobs
 3. **Runtime filtering**: Filter matrix jobs based on conditions
 4. **Matrix includes/excludes**: Include or exclude specific combinations
 5. **Dynamic matrix values**: Generate matrix values at runtime
+6. **Matrix job names**: Custom naming for matrix jobs
 
 ## Troubleshooting
 

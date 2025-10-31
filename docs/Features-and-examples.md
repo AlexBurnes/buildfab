@@ -385,6 +385,109 @@ stages:
 ```
 **Result**: All 4 jobs run in parallel using the global pool
 
+### Matrix on Stage Steps
+
+Matrix can now be applied to steps that reference other stages, enabling cross-compiler builds, multi-platform testing, and parameterized stage execution:
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: conan-install
+        require: [check-conan, check-cmake]
+      - action: cmake-config
+        require: [conan-install]
+      - action: cmake-build
+        require: [cmake-config]
+      - action: cmake-test
+        require: [cmake-build]
+
+  compiler-build:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+          strategy:
+            max_parallel: 1
+```
+
+**Key Features:**
+
+1. **Sequential Execution (`max_parallel: 1`)**: 
+   - Each matrix job runs completely before the next starts
+   - Ensures clean separation between different configurations
+   - Ideal for resource-intensive builds
+
+2. **Parallel Execution (`max_parallel: N`)**:
+   - Uses sliding window dependency pattern
+   - At most N matrix jobs run concurrently
+   - Automatic dependency injection ensures correct ordering
+   - Maximizes resource utilization while maintaining order
+
+3. **Matrix Variable Propagation**:
+   - All steps in expanded stages have access to `${{ matrix.* }}` variables
+   - Variables are available for interpolation in action commands
+   - Enables configuration-specific builds and tests
+
+**Complete Example: Cross-Platform Build**
+
+```yaml
+project:
+  name: cross-platform-app
+
+actions:
+  - name: setup-platform
+    run: |
+      echo "Setting up for ${{ matrix.platform }}"
+      export PLATFORM=${{ matrix.platform }}
+
+  - name: build-source
+    run: |
+      echo "Building for ${{ matrix.platform }}"
+      # Platform-specific build commands
+
+  - name: run-tests
+    run: |
+      echo "Testing on ${{ matrix.platform }}"
+      # Platform-specific tests
+
+  - name: package-artifact
+    run: |
+      echo "Packaging for ${{ matrix.platform }}"
+      # Platform-specific packaging
+
+stages:
+  build-platform:
+    steps:
+      - action: setup-platform
+      - action: build-source
+        require: [setup-platform]
+      - action: run-tests
+        require: [build-source]
+      - action: package-artifact
+        require: [run-tests]
+
+  all-platforms:
+    steps:
+      - stage: build-platform
+        matrix:
+          values:
+            platform: ["linux-amd64", "linux-arm64", "windows-amd64", "darwin-amd64", "darwin-arm64"]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: true
+```
+
+This configuration:
+- Builds the complete pipeline for each platform
+- Runs up to 2 platforms concurrently
+- Continues even if some platforms fail
+- All steps have access to `${{ matrix.platform }}` variable
+
 For detailed matrix feature documentation, see [Matrix Feature Documentation](Matrix-feature.md).
 
 ## Include System
@@ -477,6 +580,31 @@ stages:
 ## Variable Interpolation
 
 buildfab supports GitHub-style variable interpolation with `${{ }}` syntax:
+
+### Default Values
+
+Use a fallback value when a variable is undefined:
+
+- Literal default: `${{ variable-default }}` (quotes optional)
+- From another variable: `${{ variable-other.variable }}`
+
+Examples:
+
+```yaml
+actions:
+  - name: defaults-demo
+    run: |
+      echo "Compiler: ${{ matrix.compiler-\"gcc\" }}"
+      echo "Image: ${{ matrix.image-ubuntu:24.04 }}"
+      echo "Compiler via variable: ${{ matrix.compiler-variable.compiler_default }}"
+```
+
+Notes:
+- If the primary variable exists, it is used as-is.
+- If missing and default is provided, the default is used.
+- Defaults can be quoted; quotes are stripped.
+- Defaults can reference another variable; that reference is resolved recursively.
+- Missing variables without defaults cause an error with a list of available variables.
 
 ### Platform Variables
 

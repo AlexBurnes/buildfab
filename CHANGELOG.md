@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- **Variable default values in interpolation**: Documented default fallback syntax in:
+  - `docs/Project-specification.md`
+  - `docs/YAML-syntax-reference.md`
+  - `docs/Features-and-examples.md`
+  - Syntax covered: `${{ var-default }}` (literal) and `${{ var-other.var }}` (from variable);
+    quotes handling, recursive resolution, and error behavior when undefined without default.
+- **Matrix on stage**: Expanded docs with full examples in:
+  - `docs/YAML-syntax-reference.md` (sequential and parallel examples)
+  - `docs/Features-and-examples.md` (cross-platform example)
+
 ## [0.28.1] - 2025-10-31
 
 ### Fixed

@@ -14,6 +14,8 @@ Buildfab is a Go library and CLI utility that provides a flexible framework for 
 - **Built-in action registry**: Extensible system for common automation tasks
 - **Custom action support**: Execute shell commands and external tools
 - **Variable interpolation**: Dynamic configuration with `${{ }}` syntax
+- **Matrix execution**: Run actions and stages across multiple configurations (compilers, platforms, versions)
+- **Matrix on stages**: Apply matrix to entire stages for cross-compiler builds and multi-platform testing
 - **Error policy management**: Configurable stop/warn behavior per step
 - **Cross-platform compatibility**: Linux, Windows, macOS (amd64/arm64)
 
@@ -138,6 +140,30 @@ Variables available in `${{ }}` syntax:
 - **Step variables**: Defined in `step.variables` field (override global variables for that step)
 - **Matrix variables**: Defined in matrix configuration (e.g., `matrix.image`, `matrix.os`)
 - **Environment**: `env.VAR_NAME` for environment variables
+
+#### Default Values
+
+You can provide fallback values for missing variables using a dash `-` separator inside the expression:
+
+- Literal default: `${{ variable-default }}`
+- Default from another variable: `${{ variable-other.variable }}`
+
+Examples:
+
+```yaml
+actions:
+  - name: echo-compiler
+    run: |
+      echo "Compiler: ${{ matrix.compiler-\"gcc\" }}"
+      echo "Default from var: ${{ matrix.compiler-variable.compiler_default }}"
+```
+
+Rules:
+- If `variable` is defined, its value is used.
+- If undefined and a default is provided, the default is used.
+- Defaults may be quoted (single or double) and quotes are stripped.
+- Defaults may reference another variable; that reference is resolved.
+- If no default is provided and the variable is undefined, interpolation fails with a clear error listing available variables.
 
 #### Variable Precedence
 
@@ -391,9 +417,9 @@ func main() {
 ## 13) Future Extensions
 
 ### Planned Features
-- **Matrix execution**: Run actions across multiple configurations
-- **Conditional execution**: Advanced condition expressions
-- **Action composition**: Reusable action definitions
+- **Multi-dimensional matrix**: Support multiple matrix dimensions simultaneously
+- **Conditional execution**: Advanced condition expressions (currently supports basic if conditions)
+- **Action composition**: Reusable action definitions (currently via stage references)
 - **Plugin system**: External action registration
 - **Webhook integration**: Remote trigger support
 - **Metrics collection**: Execution timing and statistics

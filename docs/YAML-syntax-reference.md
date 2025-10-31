@@ -487,6 +487,123 @@ stages:
 # Error: circular stage reference detected (cycle: [stage-a, stage-b, stage-c, stage-a])
 ```
 
+**Matrix on Stage Steps:**
+
+Matrix can be applied to steps that reference other stages, allowing entire stages to be executed multiple times with different matrix values:
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: conan-install
+        require: [check-conan, check-cmake]
+      - action: cmake-config
+        require: [conan-install]
+      - action: cmake-build
+        require: [cmake-config]
+      - action: cmake-test
+        require: [cmake-build]
+
+  compiler-build:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+          strategy:
+            max_parallel: 1  # Sequential execution
+```
+
+**Execution Behavior:**
+
+- **Sequential (`max_parallel: 1`)**: Matrix jobs run completely sequentially - each job starts after the previous one completes
+- **Parallel (`max_parallel: N`)**: Uses sliding window dependency pattern - at most N jobs run concurrently
+- **Matrix variables**: All steps in the expanded stage have access to `${{ matrix.* }}` variables
+- **Unique naming**: Steps are automatically renamed to avoid conflicts (format: `<stage>.<jobIdx>.<stepName>`)
+- **Internal dependencies**: All stage dependencies are preserved within each matrix job
+
+**Example: Sequential Matrix Execution**
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: setup
+      - action: compile
+        require: [setup]
+      - action: test
+        require: [compile]
+
+  multi-compiler:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang", "msvc"]
+          strategy:
+            max_parallel: 1  # One compiler at a time
+```
+
+Execution order:
+1. gcc: setup → compile → test
+2. clang: setup → compile → test (starts after gcc completes)
+3. msvc: setup → compile → test (starts after clang completes)
+
+**Example: Parallel Matrix Execution**
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: setup
+      - action: compile
+        require: [setup]
+      - action: test
+        require: [compile]
+
+  multi-compiler:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang", "msvc", "icc"]
+          strategy:
+            max_parallel: 2  # Two compilers concurrently
+```
+
+Execution timeline (max_parallel: 2):
+- **Time 1**: gcc and clang start immediately
+- **Time 2**: When gcc completes, msvc starts
+- **Time 3**: When clang completes, icc starts
+
+**Matrix Variables in Expanded Stages:**
+
+```yaml
+actions:
+  - name: configure-compiler
+    run: |
+      export CC=${{ matrix.compiler }}
+      echo "Building with ${{ matrix.compiler }}"
+
+stages:
+  build:
+    steps:
+      - action: configure-compiler
+      - action: compile
+        require: [configure-compiler]
+
+  compiler-matrix:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+```
+
+Each expanded step has access to `matrix.compiler` variable, allowing configuration-specific builds.
+
 ### Step-Level Variables
 
 Step-level variables allow you to override global variables or provide step-specific values:
@@ -717,6 +834,31 @@ if: "semverCompare(os_version, '<22.04')"
 ## Variable Interpolation
 
 Variables can be interpolated in action commands using `${{ }}` syntax:
+
+### Default Values
+
+Provide a fallback when a variable is undefined using a dash `-` separator:
+
+- Literal default: `${{ variable-default }}`
+- Default from another variable: `${{ variable-other.variable }}`
+
+Examples:
+
+```yaml
+actions:
+  - name: print-values
+    run: |
+      echo "Compiler: ${{ matrix.compiler-\"gcc\" }}"
+      echo "Image: ${{ matrix.image-ubuntu:24.04 }}"
+      echo "From var: ${{ matrix.compiler-variable.compiler_default }}"
+```
+
+Behavior:
+- If the primary variable exists, it is used.
+- If missing and default provided, the default is used.
+- Defaults may be quoted; quotes are removed.
+- Defaults may reference another variable which is then resolved.
+- Missing variables without defaults cause a validation error listing available variables.
 
 ### Error Handling
 
