@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.0] - 2025-10-31
+
 ### Documentation
 - **Variable default values in interpolation**: Documented default fallback syntax in:
   - `docs/Project-specification.md`
