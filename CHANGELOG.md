@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.1] - 2025-10-31
+
+### Fixed
+- **Timestamp Display Timing**: Fixed timestamps showing output time instead of actual execution start time
+  - Timestamps were being generated when output was displayed, not when execution actually started
+  - For parallel steps, this caused different timestamps even when steps started simultaneously
+  - Now captures actual start time in `OnStepStart()` when execution begins
+  - Stores start time in `StepOutputData.StartTime` for `OrderedOutputManager`
+  - Stores start time in `stepStartTimes` map for `SimpleStepCallback`
+  - Displays stored start time instead of generating new timestamp at display time
+  - Parallel steps that start together now show same (or very close) timestamps reflecting actual execution start
+  - Files modified: `pkg/buildfab/ordered_output.go`, `pkg/buildfab/simple.go`
+
 ## [0.30.0] - 2025-10-31
 
 ### Added

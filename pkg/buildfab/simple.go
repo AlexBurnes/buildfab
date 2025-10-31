@@ -7,6 +7,7 @@ import (
     "os"
     "runtime"
     "strings"
+    "sync"
     "time"
     
     "github.com/AlexBurnes/buildfab/pkg/buildfab/container"
@@ -425,6 +426,8 @@ type SimpleStepCallback struct {
     configPath  string  // Store config path for container actions
     bufferedOutput map[string]*BufferedOutput // Store buffered output for quiet mode
     variables   map[string]string // Store variables for interpolation
+    stepStartTimes map[string]time.Time // Store actual start times for steps
+    mu           sync.Mutex // Protect stepStartTimes map
 }
 
 // BufferedOutput stores captured stdout and stderr for a step
@@ -446,8 +449,17 @@ func (c *SimpleStepCallback) StoreBufferedOutput(stepName, stdout, stderr string
 }
 
 func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
+    // Capture actual start time when execution begins
+    actualStartTime := time.Now()
+    c.mu.Lock()
+    if c.stepStartTimes == nil {
+        c.stepStartTimes = make(map[string]time.Time)
+    }
+    c.stepStartTimes[stepName] = actualStartTime
+    c.mu.Unlock()
+    
     if c.verboseLevel > 0 {
-        timestamp := formatISO8601Timestamp(time.Now())
+        timestamp := formatISO8601Timestamp(actualStartTime)
         fmt.Fprintf(c.errorOutput, "  💻 %s [%s]\n", stepName, timestamp)
         
         // Show container command for container actions (verbose level 2+)

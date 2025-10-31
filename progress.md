@@ -2,6 +2,17 @@
 
 ## What Works
 
+- **Timestamp Timing Fix** (v0.30.1 - October 31, 2025): Successfully fixed timestamps to show actual execution start time instead of output display time (100% complete)
+  - **Problem Fixed** - Timestamps were showing output display time instead of actual execution start time
+  - **Root Cause** - Timestamps generated at display time in `showStepStart()` instead of capturing when execution begins
+  - **Solution** - Capture actual start time in `OnStepStart()` when execution begins and store in `StepOutputData.StartTime`
+  - **Implementation** - Added `StartTime` field to `StepOutputData`, capture time in `OnStepStart()`, use stored time in `showStepStart()`
+  - **SimpleStepCallback** - Added `stepStartTimes` map to track start times for direct action execution
+  - **Result** - Parallel steps that start together now show same (or very close) timestamps reflecting actual execution start
+  - **Files Modified** - `pkg/buildfab/ordered_output.go`, `pkg/buildfab/simple.go`
+  - **Testing Complete** - Verified timestamps now reflect actual execution start times for parallel steps
+  - **Production Ready** - Accurate execution start time display for all steps
+
 - **ISO8601 Timestamps for Stage and Step Execution** (v0.30.0 - October 31, 2025): Successfully added timestamp display in ISO8601 format with fractional seconds (100% complete)
   - **Stage Start Timestamps** - Displays `[2025-10-31T10:57:38.649031Z]` when stage execution begins
   - **Step/Action Start Timestamps** - Displays `[2025-10-31T10:57:38.649211Z]` when each step (action) starts execution

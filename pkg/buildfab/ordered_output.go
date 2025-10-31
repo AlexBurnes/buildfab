@@ -45,6 +45,7 @@ type OrderedOutputManager struct {
 // StepOutputData contains all output data for a step
 type StepOutputData struct {
     Started        bool
+    StartTime      time.Time // Actual time when step execution started
     Completed      bool
     Shown          bool  // Track if step start message has been shown
     Status         StepStatus
@@ -116,8 +117,17 @@ func (o *OrderedOutputManager) OnStepStart(ctx context.Context, stepName string)
         o.debugPrintState()
     }
 
+    // Capture actual start time when execution begins, not when displayed
+    actualStartTime := time.Now()
     if data, exists := o.stepData[stepName]; exists {
         data.Started = true
+        data.StartTime = actualStartTime
+    } else {
+        // Create entry if it doesn't exist
+        o.stepData[stepName] = &StepOutputData{
+            Started:   true,
+            StartTime: actualStartTime,
+        }
     }
 
     // Check if we can show step start (with mutex locked)
@@ -425,7 +435,14 @@ func (o *OrderedOutputManager) checkAndShowNextStep() {
 // showStepStart shows the start message for a step
 func (o *OrderedOutputManager) showStepStart(stepName string) {
     if o.verboseLevel > 0 {
-        timestamp := formatISO8601Timestamp(time.Now())
+        // Use actual start time captured when execution began, not display time
+        var timestamp string
+        if data, exists := o.stepData[stepName]; exists && !data.StartTime.IsZero() {
+            timestamp = formatISO8601Timestamp(data.StartTime)
+        } else {
+            // Fallback to current time if start time not captured yet
+            timestamp = formatISO8601Timestamp(time.Now())
+        }
         fmt.Fprintf(o.errorOutput, "  💻 %s [%s]\n", stepName, timestamp)
 
         // Show container command for container actions (verbose level 2+)
