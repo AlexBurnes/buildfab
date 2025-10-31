@@ -9,6 +9,7 @@ import (
 )
 
 // InterpolateVariables replaces ${{ variable }} syntax with actual values
+// Supports default values: ${{variable-default}} or ${{variable-otherVariable}}
 func InterpolateVariables(text string, variables map[string]string) (string, error) {
 	if variables == nil {
 		return text, nil
@@ -17,20 +18,75 @@ func InterpolateVariables(text string, variables map[string]string) (string, err
 	// Pattern to match ${{ variable }} syntax
 	pattern := regexp.MustCompile(`\$\{\{\s*([^}]+)\s*\}\}`)
 	
-	// First pass: collect all variable references to validate they exist
-	var missingVars []string
-	allMatches := pattern.FindAllStringSubmatch(text, -1)
+	// Single pass: perform interpolation with default value support
+	result := pattern.ReplaceAllStringFunc(text, func(match string) string {
+		// Extract variable reference from ${{ variable }}
+		submatches := pattern.FindStringSubmatch(match)
+		if len(submatches) < 2 {
+			return match // Return original if no match
+		}
+		
+		varRef := strings.TrimSpace(submatches[1])
+		
+		// Parse variable reference with potential default value
+		varName, defaultValue, hasDefault := parseVariableWithDefault(varRef)
+		
+		// Check if variable exists
+		if value, exists := variables[varName]; exists {
+			return value
+		}
+		
+		// Variable doesn't exist
+		if !hasDefault {
+			// No default provided - this will be caught by validation
+			return match
+		}
+		
+		// Use default value
+		defaultValue = strings.TrimSpace(defaultValue)
+		
+		// Check if default is a variable reference (e.g., "${{otherVar}}" or "other.var")
+		if strings.HasPrefix(defaultValue, "${{") && strings.HasSuffix(defaultValue, "}}") {
+			// Recursively resolve default variable
+			resolved, err := InterpolateVariables(defaultValue, variables)
+			if err != nil {
+				// If default variable can't be resolved, return empty or original?
+				// For now, return empty string as fallback
+				return ""
+			}
+			return resolved
+		}
+		
+		// Check if default looks like a variable name (contains dot, like "variable.name")
+		if strings.Contains(defaultValue, ".") {
+			if value, exists := variables[defaultValue]; exists {
+				return value
+			}
+		}
+		
+		// Remove quotes if present (both single and double)
+		defaultValue = strings.Trim(defaultValue, `"'`)
+		
+		// Use as literal string
+		return defaultValue
+	})
 	
+	// Validation pass: check for undefined variables without defaults
+	var missingVars []string
+	allMatches := pattern.FindAllStringSubmatch(result, -1)
 	for _, match := range allMatches {
 		if len(match) >= 2 {
-			varName := strings.TrimSpace(match[1])
-			if _, exists := variables[varName]; !exists {
-				missingVars = append(missingVars, varName)
+			varRef := strings.TrimSpace(match[1])
+			varName, _, hasDefault := parseVariableWithDefault(varRef)
+			if !hasDefault {
+				if _, exists := variables[varName]; !exists {
+					missingVars = append(missingVars, varName)
+				}
 			}
 		}
 	}
 	
-	// If any variables are missing, return a comprehensive error
+	// If any variables are missing (without defaults), return error
 	if len(missingVars) > 0 {
 		var availableVars []string
 		for varName := range variables {
@@ -44,26 +100,35 @@ func InterpolateVariables(text string, variables map[string]string) (string, err
 		return "", fmt.Errorf("%s", errorMsg)
 	}
 	
-	// Second pass: perform actual interpolation
-	result := pattern.ReplaceAllStringFunc(text, func(match string) string {
-		// Extract variable name from ${{ variable }}
-		submatches := pattern.FindStringSubmatch(match)
-		if len(submatches) < 2 {
-			return match // Return original if no match
-		}
-		
-		varName := strings.TrimSpace(submatches[1])
-		
-		// Variable should exist at this point since we validated above
-		if value, exists := variables[varName]; exists {
-			return value
-		}
-		
-		// This should not happen due to validation above, but just in case
-		return match
-	})
-	
 	return result, nil
+}
+
+// parseVariableWithDefault parses a variable reference that may include a default value
+// Format: "variableName" or "variableName-defaultValue"
+// Returns: variableName, defaultValue, hasDefault
+func parseVariableWithDefault(ref string) (varName, defaultValue string, hasDefault bool) {
+	// Split on first '-' character
+	// Note: We need to be careful not to split on '-' that's part of the variable name
+	// For now, we'll split on first '-' after trimming spaces
+	trimmed := strings.TrimSpace(ref)
+	
+	// Find first '-' that's not at the start
+	for i := 0; i < len(trimmed); i++ {
+		if trimmed[i] == '-' {
+			// Found a dash - check if it's a default separator
+			// Default separator is '-' surrounded by spaces or at boundary
+			before := strings.TrimSpace(trimmed[:i])
+			after := strings.TrimSpace(trimmed[i+1:])
+			
+			// Only treat as default if there's something before and after the dash
+			if len(before) > 0 && len(after) > 0 {
+				return before, after, true
+			}
+		}
+	}
+	
+	// No default found
+	return trimmed, "", false
 }
 
 // InterpolateAction interpolates variables in an action's run command

@@ -1736,9 +1736,15 @@ func (r *Runner) executeStepRegular(ctx context.Context, step Step) error {
 // executeDAGWithCallback executes the DAG using step callbacks for output management
 func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAGNode, steps []Step) ([]Result, error) {
 	var results []Result
-	completed := make(map[string]bool)
-	failed := make(map[string]bool)
+	status := make(map[string]Status) // Track status: Pending, OK, Error, Skipped
+	completed := make(map[string]bool) // Legacy map for backward compatibility
+	failed := make(map[string]bool) // Legacy map for backward compatibility
 	executing := make(map[string]bool)
+	
+	// Initialize all steps as pending
+	for nodeName := range dag {
+		status[nodeName] = StatusPending
+	}
 	
 	// Create a map of results by step name for quick lookup
 	resultMap := make(map[string]Result)
@@ -1761,6 +1767,8 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 			completed[result.Name] = true
 			executing[result.Name] = false
 			
+			// Update status map
+			status[result.Name] = result.Status
 			if result.Status == StatusError {
 				failed[result.Name] = true
 			}
@@ -1799,34 +1807,54 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 			default:
 			}
 			
-			// Find ready steps
+			// Find ready steps using status map
 			var readySteps []string
 			mu.Lock()
 			for nodeName, node := range dag {
-				if !completed[nodeName] && !executing[nodeName] && !failed[nodeName] {
-					// Check if all dependencies are completed
-					allDepsCompleted := true
-					for _, dep := range node.Dependencies {
-						if !completed[dep] {
-							allDepsCompleted = false
-							break
-						}
+				// Skip if already completed or executing
+				if status[nodeName] == StatusOK || status[nodeName] == StatusError || status[nodeName] == StatusSkipped {
+					continue
+				}
+				if executing[nodeName] {
+					continue
+				}
+				
+				// Check if any dependency failed or was skipped - if so, this step should be skipped
+				if r.hasFailedOrSkippedDependency(node, status) {
+					// Mark as skipped
+					status[nodeName] = StatusSkipped
+					completed[nodeName] = true
+					result := Result{
+						Name:   nodeName,
+						Status: StatusSkipped,
+						Message: fmt.Sprintf("skipped (dependency failed or skipped)"),
+					}
+					mu.Unlock()
+					
+					// Call step callback for skipped step
+					if r.opts.StepCallback != nil {
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, result.Message, 0, "")
 					}
 					
-					if allDepsCompleted {
-						readySteps = append(readySteps, nodeName)
-					}
+					resultChan <- result
+					mu.Lock()
+					continue
+				}
+				
+				// Check if all dependencies completed successfully
+				if r.allDependenciesCompleted(node, status) {
+					readySteps = append(readySteps, nodeName)
 				}
 			}
 			mu.Unlock()
 			
 			// If no ready steps, we're done
 			if len(readySteps) == 0 {
-				// Check if all steps are completed or failed
+				// Check if all steps are completed
 				mu.Lock()
 				allDone := true
 				for nodeName := range dag {
-					if !completed[nodeName] && !failed[nodeName] {
+					if status[nodeName] == StatusPending && !executing[nodeName] {
 						allDone = false
 						break
 					}
@@ -1857,18 +1885,6 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 				mu.Lock()
 				executing[nodeName] = true
 				mu.Unlock()
-				
-				// Skip if already failed and this node requires it
-				if r.hasFailedDependency(node, failed) {
-					failedDeps := r.getFailedDependencyNames(node, failed)
-					result := Result{
-						Name:   nodeName,
-						Status: StatusSkipped,
-						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
-					}
-					resultChan <- result
-					continue
-				}
 				
 				// Check if step should be executed based on conditions
 				if !r.shouldExecuteStep(ctx, node) {
@@ -2471,11 +2487,17 @@ func (r *Runner) detectCycles(dag map[string]*DAGNode) error {
 // executeDAGWithOrderedStreaming executes the DAG with parallel execution but ordered streaming output
 func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[string]*DAGNode, steps []Step, interpolatedActions map[string]*Action) ([]Result, error) {
 	var results []Result
-	completed := make(map[string]bool)
-	failed := make(map[string]bool)
+	status := make(map[string]Status) // Track status: Pending, OK, Error, Skipped
+	completed := make(map[string]bool) // Legacy map for backward compatibility
+	failed := make(map[string]bool) // Legacy map for backward compatibility
 	executing := make(map[string]bool)
 	displayed := make(map[string]bool)
 	started := make(map[string]bool)
+	
+	// Initialize all steps as pending
+	for nodeName := range dag {
+		status[nodeName] = StatusPending
+	}
 	
 	// Create a map of results by step name for quick lookup
 	resultMap := make(map[string]Result)
@@ -2507,6 +2529,8 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 			completed[result.Name] = true
 			executing[result.Name] = false
 			
+			// Update status map
+			status[result.Name] = result.Status
 			if result.Status == StatusError {
 				failed[result.Name] = true
 			}
@@ -2561,7 +2585,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 			}
 			
 			mu.Lock()
-			readySteps := r.getReadyStepsLocked(dag, completed, failed, executing)
+			readySteps := r.getReadyStepsLockedWithStatus(dag, status, executing)
 			mu.Unlock()
 			
 			if len(readySteps) == 0 {
@@ -2569,7 +2593,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 				mu.Lock()
 				allDone := true
 				for nodeName := range dag {
-					if !completed[nodeName] && !executing[nodeName] {
+					if status[nodeName] == StatusPending && !executing[nodeName] {
 						allDone = false
 						break
 					}
@@ -2604,16 +2628,25 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 				
 				mu.Lock()
 				executing[nodeName] = true
-				mu.Unlock()
-				
-				// Skip if already failed and this node requires it
-				if r.hasFailedDependency(node, failed) {
-					failedDeps := r.getFailedDependencyNames(node, failed)
+				// Check if any dependency failed or was skipped
+				if r.hasFailedOrSkippedDependency(node, status) {
+					skippedDeps := r.getFailedOrSkippedDependencyNames(node, status)
+					status[nodeName] = StatusSkipped
+					completed[nodeName] = true
+					executing[nodeName] = false
+					mu.Unlock()
+					
 					result := Result{
 						Name:   nodeName,
 						Status: StatusSkipped,
-						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
+						Message: fmt.Sprintf("skipped (dependency failed or skipped: %s)", strings.Join(skippedDeps, ", ")),
 					}
+					
+					// Call step callback for skipped step
+					if r.opts.StepCallback != nil {
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, result.Message, 0, "")
+					}
+					
 					select {
 					case resultChan <- result:
 					case <-ctxDone:
@@ -2621,6 +2654,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 					}
 					continue
 				}
+				mu.Unlock()
 				
 				// Check if step should be executed based on conditions
 				if !r.shouldExecuteStep(ctx, node) {
@@ -2900,9 +2934,15 @@ func (r *Runner) displayRemainingSteps(ctx context.Context, steps []Step, result
 // executeDAGWithParallel executes the DAG with parallel execution
 func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAGNode, steps []Step) ([]Result, error) {
 	var results []Result
-	completed := make(map[string]bool)
-	failed := make(map[string]bool)
+	status := make(map[string]Status) // Track status: Pending, OK, Error, Skipped
+	completed := make(map[string]bool) // Legacy map for backward compatibility
+	failed := make(map[string]bool) // Legacy map for backward compatibility
 	executing := make(map[string]bool)
+	
+	// Initialize all steps as pending
+	for nodeName := range dag {
+		status[nodeName] = StatusPending
+	}
 	
 	// Create a map of results by step name for quick lookup
 	resultMap := make(map[string]Result)
@@ -2925,6 +2965,8 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 			completed[result.Name] = true
 			executing[result.Name] = false
 			
+			// Update status map
+			status[result.Name] = result.Status
 			if result.Status == StatusError {
 				failed[result.Name] = true
 			}
@@ -2973,7 +3015,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 			}
 			
 			mu.Lock()
-			readySteps := r.getReadyStepsLocked(dag, completed, failed, executing)
+			readySteps := r.getReadyStepsLockedWithStatus(dag, status, executing)
 			mu.Unlock()
 			
 			if len(readySteps) == 0 {
@@ -2981,7 +3023,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 				mu.Lock()
 				allDone := true
 				for nodeName := range dag {
-					if !completed[nodeName] && !executing[nodeName] {
+					if status[nodeName] == StatusPending && !executing[nodeName] {
 						allDone = false
 						break
 					}
@@ -3016,16 +3058,25 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 				
 				mu.Lock()
 				executing[nodeName] = true
-				mu.Unlock()
-				
-				// Skip if already failed and this node requires it
-				if r.hasFailedDependency(node, failed) {
-					failedDeps := r.getFailedDependencyNames(node, failed)
+				// Check if any dependency failed or was skipped
+				if r.hasFailedOrSkippedDependency(node, status) {
+					skippedDeps := r.getFailedOrSkippedDependencyNames(node, status)
+					status[nodeName] = StatusSkipped
+					completed[nodeName] = true
+					executing[nodeName] = false
+					mu.Unlock()
+					
 					result := Result{
 						Name:   nodeName,
 						Status: StatusSkipped,
-						Message: fmt.Sprintf("skipped (dependency failed: %s)", strings.Join(failedDeps, ", ")),
+						Message: fmt.Sprintf("skipped (dependency failed or skipped: %s)", strings.Join(skippedDeps, ", ")),
 					}
+					
+					// Call step callback for skipped step
+					if r.opts.StepCallback != nil {
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, result.Message, 0, "")
+					}
+					
 					select {
 					case resultChan <- result:
 					case <-ctxDone:
@@ -3033,6 +3084,7 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 					}
 					continue
 				}
+				mu.Unlock()
 				
 				// Check if step should be executed based on conditions
 				if !r.shouldExecuteStep(ctx, node) {
@@ -3087,15 +3139,47 @@ return results, ctx.Err()
 
 // getReadyStepsLocked returns steps that are ready to execute (thread-safe version)
 func (r *Runner) getReadyStepsLocked(dag map[string]*DAGNode, completed map[string]bool, failed map[string]bool, executing map[string]bool) []string {
+	// Convert completed/failed maps to status map for new logic
+	status := make(map[string]Status)
+	for nodeName := range dag {
+		if completed[nodeName] {
+			if failed[nodeName] {
+				status[nodeName] = StatusError
+			} else {
+				// Check resultMap to see if it was skipped - for now assume OK if not failed
+				// This will be properly set in the execution loop
+				status[nodeName] = StatusOK
+			}
+		}
+	}
+	
+	return r.getReadyStepsLockedWithStatus(dag, status, executing)
+}
+
+// getReadyStepsLockedWithStatus returns steps that are ready to execute using status map
+func (r *Runner) getReadyStepsLockedWithStatus(dag map[string]*DAGNode, status map[string]Status, executing map[string]bool) []string {
 	var ready []string
 	
 	for nodeName, node := range dag {
-		if completed[nodeName] || executing[nodeName] {
+		// Skip if already completed (OK, Error, or Skipped) or currently executing
+		if status[nodeName] == StatusOK || status[nodeName] == StatusError || status[nodeName] == StatusSkipped {
+			continue
+		}
+		if executing[nodeName] {
 			continue
 		}
 		
-		// Check if all dependencies are completed
-		if r.allDependenciesCompleted(node, completed) {
+		// Check if all dependencies are completed (regardless of status)
+		// Steps with skipped/failed dependencies will be marked as skipped in execution loop
+		allDepsDone := true
+		for _, dep := range node.Dependencies {
+			if status[dep] == StatusPending {
+				allDepsDone = false
+				break
+			}
+		}
+		
+		if allDepsDone {
 			ready = append(ready, nodeName)
 		}
 	}
@@ -3103,8 +3187,18 @@ func (r *Runner) getReadyStepsLocked(dag map[string]*DAGNode, completed map[stri
 	return ready
 }
 
-// allDependenciesCompleted checks if all dependencies are completed
-func (r *Runner) allDependenciesCompleted(node *DAGNode, completed map[string]bool) bool {
+// allDependenciesCompleted checks if all dependencies are completed successfully
+func (r *Runner) allDependenciesCompleted(node *DAGNode, status map[string]Status) bool {
+	for _, dep := range node.Dependencies {
+		if status[dep] != StatusOK {
+			return false
+		}
+	}
+	return true
+}
+
+// allDependenciesCompletedLegacy checks if all dependencies are completed (legacy version for backward compatibility)
+func (r *Runner) allDependenciesCompletedLegacy(node *DAGNode, completed map[string]bool) bool {
 	for _, dep := range node.Dependencies {
 		if !completed[dep] {
 			return false
@@ -3113,7 +3207,7 @@ func (r *Runner) allDependenciesCompleted(node *DAGNode, completed map[string]bo
 	return true
 }
 
-// hasFailedDependency checks if any required dependency has failed
+// hasFailedDependency checks if any required dependency has failed (legacy version)
 func (r *Runner) hasFailedDependency(node *DAGNode, failed map[string]bool) bool {
 	for _, dep := range node.Dependencies {
 		if failed[dep] {
@@ -3121,6 +3215,27 @@ func (r *Runner) hasFailedDependency(node *DAGNode, failed map[string]bool) bool
 		}
 	}
 	return false
+}
+
+// hasFailedOrSkippedDependency checks if any required dependency has failed or been skipped
+func (r *Runner) hasFailedOrSkippedDependency(node *DAGNode, status map[string]Status) bool {
+	for _, dep := range node.Dependencies {
+		if status[dep] == StatusError || status[dep] == StatusSkipped {
+			return true
+		}
+	}
+	return false
+}
+
+// getFailedOrSkippedDependencyNames returns the names of failed or skipped dependencies
+func (r *Runner) getFailedOrSkippedDependencyNames(node *DAGNode, status map[string]Status) []string {
+	var deps []string
+	for _, dep := range node.Dependencies {
+		if status[dep] == StatusError || status[dep] == StatusSkipped {
+			deps = append(deps, dep)
+		}
+	}
+	return deps
 }
 
 // getFailedDependencyNames returns the names of failed dependencies

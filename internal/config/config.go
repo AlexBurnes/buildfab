@@ -128,50 +128,11 @@ func ResolveVariables(config *buildfab.Config, variables map[string]string) erro
 }
 
 // resolveString resolves variable interpolation in a string
+// Supports default values: ${{variable-default}} or ${{variable-otherVariable}}
 func resolveString(s string, variables map[string]string) (string, error) {
-	// First pass: validate all variables exist before processing
-	var missingVars []string
-	temp := s
-	
-	for {
-		start := strings.Index(temp, "${{")
-		if start == -1 {
-			break
-		}
-		
-		end := strings.Index(temp[start:], "}}")
-		if end == -1 {
-			return "", fmt.Errorf("unclosed variable reference: %s", temp[start:])
-		}
-		
-		end += start + 2 // Adjust for the start position
-		
-		variableName := strings.TrimSpace(temp[start+3 : end-2])
-		
-		if _, exists := variables[variableName]; !exists {
-			missingVars = append(missingVars, variableName)
-		}
-		
-		temp = temp[end:]
-	}
-	
-	// If any variables are missing, return a comprehensive error
-	if len(missingVars) > 0 {
-		var availableVars []string
-		for varName := range variables {
-			availableVars = append(availableVars, varName)
-		}
-		
-		errorMsg := fmt.Sprintf("undefined variables: %s", strings.Join(missingVars, ", "))
-		if len(availableVars) > 0 {
-			errorMsg += fmt.Sprintf("\navailable variables: %s", strings.Join(availableVars, ", "))
-		}
-		return "", fmt.Errorf("%s", errorMsg)
-	}
-	
-	// Second pass: perform actual interpolation
 	result := s
 	
+	// Single pass: perform interpolation with default value support
 	for {
 		start := strings.Index(result, "${{")
 		if start == -1 {
@@ -185,18 +146,116 @@ func resolveString(s string, variables map[string]string) (string, error) {
 		
 		end += start + 2 // Adjust for the start position
 		
-		variableName := strings.TrimSpace(result[start+3 : end-2])
+		varRef := strings.TrimSpace(result[start+3 : end-2])
 		
-		// Variable should exist at this point since we validated above
-		value, exists := variables[variableName]
-		if !exists {
-			return "", fmt.Errorf("undefined variable: %s", variableName)
+		// Parse variable reference with potential default value
+		varName, defaultValue, hasDefault := parseVariableWithDefaultInternal(varRef)
+		
+		// Check if variable exists
+		var value string
+		var exists bool
+		if value, exists = variables[varName]; !exists {
+			if !hasDefault {
+				// No default - leave as-is for validation to catch
+				break
+			}
+			
+			// Use default value
+			defaultValue = strings.TrimSpace(defaultValue)
+			
+			// Check if default is a variable reference (e.g., "${{otherVar}}" or "other.var")
+			if strings.HasPrefix(defaultValue, "${{") && strings.HasSuffix(defaultValue, "}}") {
+				// Recursively resolve default variable
+				resolved, err := resolveString(defaultValue, variables)
+				if err != nil {
+					// If default variable can't be resolved, use empty string
+					value = ""
+				} else {
+					value = resolved
+				}
+			} else if strings.Contains(defaultValue, ".") {
+				// Check if default looks like a variable name (e.g., "variable.name")
+				if val, ok := variables[defaultValue]; ok {
+					value = val
+				} else {
+					// Remove quotes and use as literal
+					value = strings.Trim(defaultValue, `"'`)
+				}
+			} else {
+				// Remove quotes if present and use as literal
+				value = strings.Trim(defaultValue, `"'`)
+			}
 		}
 		
+		// Replace variable reference with value
 		result = result[:start] + value + result[end:]
 	}
 	
+	// Validation pass: check for undefined variables without defaults in original string
+	var missingVars []string
+	temp := s
+	for {
+		start := strings.Index(temp, "${{")
+		if start == -1 {
+			break
+		}
+		
+		end := strings.Index(temp[start:], "}}")
+		if end == -1 {
+			break
+		}
+		
+		end += start + 2
+		varRef := strings.TrimSpace(temp[start+3 : end-2])
+		varName, _, hasDefault := parseVariableWithDefaultInternal(varRef)
+		
+		if !hasDefault {
+			if _, exists := variables[varName]; !exists {
+				missingVars = append(missingVars, varName)
+			}
+		}
+		
+		temp = temp[end:]
+	}
+	
+	// If any variables are missing (without defaults), return error
+	if len(missingVars) > 0 {
+		var availableVars []string
+		for varName := range variables {
+			availableVars = append(availableVars, varName)
+		}
+		
+		errorMsg := fmt.Sprintf("undefined variables: %s", strings.Join(missingVars, ", "))
+		if len(availableVars) > 0 {
+			errorMsg += fmt.Sprintf("\navailable variables: %s", strings.Join(availableVars, ", "))
+		}
+		return "", fmt.Errorf("%s", errorMsg)
+	}
+	
 	return result, nil
+}
+
+// parseVariableWithDefaultInternal parses a variable reference that may include a default value
+// Format: "variableName" or "variableName-defaultValue"
+// Returns: variableName, defaultValue, hasDefault
+func parseVariableWithDefaultInternal(ref string) (varName, defaultValue string, hasDefault bool) {
+	trimmed := strings.TrimSpace(ref)
+	
+	// Find first '-' that's not at the start
+	for i := 0; i < len(trimmed); i++ {
+		if trimmed[i] == '-' {
+			before := strings.TrimSpace(trimmed[:i])
+			after := strings.TrimSpace(trimmed[i+1:])
+			
+			// Only treat as default if there's something before and after the dash
+			if len(before) > 0 && len(after) > 0 {
+				return before, after, true
+			}
+		}
+	}
+	
+	// No default found
+	return trimmed, "", false
 }
 
 // mergeConfig merges included configuration into the main config

@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.28.1] - 2025-10-31
+
+### Fixed
+- **Variable Interpolation Default Values**: Added support for default values in variable interpolation
+  - Support syntax: `${{variable-default}}` for literal default values
+  - Support syntax: `${{variable-otherVariable}}` for default from another variable
+  - Default values can be quoted strings or variable references
+  - Variable defaults are resolved recursively
+  - Updated both `InterpolateVariables()` in `pkg/buildfab/variables.go` and `resolveString()` in `internal/config/config.go`
+  
+- **DAG Skip Propagation**: Fixed skip propagation to dependent steps
+  - Steps depending on failed steps are now correctly skipped
+  - Steps depending on skipped steps are now correctly skipped (transitive propagation)
+  - Changed from `completed`/`failed` maps to `status` map tracking (Pending, OK, Error, Skipped)
+  - Updated `allDependenciesCompleted()` to verify dependencies completed successfully (StatusOK)
+  - Added `hasFailedOrSkippedDependency()` function to check both failed and skipped dependencies
+  - Updated all three execution functions: `executeDAGWithOrderedStreaming`, `executeDAGWithCallback`, `executeDAGWithParallel`
+  - Fixes issue where step3 would run even if step2 was skipped due to step1 failure
+
+### Documentation
+- **Matrix on Stage Feature Plan**: Added comprehensive implementation plan for matrix configuration on stage steps
+  - Documented problem statement and user requirements
+  - Designed matrix-first expansion approach (Option A) with sliding window dependencies
+  - Detailed implementation phases: expansion, dependency injection, integration
+  - Provided examples for sequential and parallel matrix execution
+  - Defined testing strategy and edge case handling
+  - File: `docs/Matrix-on-stage-feature-plan.md`
+  
+- **Bug Fixes Planning**: Added planning document for fixes required before matrix-on-stage implementation
+  - Documented variable interpolation default value requirements
+  - Documented DAG skip propagation bug and solution
+  - File: `docs/Bug-fixes-before-matrix-stage.md`
+
 ## [0.28.0] - 2025-10-17
 
 ### Added

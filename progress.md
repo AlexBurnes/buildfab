@@ -2,6 +2,30 @@
 
 ## What Works
 
+- **Variable Interpolation Default Values and DAG Skip Propagation Fixes** (v0.28.1 - October 31, 2025): Successfully fixed two critical bugs required before matrix-on-stage feature implementation (100% complete)
+  - **Variable Interpolation Default Values** - Added support for default values in variable interpolation syntax
+    - **Support Syntax** - `${{variable-default}}` for literal default values, `${{variable-otherVariable}}` for default from another variable
+    - **Default Value Types** - Literal strings (with or without quotes), variable references (recursively resolved), supports nested variable defaults
+    - **Implementation** - Modified `InterpolateVariables()` in `pkg/buildfab/variables.go` and `resolveString()` in `internal/config/config.go`
+    - **Parsing Logic** - Added `parseVariableWithDefault()` helper to extract variable name and default value separated by `-` character
+    - **Recursive Resolution** - Default values that are variable references are recursively resolved before use
+    - **Validation** - Final validation pass ensures undefined variables without defaults cause clear error messages
+    - **Files Modified** - `pkg/buildfab/variables.go` (InterpolateVariables, parseVariableWithDefault), `internal/config/config.go` (resolveString, parseVariableWithDefaultInternal)
+    - **Testing Complete** - Verified literal defaults, variable reference defaults, recursive resolution, error handling for missing variables
+    - **Production Ready** - Default values work correctly in all contexts (stages, actions, matrix, containers)
+  - **DAG Skip Propagation** - Fixed skip propagation to dependent steps when dependencies fail or are skipped
+    - **Problem Solved** - Steps depending on failed/skipped steps were not being skipped (e.g., step3 would run even if step2 was skipped due to step1 failure)
+    - **Root Cause** - DAG executor only checked for `failed` dependencies, not `skipped` ones, and didn't transitively propagate skip status
+    - **Solution Implemented** - (1) Replaced separate `completed`/`failed` maps with unified `status` map tracking Pending/OK/Error/Skipped, (2) Added `hasFailedOrSkippedDependency()` to check both failed and skipped dependencies, (3) Modified `allDependenciesCompleted()` to verify dependencies completed successfully (StatusOK), (4) Updated execution loops to mark steps as skipped immediately when dependencies are failed/skipped, (5) Added `getFailedOrSkippedDependencyNames()` for clear error messages
+    - **Transitive Propagation** - Skip status now propagates transitively: step1 fails → step2 skipped → step3 skipped (all dependent steps correctly skipped)
+    - **Status Tracking** - Single `status` map provides clear state: StatusPending, StatusOK, StatusError, StatusSkipped
+    - **Execution Functions Updated** - All three execution functions updated: `executeDAGWithOrderedStreaming`, `executeDAGWithCallback`, `executeDAGWithParallel`
+    - **Files Modified** - `pkg/buildfab/buildfab.go` (unified status map, dependency checking functions, execution loops)
+    - **Testing Complete** - Verified skip propagation works correctly for direct and transitive dependencies, confirmed proper status tracking
+    - **Production Ready** - Dependent steps now correctly skip when their dependencies fail or are skipped, ensuring predictable execution behavior
+  - **Documentation Created** - `docs/Bug-fixes-before-matrix-stage.md` (planning), `docs/Matrix-on-stage-feature-plan.md` (feature plan)
+  - **Next Step** - Begin implementation of matrix-on-stage feature based on approved plan
+
 - **BuildfabBinaryPath Option for run_action/run_stage** (v0.26.0 - October 17, 2025): Successfully implemented BuildfabBinaryPath option to enable run_action and run_stage in containers when using SimpleRunner API (100% complete)
   - **Problem Solved** - Container actions with run_action/run_stage failed with "buildfab: not found" when using SimpleRunner API
   - **User Impact** - pre-push and custom apps couldn't reuse existing actions in containers, limiting flexibility
