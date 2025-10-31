@@ -132,12 +132,12 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     // Start timing the stage execution
     stageStart := time.Now()
     
-    // Print stage start message with timestamp
+    // Print stage start message with timestamp (always shown)
     timestamp := formatISO8601Timestamp(stageStart)
     fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s [%s]\n\n", stageName, timestamp)
 
     // Expand matrix steps into individual steps before creating output manager
-    expandedSteps, err := r.expandMatrixSteps(stepsWithExpandedStages)
+    expandedSteps, matrixJobs, err := r.expandMatrixSteps(stepsWithExpandedStages)
     if err != nil {
         return fmt.Errorf("failed to expand matrix steps: %w", err)
     }
@@ -146,7 +146,9 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     poolConfigs := make(map[string]int)
     for _, origStep := range stage.Steps {
         if origStep.Matrix != nil && origStep.Matrix.Strategy.MaxParallel > 0 {
-            poolID := fmt.Sprintf("matrix-%s", origStep.Action)
+            // Use GetStepName() to handle both matrix actions and matrix stages
+            stepName := origStep.GetStepName()
+            poolID := fmt.Sprintf("matrix-%s", stepName)
             
             // Apply min() strategy: effective = min(global, matrix)
             globalMax := r.opts.MaxParallel
@@ -228,6 +230,26 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         runner.poolManager.GetOrCreateMatrixPool(poolID, poolMaxParallel)
         if r.opts.Debug {
             fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Created matrix pool: %s (max_parallel=%d)\n", poolID, poolMaxParallel)
+        }
+    }
+    
+    // Inject sliding window dependencies if max_parallel is specified for matrix stages
+    if len(matrixJobs) > 0 {
+        // Get max_parallel from matrix steps
+        matrixMaxParallel := 0
+        for _, origStep := range stage.Steps {
+            if origStep.Stage != "" && origStep.Matrix != nil && origStep.Matrix.Strategy.MaxParallel > 0 {
+                matrixMaxParallel = origStep.Matrix.Strategy.MaxParallel
+                // Apply min() strategy with global max_parallel
+                if r.opts.MaxParallel > 0 && r.opts.MaxParallel < matrixMaxParallel {
+                    matrixMaxParallel = r.opts.MaxParallel
+                }
+                break
+            }
+        }
+        
+        if matrixMaxParallel > 0 {
+            expandedSteps = r.injectSlidingWindowDependencies(expandedSteps, matrixJobs, matrixMaxParallel)
         }
     }
     
@@ -1490,8 +1512,9 @@ func (r *SimpleRunner) expandStageReferences(steps []Step) ([]Step, error) {
     return expandedSteps, nil
 }
 
-func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
+func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob, error) {
     var expandedSteps []Step
+    var matrixJobs []MatrixStageJob
 
     if r.opts.Debug {
         fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: processing %d steps\n", len(steps))
@@ -1516,7 +1539,7 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
                 // Get the referenced stage
                 referencedStage, exists := r.config.GetStage(step.Stage)
                 if !exists {
-                    return nil, fmt.Errorf("stage not found: %s", step.Stage)
+                    return nil, nil, fmt.Errorf("stage not found: %s", step.Stage)
                 }
 
                 // Extract matrix variables from CLI variables
@@ -1551,8 +1574,16 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
                     fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Generated %d matrix combinations for stage %s\n", len(combinations), step.Stage)
                 }
 
+                // Determine base name for pool ID and logging
+                baseName := step.Stage
+                if step.Name != "" {
+                    baseName = step.Name
+                }
+
                 // For each matrix combination, expand the stage with matrix variables
                 for jobIdx, combination := range combinations {
+                    // Store start index to track steps added for this job
+                    jobStartIdx := len(expandedSteps)
                     // Create matrix variables for this job (with "matrix." prefix)
                     matrixVars := make(map[string]string)
                     for key, value := range combination {
@@ -1576,18 +1607,13 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
                     expandedStageSteps, err := r.expandStageReferences(referencedStage.Steps)
                     if err != nil {
                         r.opts.Variables = originalVars
-                        return nil, fmt.Errorf("failed to expand stage %s for matrix job %d: %w", step.Stage, jobIdx, err)
+                        return nil, nil, fmt.Errorf("failed to expand stage %s for matrix job %d: %w", step.Stage, jobIdx, err)
                     }
 
                     // Restore original variables
                     r.opts.Variables = originalVars
 
                     // Apply matrix variables to all expanded steps and ensure unique names
-                    baseName := step.Stage
-                    if step.Name != "" {
-                        baseName = step.Name
-                    }
-
                     for stepIdx := range expandedStageSteps {
                         // Merge matrix variables into step variables
                         if expandedStageSteps[stepIdx].Variables == nil {
@@ -1654,8 +1680,46 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
                         expandedStageSteps[stepIdx].DependsOn = updatedDependsOn
                     }
 
+                    // Assign pool ID if max_parallel is specified
+                    strategy := step.Matrix.Strategy
+                    if strategy.MaxParallel > 0 {
+                        poolID := fmt.Sprintf("matrix-%s", baseName)
+                        
+                        // Assign pool ID to all expanded steps from this matrix job
+                        for stepIdx := range expandedStageSteps {
+                            expandedStageSteps[stepIdx].PoolID = poolID
+                        }
+                    }
+
                     // Add expanded steps for this matrix job
                     expandedSteps = append(expandedSteps, expandedStageSteps...)
+                    
+                    // Find first and last steps for this job and create MatrixStageJob
+                    firstSteps := r.findFirstSteps(expandedStageSteps)
+                    lastSteps := r.findLastSteps(expandedStageSteps)
+                    jobSteps := expandedSteps[jobStartIdx:]
+                    
+                    matrixJob := MatrixStageJob{
+                        Index:      jobIdx,
+                        MatrixVars: matrixVars,
+                        Steps:      jobSteps,
+                        FirstSteps: firstSteps,
+                        LastSteps:  lastSteps,
+                    }
+                    matrixJobs = append(matrixJobs, matrixJob)
+                    
+                    if r.opts.Debug {
+                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix job %d: %d steps, first=%v, last=%v\n", 
+                            jobIdx, len(expandedStageSteps), firstSteps, lastSteps)
+                    }
+                }
+                
+                // Log pool assignment after all jobs are processed
+                strategy := step.Matrix.Strategy
+                if strategy.MaxParallel > 0 && r.opts.Debug {
+                    poolID := fmt.Sprintf("matrix-%s", baseName)
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Assigned matrix stage steps to pool %s (max_parallel=%d)\n",
+                        poolID, strategy.MaxParallel)
                 }
 
                 continue
@@ -1670,7 +1734,7 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
                 // Get the action for this step
                 action, exists := r.config.GetAction(step.Action)
                 if !exists {
-                    return nil, fmt.Errorf("action not found: %s", step.Action)
+                    return nil, nil, fmt.Errorf("action not found: %s", step.Action)
                 }
 
                 // Extract matrix variables from CLI variables
@@ -1689,7 +1753,7 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
                 // Expand matrix into individual steps
                 matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
                 if err != nil {
-                    return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+                    return nil, nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
                 }
 
                 // Assign pool ID if max_parallel is specified
@@ -1726,8 +1790,156 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
     }
 
     if r.opts.Debug {
-        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: returning %d expanded steps\n", len(expandedSteps))
+        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: returning %d expanded steps, %d matrix jobs\n", len(expandedSteps), len(matrixJobs))
     }
 
-    return expandedSteps, nil
+    return expandedSteps, matrixJobs, nil
+}
+
+// findFirstSteps finds steps that can start the matrix job (no dependencies within the job)
+func (r *SimpleRunner) findFirstSteps(steps []Step) []string {
+    // Build a set of all step names in this job
+    stepNames := make(map[string]bool)
+    for _, step := range steps {
+        stepNames[step.GetStepName()] = true
+    }
+    
+    var firstSteps []string
+    for _, step := range steps {
+        stepName := step.GetStepName()
+        // Check if this step has any dependencies within the job
+        hasInternalDep := false
+        for _, dep := range step.Require {
+            if stepNames[dep] {
+                hasInternalDep = true
+                break
+            }
+        }
+        for _, dep := range step.DependsOn {
+            if stepNames[dep] {
+                hasInternalDep = true
+                break
+            }
+        }
+        
+        // If no internal dependencies, this is a first step
+        if !hasInternalDep {
+            firstSteps = append(firstSteps, stepName)
+        }
+    }
+    
+    // If no first steps found (all steps have dependencies), return all steps
+    // This handles the case where dependencies are external to the job
+    if len(firstSteps) == 0 {
+        for _, step := range steps {
+            firstSteps = append(firstSteps, step.GetStepName())
+        }
+    }
+    
+    return firstSteps
+}
+
+// findLastSteps finds steps that complete the matrix job (no dependents within the job)
+func (r *SimpleRunner) findLastSteps(steps []Step) []string {
+    // Build a reverse dependency graph: which steps depend on each step
+    dependents := make(map[string][]string)
+    stepNames := make(map[string]bool)
+    
+    for _, step := range steps {
+        stepName := step.GetStepName()
+        stepNames[stepName] = true
+        dependents[stepName] = []string{}
+    }
+    
+    for _, step := range steps {
+        stepName := step.GetStepName()
+        for _, dep := range step.Require {
+            if stepNames[dep] {
+                dependents[dep] = append(dependents[dep], stepName)
+            }
+        }
+        for _, dep := range step.DependsOn {
+            if stepNames[dep] {
+                dependents[dep] = append(dependents[dep], stepName)
+            }
+        }
+    }
+    
+    var lastSteps []string
+    for _, step := range steps {
+        stepName := step.GetStepName()
+        // If this step has no dependents within the job, it's a last step
+        if len(dependents[stepName]) == 0 {
+            lastSteps = append(lastSteps, stepName)
+        }
+    }
+    
+    // If no last steps found (circular dependencies or all steps have dependents), return all steps
+    if len(lastSteps) == 0 {
+        for _, step := range steps {
+            lastSteps = append(lastSteps, step.GetStepName())
+        }
+    }
+    
+    return lastSteps
+}
+
+// injectSlidingWindowDependencies injects dependencies between matrix jobs based on max_parallel
+func (r *SimpleRunner) injectSlidingWindowDependencies(steps []Step, matrixJobs []MatrixStageJob, maxParallel int) []Step {
+    if maxParallel <= 0 || len(matrixJobs) <= maxParallel {
+        // No dependencies needed
+        return steps
+    }
+    
+    // Create a map from step name to step index for quick lookup
+    stepNameToIndex := make(map[string]int)
+    for i, step := range steps {
+        stepNameToIndex[step.GetStepName()] = i
+    }
+    
+    // Inject dependencies: job i's first steps depend on job (i - maxParallel)'s last steps
+    for i := maxParallel; i < len(matrixJobs); i++ {
+        previousJobIdx := i - maxParallel
+        previousJob := matrixJobs[previousJobIdx]
+        currentJob := matrixJobs[i]
+        
+        // Find indices of first steps in current job
+        var currentFirstIndices []int
+        for _, firstStepName := range currentJob.FirstSteps {
+            if idx, exists := stepNameToIndex[firstStepName]; exists {
+                currentFirstIndices = append(currentFirstIndices, idx)
+            }
+        }
+        
+        // Add dependencies from previous job's last steps
+        for _, firstIdx := range currentFirstIndices {
+            firstStep := &steps[firstIdx]
+            for _, lastStepName := range previousJob.LastSteps {
+                // Check if dependency already exists
+                hasDep := false
+                for _, dep := range firstStep.Require {
+                    if dep == lastStepName {
+                        hasDep = true
+                        break
+                    }
+                }
+                for _, dep := range firstStep.DependsOn {
+                    if dep == lastStepName {
+                        hasDep = true
+                        break
+                    }
+                }
+                
+                if !hasDep {
+                    firstStep.Require = append(firstStep.Require, lastStepName)
+                    if r.opts.Debug {
+                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Injected dependency: %s depends on %s (job %d → job %d)\n",
+                            firstStep.GetStepName(), lastStepName, i, previousJobIdx)
+                    }
+                }
+            }
+        }
+    }
+    
+    return steps
 }

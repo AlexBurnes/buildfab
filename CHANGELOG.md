@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.2] - 2025-10-31
+
+### Added
+- **Timestamps in Quiet Mode**: Added ISO8601 timestamps to step completion output in quiet mode
+  - Quiet mode now displays timestamps after successful step completion: `✓ step-name executed successfully - in '1s' [2025-10-31T12:11:15.080741Z]`
+  - Timestamps are captured when steps start execution and displayed when they complete
+  - Provides consistent timing information across all verbosity levels
+  - Files modified: `pkg/buildfab/ordered_output.go`
+
+### Fixed
+- **Matrix Stage max_parallel Not Enforced**: Fixed matrix stage max_parallel not working in SimpleRunner
+  - Matrix stage steps were not assigned pool IDs causing them to bypass max_parallel limits
+  - `SimpleRunner.expandMatrixSteps` was missing `MatrixStageJob` tracking and dependency injection
+  - Added pool ID assignment for matrix stage steps using `GetStepName()` to handle both actions and stages
+  - Implemented `findFirstSteps`, `findLastSteps`, and `injectSlidingWindowDependencies` in `SimpleRunner`
+  - Matrix stages now properly track first/last steps and inject sliding window dependencies for max_parallel
+  - max_parallel=1 now executes matrix jobs sequentially, max_parallel=2 executes two jobs in parallel, etc.
+  - Files modified: `pkg/buildfab/simple.go`, `tests/test_matrix_stage.yml`
+  
+- **Timestamp Display Timing**: Fixed timestamps showing output time instead of actual execution start time
+  - Timestamps were being generated when output was displayed, not when execution actually started
+  - For parallel steps, this caused different timestamps even when steps started simultaneously
+  - Now captures actual start time in `OnStepStart()` when execution begins
+  - Stores start time in `StepOutputData.StartTime` for `OrderedOutputManager`
+  - Stores start time in `stepStartTimes` map for `SimpleStepCallback`
+  - Displays stored start time instead of generating new timestamp at display time
+  - Parallel steps that start together now show same (or very close) timestamps reflecting actual execution start
+  - Files modified: `pkg/buildfab/ordered_output.go`, `pkg/buildfab/simple.go`
+
 ## [0.30.1] - 2025-10-31
 
 ### Fixed

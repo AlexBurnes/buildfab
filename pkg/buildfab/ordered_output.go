@@ -1134,6 +1134,7 @@ type JobDisplay struct {
     Row         int           // Display row number (1-based)
     Started     bool          // Whether job has started
     Completed   bool          // Whether job has completed
+    StartTime   time.Time     // When job started
 }
 
 // MultilineOutputManager manages multiline job status display using ANSI escape codes
@@ -1257,6 +1258,10 @@ func (m *MultilineOutputManager) UpdateJobStatus(jobName string, status JobStatu
     job.Status = status
     job.Message = message
     job.Duration = duration
+    if !job.Started {
+        // Capture start time when job first starts
+        job.StartTime = time.Now()
+    }
     job.Started = true
     
     if status == JobStatusSuccess || status == JobStatusWarning || status == JobStatusError || status == JobStatusSkipped {
@@ -1275,7 +1280,8 @@ func (m *MultilineOutputManager) redrawDisplay() {
 
     // Build the display content
     var display strings.Builder
-    for _, job := range m.jobs {
+    for i := range m.jobs {
+        job := &m.jobs[i]
         // Get status icon and color
         icon, color := m.getStatusIconAndColor(job.Status)
         
@@ -1285,8 +1291,14 @@ func (m *MultilineOutputManager) redrawDisplay() {
             durationStr = fmt.Sprintf(" - in '%.3fs'", job.Duration.Seconds())
         }
         
+        // Format timestamp if job has started
+        timestampStr := ""
+        if job.Started && !job.StartTime.IsZero() {
+            timestampStr = " [" + formatISO8601Timestamp(job.StartTime) + "]"
+        }
+        
         // Build the job line
-        line := fmt.Sprintf("  %s%s%s %s %s%s", color, icon, colorReset, job.Name, job.Message, durationStr)
+        line := fmt.Sprintf("  %s%s%s %s %s%s%s", color, icon, colorReset, job.Name, job.Message, durationStr, timestampStr)
         display.WriteString(line)
         display.WriteString("\n")
     }

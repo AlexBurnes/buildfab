@@ -7,15 +7,18 @@ actions:
 
   - name: echo-test-one
     run: |
-      echo "Matrix test one: ${{ matrix.test_name-unknown }}"
+      echo "Matrix test one: ${{ matrix.test_name - unknown }}"
+      sleep 1
 
   - name: echo-test-two
     run: |
-      echo "Matrix test two: ${{ matrix.test_name-unknown }}"
+      echo "Matrix test two: ${{ matrix.test_name - unknown }}"
+      sleep 1
 
   - name: echo-test-three
     run: |
-      echo "Matrix test three: ${{ matrix.test_name-unknown }}"
+      echo "Matrix test three: ${{ matrix.test_name - unknown }}"
+      sleep 5
 
 
 stages:
