@@ -2,6 +2,18 @@
 
 ## What Works
 
+- **Matrix Stage Execution Fix** (v0.29.1 - October 31, 2025): Successfully fixed critical bugs in matrix stage execution including segmentation fault, step name matching, and output display (100% complete)
+  - **Segmentation Fault Fixed** - Fixed nil pointer dereference in `executeActionForDAGWithCallback` debug print when stepConfig was nil
+  - **Step Name Matching Fixed** - Fixed OrderedOutputManager to use `GetStepName()` for unique matrix step names instead of `step.Action`
+  - **Step Completion Names Fixed** - Updated all `OnStepComplete` and `OnStepError` calls to use unique step names from `stepConfig.GetStepName()`
+  - **Output Streaming Fixed** - Updated `runCustomActionForDAG` to pass unique step names to `executeCommandWithStreaming` so output is routed correctly
+  - **Step Config Lookup Fixed** - Changed step config lookup to use `GetStepName()` instead of `step.Action == nodeName` for matching unique matrix step names
+  - **Variable Substitution Working** - Matrix variables are now correctly substituted in action commands (showing "test1" and "test2" instead of "unknown")
+  - **All Matrix Steps Display** - All 6 steps (3 actions × 2 matrix values) now display correctly with unique names and proper output
+  - **Files Modified** - `pkg/buildfab/buildfab.go` (nil checks, step name usage, step config lookup), `pkg/buildfab/ordered_output.go` (step name matching)
+  - **Testing Complete** - Verified segmentation fault fixed, all matrix steps execute and display correctly, variables substituted properly
+  - **Production Ready** - Matrix stage execution fully functional with correct variable substitution, unique step names, and proper output display
+
 - **Variable Interpolation Default Values and DAG Skip Propagation Fixes** (v0.28.1 - October 31, 2025): Successfully fixed two critical bugs required before matrix-on-stage feature implementation (100% complete)
   - **Variable Interpolation Default Values** - Added support for default values in variable interpolation syntax
     - **Support Syntax** - `${{variable-default}}` for literal default values, `${{variable-otherVariable}}` for default from another variable

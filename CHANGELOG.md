@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.29.1] - 2025-10-31
+
+### Fixed
+- **Matrix Stage Execution**: Fixed critical bugs in matrix stage execution
+  - Fixed segmentation fault caused by nil pointer dereference in debug print when stepConfig was nil
+  - Fixed step name mismatch between executor and output manager causing steps to complete with wrong names
+  - Fixed output not displaying for matrix steps due to incorrect step name matching
+  - Fixed matrix variables not being substituted correctly due to missing step variable merging
+  - Updated `OnStepComplete` and `OnStepError` to use unique step names from `stepConfig.GetStepName()`
+  - Fixed `canShowStepStart` and `debugPrintState` to use `GetStepName()` for matrix step names
+  - Fixed step config lookup to use `GetStepName()` for matching unique matrix step names
+  - Updated `runCustomActionForDAG` to accept stepName parameter and pass it to `executeCommandWithStreaming`
+  - All matrix steps (3 actions × 2 matrix values = 6 steps) now execute and display correctly with unique names
+  - Matrix variables are now properly substituted in action commands (showing "test1" and "test2" instead of "unknown")
+  - Command output is correctly streamed and displayed for all matrix steps
+  - Files modified: `pkg/buildfab/buildfab.go`, `pkg/buildfab/ordered_output.go`
+
 ## [0.29.0] - 2025-10-31
 
 ### Documentation

@@ -2401,11 +2401,11 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 				}
 				
 				// Submit the step to the execution pool instead of spawning unlimited goroutines
-				// Find the step configuration
+				// Find the step configuration by matching step name (GetStepName handles unique names for matrix steps)
 				var stepConfig *Step
-				for _, step := range steps {
-					if step.Action == nodeName {
-						stepConfig = &step
+				for i := range steps {
+					if steps[i].GetStepName() == nodeName {
+						stepConfig = &steps[i]
 						break
 					}
 				}
@@ -2514,13 +2514,22 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 	
 	// Call step start callback if provided
 	stepName := action.Name
-	if stepConfig != nil && stepConfig.Action != "" {
-		stepName = stepConfig.Action // Use step action name for matrix steps (e.g., "container-platform-view.alpine:latest")
+	if stepConfig != nil {
+		// Use step's GetStepName() which handles unique names for matrix steps (e.g., "echo-stage.0.echo-test-one")
+		stepName = stepConfig.GetStepName()
+		if stepName == "" {
+			// Fallback to action name if step name is empty
+			stepName = action.Name
+		}
 	}
 	
 	// Debug: Print step information
 	if r.opts.Debug {
-		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] executeActionForDAGWithCallback: action.Name=%s, stepConfig.Action=%s, stepName=%s\n", action.Name, stepConfig.Action, stepName)
+		stepConfigAction := ""
+		if stepConfig != nil {
+			stepConfigAction = stepConfig.Action
+		}
+		fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] executeActionForDAGWithCallback: action.Name=%s, stepConfig.Action=%s, stepName=%s\n", action.Name, stepConfigAction, stepName)
 	}
 	
 	// Pass step variables to output manager BEFORE calling OnStepStart
@@ -2566,7 +2575,7 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 			
 			// Call step complete callback if provided
 			if r.opts.StepCallback != nil {
-				r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusError, variantErr.Error(), duration, "")
+				r.opts.StepCallback.OnStepComplete(ctx, stepName, StepStatusError, variantErr.Error(), duration, "")
 			}
 			
 			err = variantErr
@@ -2584,7 +2593,7 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 			
 			// Call step complete callback if provided
 			if r.opts.StepCallback != nil {
-				r.opts.StepCallback.OnStepComplete(ctx, action.Name, StepStatusSkipped, "no matching variant", duration, "")
+				r.opts.StepCallback.OnStepComplete(ctx, stepName, StepStatusSkipped, "no matching variant", duration, "")
 			}
 			
 			return nil // Not an error, just skipped
@@ -2605,7 +2614,7 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 		if effectiveAction.Uses != "" {
 			result, err = r.runBuiltInActionForDAG(ctx, effectiveAction)
 		} else {
-			result, err = r.runCustomActionForDAG(ctx, effectiveAction)
+			result, err = r.runCustomActionForDAG(ctx, effectiveAction, stepName)
 		}
 		duration := time.Since(start)
 		
@@ -2629,7 +2638,7 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 				status = StepStatusError
 				message = result.Message
 				if err != nil {
-					r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+					r.opts.StepCallback.OnStepError(ctx, stepName, err)
 				}
 			} else if result.Status == StatusWarn {
 				status = StepStatusWarn
@@ -2640,10 +2649,10 @@ func (r *Runner) executeActionForDAGWithCallback(ctx context.Context, action Act
 			} else if err != nil {
 				status = StepStatusError
 				message = err.Error()
-				r.opts.StepCallback.OnStepError(ctx, action.Name, err)
+				r.opts.StepCallback.OnStepError(ctx, stepName, err)
 			}
 			
-			r.opts.StepCallback.OnStepComplete(ctx, action.Name, status, message, duration, result.BufferedOutput)
+			r.opts.StepCallback.OnStepComplete(ctx, stepName, status, message, duration, result.BufferedOutput)
 		}
 
 		return err
@@ -3175,11 +3184,11 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 				}
 				
 				// Submit the step to the execution pool instead of spawning unlimited goroutines
-				// Find the step configuration
+				// Find the step configuration by matching step name (GetStepName handles unique names for matrix steps)
 				var stepConfig *Step
-				for _, step := range steps {
-					if step.Action == nodeName {
-						stepConfig = &step
+				for i := range steps {
+					if steps[i].GetStepName() == nodeName {
+						stepConfig = &steps[i]
 						break
 					}
 				}
@@ -3204,7 +3213,7 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 				task := Task{
 					ID: nodeName,
 					Execute: func(taskCtx context.Context) error {
-						result, err := r.executeActionForDAGWithStreamingControl(taskCtx, node.Action, streamingManager)
+						result, err := r.executeActionForDAGWithStreamingControl(taskCtx, node.Action, streamingManager, nodeName, &node.Step)
 						result.Name = nodeName
 						
 						// Call OnStepError immediately if the step failed
@@ -3812,23 +3821,40 @@ func getShellCommand(userShell string, verboseLevel int) (string, []string, erro
 }
 
 // executeActionForDAGWithStreamingControl executes a single action for DAG execution with streaming control
-func (r *Runner) executeActionForDAGWithStreamingControl(ctx context.Context, action Action, streamingManager *StreamingOutputManager) (Result, error) {
+func (r *Runner) executeActionForDAGWithStreamingControl(ctx context.Context, action Action, streamingManager *StreamingOutputManager, stepName string, step *Step) (Result, error) {
 	// Step start callback will be handled by displayStepInOrder when the step becomes current
 
 	var result Result
 	var err error
 
-	// Measure execution time from when the action actually starts to when it finishes
-	start := time.Now()
-	if action.Uses != "" {
-		result, err = r.runBuiltInActionForDAG(ctx, action)
+	// Create step for variable merging if we have step
+	var stepForVars Step
+	if step != nil {
+		stepForVars = *step
 	} else {
-		result, err = r.runCustomActionForDAGWithStreamingControl(ctx, action, streamingManager)
+		stepForVars = Step{Action: action.Name}
 	}
-	duration := time.Since(start)
+
+	// Wrap execution with step variable merging
+	execErr := r.withStepVariables(stepForVars, func() error {
+		// Measure execution time from when the action actually starts to when it finishes
+		start := time.Now()
+		if action.Uses != "" {
+			result, err = r.runBuiltInActionForDAG(ctx, action)
+		} else {
+			result, err = r.runCustomActionForDAGWithStreamingControl(ctx, action, streamingManager, stepName)
+		}
+		duration := time.Since(start)
+		
+		// Set the duration in the result
+		result.Duration = duration
+		
+		return err
+	})
 	
-	// Set the duration in the result
-	result.Duration = duration
+	if execErr != nil && err == nil {
+		err = execErr
+	}
 
 	// Step completion callback will be handled by displayStepInOrder when the step completes
 
@@ -3850,7 +3876,7 @@ func (r *Runner) executeActionForDAG(ctx context.Context, action Action) (Result
 	if action.Uses != "" {
 		result, err = r.runBuiltInActionForDAG(ctx, action)
 	} else {
-		result, err = r.runCustomActionForDAG(ctx, action)
+		result, err = r.runCustomActionForDAG(ctx, action, action.Name)
 	}
 	duration := time.Since(start)
 	
@@ -3881,20 +3907,46 @@ func (r *Runner) executeActionForDAGWithStep(ctx context.Context, action Action,
 		r.opts.StepCallback.OnStepStart(ctx, stepName)
 	}
 
-	// Execute the action (matrix steps now have interpolated actions)
-	start := time.Now()
+	// Create a step for variable merging if we have step
+	var stepForVars Step
+	if step != nil {
+		stepForVars = *step
+	} else {
+		stepForVars = Step{Action: action.Name}
+	}
+
+	// Wrap execution with step variable merging
 	var result Result
 	var err error
+	execErr := r.withStepVariables(stepForVars, func() error {
+		// Execute the action (matrix steps now have interpolated actions)
+		start := time.Now()
+		
+		// Use step's GetStepName() for matrix steps, fallback to action.Name
+		outputStepName := action.Name
+		if step != nil {
+			outputStepName = step.GetStepName()
+			if outputStepName == "" {
+				outputStepName = action.Name
+			}
+		}
+		
+		if action.Uses != "" {
+			result, err = r.runBuiltInActionForDAG(ctx, action)
+		} else {
+			result, err = r.runCustomActionForDAG(ctx, action, outputStepName)
+		}
+		duration := time.Since(start)
+		
+		// Set the duration in the result
+		result.Duration = duration
+		
+		return err
+	})
 	
-	if action.Uses != "" {
-		result, err = r.runBuiltInActionForDAG(ctx, action)
-	} else {
-		result, err = r.runCustomActionForDAG(ctx, action)
+	if execErr != nil && err == nil {
+		err = execErr
 	}
-	duration := time.Since(start)
-	
-	// Set the duration in the result
-	result.Duration = duration
 
 	return result, err
 }
@@ -3932,7 +3984,7 @@ func (r *Runner) runBuiltInActionForDAG(ctx context.Context, action Action) (Res
 }
 
 // runCustomActionForDAGWithStreamingControl executes a custom action for DAG execution with streaming control
-func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, action Action, streamingManager *StreamingOutputManager) (Result, error) {
+func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, action Action, streamingManager *StreamingOutputManager, stepName string) (Result, error) {
 	if action.Run == "" {
 		return Result{
 			Status:  StatusError,
@@ -3975,10 +4027,16 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	
+	// Use stepName if provided, otherwise fall back to action.Name
+	outputStepName := stepName
+	if outputStepName == "" {
+		outputStepName = action.Name
+	}
+	
 	var bufferedOutput string
-	if r.opts.VerboseLevel > 0 && streamingManager.ShouldStreamOutput(action.Name) {
+	if r.opts.VerboseLevel > 0 && streamingManager.ShouldStreamOutput(outputStepName) {
 		// Use streaming output for verbose mode and if this step should stream
-		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
+		err = r.executeCommandWithStreaming(ctx, cmd, outputStepName)
 	} else {
 		// Use buffered output for non-verbose mode or if this step shouldn't stream
 		var stdout, stderr strings.Builder
@@ -4020,7 +4078,7 @@ func (r *Runner) runCustomActionForDAGWithStreamingControl(ctx context.Context, 
 }
 
 // runCustomActionForDAG executes a custom action for DAG execution
-func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Result, error) {
+func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action, stepName string) (Result, error) {
 	// Check if action has container configuration
 	if action.Container != nil {
 		return r.runContainerAction(ctx, action)
@@ -4072,8 +4130,13 @@ func (r *Runner) runCustomActionForDAG(ctx context.Context, action Action) (Resu
 	var stdout, stderr strings.Builder
 	
 	if r.opts.VerboseLevel > 0 {
+		// Use stepName if provided, otherwise fall back to action.Name
+		outputStepName := stepName
+		if outputStepName == "" {
+			outputStepName = action.Name
+		}
 		// Use streaming output for verbose mode
-		err = r.executeCommandWithStreaming(ctx, cmd, action.Name)
+		err = r.executeCommandWithStreaming(ctx, cmd, outputStepName)
 	} else {
 		// Use buffered output for quiet mode
 		cmd.Stdout = &stdout

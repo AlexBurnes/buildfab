@@ -295,7 +295,7 @@ func (o *OrderedOutputManager) canShowStepStart(stepName string) bool {
 
     // Check if all previous steps have been completed
     for i := 0; i < stepIndex; i++ {
-        prevStepName := o.steps[i].Action
+        prevStepName := o.steps[i].GetStepName()
         if data, exists := o.stepData[prevStepName]; !exists || !data.Completed {
             if o.debug {
                 fmt.Fprintf(o.errorOutput, "[DEBUG] canShowStepStart: %s cannot show start, previous step %s not completed (exists: %v, completed: %v)\n",
@@ -875,7 +875,7 @@ func (o *OrderedOutputManager) debugPrintState() {
         if i > 0 {
             fmt.Fprintf(o.errorOutput, ", ")
         }
-        fmt.Fprintf(o.errorOutput, "%s", step.Action)
+        fmt.Fprintf(o.errorOutput, "%s", step.GetStepName())
     }
     fmt.Fprintf(o.errorOutput, "\n")
     fmt.Fprintf(o.errorOutput, "  Step Data:\n")

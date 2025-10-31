@@ -1,0 +1,38 @@
+project:
+  name: "matrix-stage"
+  modules: ["matrix-stage-testing"]
+
+
+actions:
+
+  - name: echo-test-one
+    run: |
+      echo "Matrix test one: ${{ matrix.test_name-unknown }}"
+
+  - name: echo-test-two
+    run: |
+      echo "Matrix test two: ${{ matrix.test_name-unknown }}"
+
+  - name: echo-test-three
+    run: |
+      echo "Matrix test three: ${{ matrix.test_name-unknown }}"
+
+
+stages:
+
+  echo-stage:
+    steps:
+      - action: echo-test-one
+      - action: echo-test-two
+        require: [echo-test-one]
+      - action: echo-test-three
+        require: [echo-test-two]
+
+  matrix-stage:
+    steps:
+      - stage: echo-stage
+        matrix:
+          values:
+            test_name: ["test1", "test2"]
+          strategy:
+            max_parallel: 1

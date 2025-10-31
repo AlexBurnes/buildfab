@@ -1401,6 +1401,11 @@ func (r *SimpleRunner) expandStageReferences(steps []Step) ([]Step, error) {
         
         // If step references a stage, expand it
         if step.Stage != "" {
+            // If step has both Stage and Matrix, skip expansion here - it will be handled by expandMatrixSteps
+            if step.Matrix != nil {
+                return []Step{step}, nil
+            }
+            
             // Get the referenced stage
             referencedStage, exists := r.config.GetStage(step.Stage)
             if !exists {
@@ -1488,61 +1493,218 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, error) {
 
         // Check if this step has matrix configuration
         if step.Matrix != nil {
-            if r.opts.Debug {
-                fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding matrix step: %s\n", step.Action)
-            }
-
-            // Get the action for this step
-            action, exists := r.config.GetAction(step.Action)
-            if !exists {
-                return nil, fmt.Errorf("action not found: %s", step.Action)
-            }
-
-            // Extract matrix variables from CLI variables
-            matrixVars := make(map[string]string)
-            for key, value := range r.opts.Variables {
-                if strings.HasPrefix(key, "matrix.") {
-                    matrixKey := strings.TrimPrefix(key, "matrix.")
-                    matrixVars[matrixKey] = value
+            // Handle matrix stage steps (step with both Stage and Matrix)
+            if step.Stage != "" {
+                if r.opts.Debug {
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding matrix stage step: %s\n", step.Stage)
                 }
+
+                // Get the referenced stage
+                referencedStage, exists := r.config.GetStage(step.Stage)
+                if !exists {
+                    return nil, fmt.Errorf("stage not found: %s", step.Stage)
+                }
+
+                // Extract matrix variables from CLI variables
+                cliMatrixVars := make(map[string]string)
+                for key, value := range r.opts.Variables {
+                    if strings.HasPrefix(key, "matrix.") {
+                        cliMatrixVars[key] = value
+                    }
+                }
+
+                // Create matrix expander with CLI matrix variables
+                expander := NewMatrixExpander(r.config, cliMatrixVars)
+
+                // Generate matrix combinations
+                matrixValues := make(map[string][]interface{})
+                for key, values := range step.Matrix.Values {
+                    matrixValues[key] = values
+                }
+
+                // Override with CLI-provided matrix values
+                for cliKey, cliValue := range cliMatrixVars {
+                    // Remove "matrix." prefix for key matching
+                    keyWithoutPrefix := strings.TrimPrefix(cliKey, "matrix.")
+                    if _, existsInMatrix := matrixValues[keyWithoutPrefix]; existsInMatrix {
+                        matrixValues[keyWithoutPrefix] = []interface{}{cliValue}
+                    }
+                }
+
+                combinations := expander.generateCombinations(matrixValues)
+
+                if r.opts.Debug {
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Generated %d matrix combinations for stage %s\n", len(combinations), step.Stage)
+                }
+
+                // For each matrix combination, expand the stage with matrix variables
+                for jobIdx, combination := range combinations {
+                    // Create matrix variables for this job (with "matrix." prefix)
+                    matrixVars := make(map[string]string)
+                    for key, value := range combination {
+                        matrixVars[fmt.Sprintf("matrix.%s", key)] = fmt.Sprintf("%v", value)
+                    }
+
+                    // Merge with global variables (matrix vars override global)
+                    jobVariables := make(map[string]string)
+                    for k, v := range r.opts.Variables {
+                        jobVariables[k] = v
+                    }
+                    for k, v := range matrixVars {
+                        jobVariables[k] = v
+                    }
+
+                    // Temporarily set variables for stage expansion
+                    originalVars := r.opts.Variables
+                    r.opts.Variables = jobVariables
+
+                    // Expand stage reference with matrix variables in context
+                    expandedStageSteps, err := r.expandStageReferences(referencedStage.Steps)
+                    if err != nil {
+                        r.opts.Variables = originalVars
+                        return nil, fmt.Errorf("failed to expand stage %s for matrix job %d: %w", step.Stage, jobIdx, err)
+                    }
+
+                    // Restore original variables
+                    r.opts.Variables = originalVars
+
+                    // Apply matrix variables to all expanded steps and ensure unique names
+                    baseName := step.Stage
+                    if step.Name != "" {
+                        baseName = step.Name
+                    }
+
+                    for stepIdx := range expandedStageSteps {
+                        // Merge matrix variables into step variables
+                        if expandedStageSteps[stepIdx].Variables == nil {
+                            expandedStageSteps[stepIdx].Variables = make(map[string]string)
+                        }
+                        for k, v := range matrixVars {
+                            expandedStageSteps[stepIdx].Variables[k] = v
+                        }
+
+                        // Ensure unique step names across matrix jobs
+                        originalStepName := expandedStageSteps[stepIdx].GetStepName()
+                        uniqueName := fmt.Sprintf("%s.%d.%s", baseName, jobIdx, originalStepName)
+
+                        if expandedStageSteps[stepIdx].Name == "" {
+                            expandedStageSteps[stepIdx].Name = uniqueName
+                        } else {
+                            expandedStageSteps[stepIdx].Name = fmt.Sprintf("%s.%d.%s", baseName, jobIdx, expandedStageSteps[stepIdx].Name)
+                        }
+
+                        // Inherit properties from parent step
+                        if step.OnError != "" && expandedStageSteps[stepIdx].OnError == "" {
+                            expandedStageSteps[stepIdx].OnError = step.OnError
+                        }
+                        if step.If != "" {
+                            if expandedStageSteps[stepIdx].If == "" {
+                                expandedStageSteps[stepIdx].If = step.If
+                            } else {
+                                expandedStageSteps[stepIdx].If = fmt.Sprintf("(%s) && (%s)", step.If, expandedStageSteps[stepIdx].If)
+                            }
+                        }
+                    }
+
+                    // Update dependencies within the same matrix job
+                    stepNameMap := make(map[string]string)
+                    for stepIdx := range expandedStageSteps {
+                        originalStepName := expandedStageSteps[stepIdx].Action
+                        if expandedStageSteps[stepIdx].Stage != "" {
+                            originalStepName = expandedStageSteps[stepIdx].Stage
+                        }
+                        newStepName := expandedStageSteps[stepIdx].Name
+                        stepNameMap[originalStepName] = newStepName
+                    }
+
+                    // Update Require and DependsOn to use new names
+                    for stepIdx := range expandedStageSteps {
+                        updatedRequire := make([]string, 0, len(expandedStageSteps[stepIdx].Require))
+                        for _, dep := range expandedStageSteps[stepIdx].Require {
+                            if newName, exists := stepNameMap[dep]; exists {
+                                updatedRequire = append(updatedRequire, newName)
+                            } else {
+                                updatedRequire = append(updatedRequire, dep)
+                            }
+                        }
+                        expandedStageSteps[stepIdx].Require = updatedRequire
+
+                        updatedDependsOn := make([]string, 0, len(expandedStageSteps[stepIdx].DependsOn))
+                        for _, dep := range expandedStageSteps[stepIdx].DependsOn {
+                            if newName, exists := stepNameMap[dep]; exists {
+                                updatedDependsOn = append(updatedDependsOn, newName)
+                            } else {
+                                updatedDependsOn = append(updatedDependsOn, dep)
+                            }
+                        }
+                        expandedStageSteps[stepIdx].DependsOn = updatedDependsOn
+                    }
+
+                    // Add expanded steps for this matrix job
+                    expandedSteps = append(expandedSteps, expandedStageSteps...)
+                }
+
+                continue
             }
-            
 
-            // Create matrix expander with CLI matrix variables
-            expander := NewMatrixExpander(r.config, matrixVars)
+            // Handle matrix action steps (step with Action and Matrix)
+            if step.Action != "" {
+                if r.opts.Debug {
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding matrix action step: %s\n", step.Action)
+                }
 
-            // Expand matrix into individual steps
-            matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
-            if err != nil {
-                return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
-            }
+                // Get the action for this step
+                action, exists := r.config.GetAction(step.Action)
+                if !exists {
+                    return nil, fmt.Errorf("action not found: %s", step.Action)
+                }
 
-            // Assign pool ID if max_parallel is specified
-            strategy := step.Matrix.Strategy
-            if strategy.MaxParallel > 0 {
-                poolID := fmt.Sprintf("matrix-%s", step.Action)
+                // Extract matrix variables from CLI variables
+                matrixVars := make(map[string]string)
+                for key, value := range r.opts.Variables {
+                    if strings.HasPrefix(key, "matrix.") {
+                        matrixKey := strings.TrimPrefix(key, "matrix.")
+                        matrixVars[matrixKey] = value
+                    }
+                }
                 
-                // Assign pool ID to all expanded steps
-                for i := range matrixSteps {
-                    matrixSteps[i].PoolID = poolID
+
+                // Create matrix expander with CLI matrix variables
+                expander := NewMatrixExpander(r.config, matrixVars)
+
+                // Expand matrix into individual steps
+                matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
+                if err != nil {
+                    return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+                }
+
+                // Assign pool ID if max_parallel is specified
+                strategy := step.Matrix.Strategy
+                if strategy.MaxParallel > 0 {
+                    poolID := fmt.Sprintf("matrix-%s", step.Action)
+                    
+                    // Assign pool ID to all expanded steps
+                    for i := range matrixSteps {
+                        matrixSteps[i].PoolID = poolID
+                    }
+                    
+                    if r.opts.Debug {
+                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Assigned %d matrix steps to pool %s (max_parallel=%d)\n",
+                            len(matrixSteps), poolID, strategy.MaxParallel)
+                    }
                 }
                 
                 if r.opts.Debug {
-                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Assigned %d matrix steps to pool %s (max_parallel=%d)\n",
-                        len(matrixSteps), poolID, strategy.MaxParallel)
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanded into %d steps\n", len(matrixSteps))
+                    for j, matrixStep := range matrixSteps {
+                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix step %d: Action=%s, PoolID=%s, Description=%s\n", 
+                            j, matrixStep.Action, matrixStep.PoolID, matrixStep.Description)
+                    }
                 }
-            }
-            
-            if r.opts.Debug {
-                fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanded into %d steps\n", len(matrixSteps))
-                for j, matrixStep := range matrixSteps {
-                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Matrix step %d: Action=%s, PoolID=%s, Description=%s\n", 
-                        j, matrixStep.Action, matrixStep.PoolID, matrixStep.Description)
-                }
-            }
 
-            // Add expanded steps
-            expandedSteps = append(expandedSteps, matrixSteps...)
+                // Add expanded steps
+                expandedSteps = append(expandedSteps, matrixSteps...)
+            }
         } else {
             // Regular step - add as is
             expandedSteps = append(expandedSteps, step)
