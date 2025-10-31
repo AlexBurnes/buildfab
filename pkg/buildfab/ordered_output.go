@@ -14,6 +14,12 @@ import (
     "golang.org/x/term"
 )
 
+// formatISO8601Timestamp formats a time in ISO8601 format with fractional seconds
+// Format: 2025-10-31T14:30:45.123456Z
+func formatISO8601Timestamp(t time.Time) string {
+    return t.UTC().Format("2006-01-02T15:04:05.000000Z")
+}
+
 // OrderedOutputManager manages step output in proper order using a queue-based approach
 // This implements the architecture where:
 // 1. Executor only runs tasks and reports to output manager, no direct output
@@ -419,7 +425,8 @@ func (o *OrderedOutputManager) checkAndShowNextStep() {
 // showStepStart shows the start message for a step
 func (o *OrderedOutputManager) showStepStart(stepName string) {
     if o.verboseLevel > 0 {
-        fmt.Fprintf(o.errorOutput, "  💻 %s\n", stepName)
+        timestamp := formatISO8601Timestamp(time.Now())
+        fmt.Fprintf(o.errorOutput, "  💻 %s [%s]\n", stepName, timestamp)
 
         // Show container command for container actions (verbose level 2+)
         if o.verboseLevel >= 2 {

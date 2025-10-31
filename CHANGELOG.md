@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.0] - 2025-10-31
+
+### Added
+- **ISO8601 Timestamps for Stage and Step Execution**: Added timestamp display in ISO8601 format with fractional seconds
+  - Stage start timestamps: Shows `[2025-10-31T10:57:38.649031Z]` when stage execution begins
+  - Step/Action start timestamps: Shows `[2025-10-31T10:57:38.649211Z]` when each step (action) starts execution
+  - Format: ISO8601 with 6-digit fractional seconds in UTC (e.g., `2025-10-31T10:57:38.649031Z`)
+  - Timestamps appear in brackets `[timestamp]` after stage/step names for precise timing information
+  - Works for all stages and steps including matrix-expanded steps
+  - Implementation: Added `formatISO8601Timestamp()` function in `pkg/buildfab/ordered_output.go`
+  - Files modified: `pkg/buildfab/simple.go`, `pkg/buildfab/ordered_output.go`
+
 ## [0.29.1] - 2025-10-31
 
 ### Fixed

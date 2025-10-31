@@ -128,11 +128,12 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         return r.executeStageDryRun(ctx, stageName, stepsWithExpandedStages)
     }
 
-    // Print stage start message
-    fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s\n\n", stageName)
-
     // Start timing the stage execution
     stageStart := time.Now()
+    
+    // Print stage start message with timestamp
+    timestamp := formatISO8601Timestamp(stageStart)
+    fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s [%s]\n\n", stageName, timestamp)
 
     // Expand matrix steps into individual steps before creating output manager
     expandedSteps, err := r.expandMatrixSteps(stepsWithExpandedStages)
@@ -446,7 +447,8 @@ func (c *SimpleStepCallback) StoreBufferedOutput(stepName, stdout, stderr string
 
 func (c *SimpleStepCallback) OnStepStart(ctx context.Context, stepName string) {
     if c.verboseLevel > 0 {
-        fmt.Fprintf(c.errorOutput, "  💻 %s\n", stepName)
+        timestamp := formatISO8601Timestamp(time.Now())
+        fmt.Fprintf(c.errorOutput, "  💻 %s [%s]\n", stepName, timestamp)
         
         // Show container command for container actions (verbose level 2+)
         if c.verboseLevel >= 2 {

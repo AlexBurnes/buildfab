@@ -2,6 +2,17 @@
 
 ## What Works
 
+- **ISO8601 Timestamps for Stage and Step Execution** (v0.30.0 - October 31, 2025): Successfully added timestamp display in ISO8601 format with fractional seconds (100% complete)
+  - **Stage Start Timestamps** - Displays `[2025-10-31T10:57:38.649031Z]` when stage execution begins
+  - **Step/Action Start Timestamps** - Displays `[2025-10-31T10:57:38.649211Z]` when each step (action) starts execution
+  - **Format** - ISO8601 with 6-digit fractional seconds in UTC (e.g., `2025-10-31T10:57:38.649031Z`)
+  - **Display Location** - Timestamps appear in brackets `[timestamp]` after stage/step names
+  - **Coverage** - Works for all stages and steps including matrix-expanded steps
+  - **Implementation** - Added `formatISO8601Timestamp()` function in `pkg/buildfab/ordered_output.go`
+  - **Files Modified** - `pkg/buildfab/simple.go` (stage timestamp, SimpleStepCallback), `pkg/buildfab/ordered_output.go` (timestamp function, step display)
+  - **Testing Complete** - Verified timestamps display correctly for stages and all step types
+  - **Production Ready** - Precise timing information available for all execution events
+
 - **Matrix Stage Execution Fix** (v0.29.1 - October 31, 2025): Successfully fixed critical bugs in matrix stage execution including segmentation fault, step name matching, and output display (100% complete)
   - **Segmentation Fault Fixed** - Fixed nil pointer dereference in `executeActionForDAGWithCallback` debug print when stepConfig was nil
   - **Step Name Matching Fixed** - Fixed OrderedOutputManager to use `GetStepName()` for unique matrix step names instead of `step.Action`
