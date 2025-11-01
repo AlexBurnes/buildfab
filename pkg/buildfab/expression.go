@@ -42,8 +42,15 @@ func NewExpressionContext(variables map[string]string) *ExpressionContext {
 	}
 
 	// Copy user variables (these can override platform variables)
+	// Separate matrix variables into ctx.Matrix
 	for k, v := range variables {
-		ctx.Variables[k] = v
+		if strings.HasPrefix(k, "matrix.") {
+			// Extract matrix key (remove "matrix." prefix)
+			matrixKey := k[7:] // len("matrix.") = 7
+			ctx.Matrix[matrixKey] = v
+		} else {
+			ctx.Variables[k] = v
+		}
 	}
 
 	// Set default values

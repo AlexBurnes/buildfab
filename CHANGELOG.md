@@ -8,16 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.4] - 2025-11-01
+
+### Fixed
+- **Expression Context Matrix Variables**: Fixed matrix variables not being properly separated in expression context
+  - `NewExpressionContext()` now properly separates `matrix.*` variables into `ctx.Matrix` map for expression evaluation
+  - Matrix variable references like `matrix.compiler` now correctly resolve to the matrix values
+  - Completes the fix from v0.30.3 for full matrix variable support in if conditions
+  - Files modified: `pkg/buildfab/expression.go`
+
 ## [0.30.3] - 2025-11-01
 
 ### Fixed
-- **If Condition Evaluation with Matrix Variables**: Fixed if conditions not having access to matrix variables
+- **If Condition Evaluation with Matrix Variables**: Fixed if conditions not having access to matrix variables (partial fix)
   - Step if conditions were only receiving global variables, not step-level variables containing matrix values
   - `shouldExecuteStepByCondition()` in both `Runner` and `SimpleRunner` now merges step variables with global variables
   - Matrix variables (e.g., `matrix.compiler`, `matrix.image`) are now available in if condition expressions
   - Step variables take precedence over global variables when evaluating conditions
   - Enables conditional execution based on matrix combinations: `if: "!(os == 'centos' && os_version == '7' && matrix.compiler == 'clang')"`
   - Platform variables (os, os_version, arch, etc.) remain available in if conditions
+  - Note: This was a partial fix; full fix completed in v0.30.4 with expression context changes
   - Files modified: `pkg/buildfab/buildfab.go`, `pkg/buildfab/simple.go`
 
 ## [0.30.2] - 2025-10-31
