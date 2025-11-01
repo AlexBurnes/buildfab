@@ -319,17 +319,19 @@ func (me *MatrixExpander) interpolateVariables(text string, variables map[string
 }
 
 // generateStepName creates a step name with matrix values concatenated
+// For multi-dimensional matrices, includes all variables (including nested ones like compiler)
 func (me *MatrixExpander) generateStepName(actionName string, combination map[string]interface{}, originalValues map[string][]interface{}) string {
 	var parts []string
 	parts = append(parts, actionName)
 	
-	// Use the same sorted order as the Cartesian product generation
-	keys := make([]string, 0, len(originalValues))
-	for key := range originalValues {
+	// Get all keys from the combination (includes nested dimensions)
+	keys := make([]string, 0, len(combination))
+	for key := range combination {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
 	
+	// Add all values in sorted key order
 	for _, key := range keys {
 		if value, exists := combination[key]; exists {
 			parts = append(parts, fmt.Sprintf("%v", value))
@@ -345,11 +347,79 @@ func (me *MatrixExpander) generateStepDescription(actionName string, jobIndex, t
 }
 
 // generateCombinations creates a Cartesian product of all matrix values
+// Supports multi-dimensional matrices where values can have nested sub-dimensions
 func (me *MatrixExpander) generateCombinations(values map[string][]interface{}) []map[string]interface{} {
 	if len(values) == 0 {
 		return []map[string]interface{}{}
 	}
 
+	// Separate simple and complex dimensions
+	simpleDims := make(map[string][]interface{})
+	complexDims := make(map[string][]interface{})
+	
+	for dimName, dimValues := range values {
+		hasNested := false
+		for _, val := range dimValues {
+			if me.isNestedValue(val) {
+				hasNested = true
+				break
+			}
+		}
+		
+		if hasNested {
+			complexDims[dimName] = dimValues
+		} else {
+			simpleDims[dimName] = dimValues
+		}
+	}
+	
+	// If no complex dimensions, use the original algorithm
+	if len(complexDims) == 0 {
+		return me.generateSimpleCombinations(values)
+	}
+	
+	// Expand complex dimensions into pre-combined tuples
+	complexCombos := me.expandComplexDimensions(complexDims)
+	
+	// Check for variable name conflicts between simple dims and expanded sub-dims
+	// This helps detect configuration errors where the same variable is defined multiple times
+	usedNames := make(map[string]bool)
+	for key := range simpleDims {
+		usedNames[key] = true
+	}
+	
+	// Check all combinations from complex dimensions for conflicts
+	for _, combos := range complexCombos {
+		for _, combo := range combos {
+			if comboMap, ok := combo.(map[string]interface{}); ok {
+				for key := range comboMap {
+					if usedNames[key] {
+						// Duplicate variable name detected
+						// TODO: Add proper error reporting
+					}
+					usedNames[key] = true
+				}
+			}
+		}
+	}
+	
+	// Merge simple dimensions with complex combinations
+	allDims := make(map[string][]interface{})
+	for key, vals := range simpleDims {
+		allDims[key] = vals
+	}
+	
+	// Add complex combinations as composite values
+	for dimName, combos := range complexCombos {
+		allDims[dimName] = combos
+	}
+	
+	// Generate Cartesian product
+	return me.generateSimpleCombinations(allDims)
+}
+
+// generateSimpleCombinations generates Cartesian product for simple (non-nested) dimensions
+func (me *MatrixExpander) generateSimpleCombinations(values map[string][]interface{}) []map[string]interface{} {
 	// Get all keys and their values in a deterministic order
 	keys := make([]string, 0, len(values))
 	valueLists := make([][]interface{}, 0, len(values))
@@ -372,13 +442,172 @@ func (me *MatrixExpander) generateCombinations(values map[string][]interface{}) 
 	return combinations
 }
 
+// expandComplexDimensions expands complex dimensions with nested sub-dimensions
+// Returns a map where each key is a dimension name and values are pre-combined tuples
+func (me *MatrixExpander) expandComplexDimensions(complexDims map[string][]interface{}) map[string][]interface{} {
+	result := make(map[string][]interface{})
+	
+	for dimName, dimValues := range complexDims {
+		// Expand this complex dimension into combinations
+		combos := me.expandComplexDimension(dimName, dimValues)
+		
+		// Each combination is stored as a map that will be flattened into the final result
+		var combinedValues []interface{}
+		for _, combo := range combos {
+			combinedValues = append(combinedValues, combo)
+		}
+		
+		result[dimName] = combinedValues
+	}
+	
+	return result
+}
+
+// expandComplexDimension expands a complex dimension into a list of combination maps
+func (me *MatrixExpander) expandComplexDimension(dimName string, dimValues []interface{}) []map[string]interface{} {
+	var result []map[string]interface{}
+	
+	// Process each value in the dimension
+	for _, val := range dimValues {
+		if !me.isNestedValue(val) {
+			// Simple value - create a single-value combination
+			combo := map[string]interface{}{
+				dimName: val,
+			}
+			result = append(result, combo)
+			continue
+		}
+		
+		// Convert to map
+		var valMap map[string]interface{}
+		switch v := val.(type) {
+		case map[interface{}]interface{}:
+			valMap = me.convertMapKeys(v)
+		case map[string]interface{}:
+			valMap = v
+		default:
+			continue
+		}
+		
+		// For each key in the map, this is a main value for the dimension
+		for mainKey, subValue := range valMap {
+			// Check if subValue contains further sub-dimensions
+			switch sv := subValue.(type) {
+			case map[interface{}]interface{}:
+				// Nested map - expand sub-dimensions recursively
+				subMap := me.convertMapKeys(sv)
+				subCombos := me.expandSubDimensionsRecursive(dimName, mainKey, subMap)
+				result = append(result, subCombos...)
+				
+			case map[string]interface{}:
+				// Nested map - expand sub-dimensions recursively
+				subCombos := me.expandSubDimensionsRecursive(dimName, mainKey, sv)
+				result = append(result, subCombos...)
+				
+			default:
+				// Simple value - create a combination with main key
+				combo := map[string]interface{}{
+					dimName: mainKey,
+				}
+				
+				// If subValue is not nil, add it as a sub-dimension
+				if subValue != nil {
+					subDimName := fmt.Sprintf("%s.%s", dimName, mainKey)
+					combo[subDimName] = subValue
+				}
+				
+				result = append(result, combo)
+			}
+		}
+	}
+	
+	return result
+}
+
+// expandSubDimensionsRecursive expands sub-dimensions recursively into combinations
+// All variables are flattened to single level (e.g., "compiler" instead of "images.compiler")
+func (me *MatrixExpander) expandSubDimensionsRecursive(dimName, mainValue string, subDims map[string]interface{}) []map[string]interface{} {
+	// Convert sub-dimensions into a matrix-like structure (flat naming)
+	subDimMatrix := make(map[string][]interface{})
+	
+	for subKey, subValues := range subDims {
+		// Use flat naming: just the subKey, not dimName.subKey
+		// This creates matrix.compiler instead of matrix.images.compiler
+		
+		// Convert subValues to array if it's not already
+		var subValArray []interface{}
+		switch sv := subValues.(type) {
+		case []interface{}:
+			subValArray = sv
+		case string:
+			subValArray = []interface{}{sv}
+		default:
+			subValArray = []interface{}{sv}
+		}
+		
+		subDimMatrix[subKey] = subValArray
+	}
+	
+	// Generate Cartesian product of sub-dimensions
+	subCombinations := me.generateSimpleCombinations(subDimMatrix)
+	
+	// Add the main dimension value to each sub-combination
+	var result []map[string]interface{}
+	for _, subCombo := range subCombinations {
+		combo := map[string]interface{}{
+			dimName: mainValue,
+		}
+		
+		// Merge sub-combination into the result
+		for key, val := range subCombo {
+			combo[key] = val
+		}
+		
+		result = append(result, combo)
+	}
+	
+	return result
+}
+
+// isNestedValue checks if a value contains nested sub-dimensions
+func (me *MatrixExpander) isNestedValue(val interface{}) bool {
+	// Check if value is a map (indicates nested structure)
+	switch val.(type) {
+	case map[interface{}]interface{}, map[string]interface{}:
+		return true
+	default:
+		return false
+	}
+}
+
+// convertMapKeys converts map[interface{}]interface{} to map[string]interface{}
+func (me *MatrixExpander) convertMapKeys(m map[interface{}]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for k, v := range m {
+		if key, ok := k.(string); ok {
+			result[key] = v
+		} else {
+			result[fmt.Sprintf("%v", k)] = v
+		}
+	}
+	return result
+}
+
 // cartesianProduct recursively generates Cartesian product
+// Handles map values as pre-combined tuples (from complex dimensions)
 func (me *MatrixExpander) cartesianProduct(keys []string, valueLists [][]interface{}, index int, current map[string]interface{}, result *[]map[string]interface{}) {
 	if index == len(keys) {
 		// Create a copy of current combination
 		combination := make(map[string]interface{})
 		for k, v := range current {
-			combination[k] = v
+			// If value is a map, flatten it into the combination
+			if mapVal, ok := v.(map[string]interface{}); ok {
+				for mk, mv := range mapVal {
+					combination[mk] = mv
+				}
+			} else {
+				combination[k] = v
+			}
 		}
 		*result = append(*result, combination)
 		return

@@ -1,0 +1,49 @@
+project:
+  name: "multidim-matrix-simple"
+
+actions:
+  - name: build
+    run: |
+      echo "============================================"
+      echo "Building application..."
+      echo "  Platform: ${{ matrix.platform }}"
+      echo "  Compiler: ${{ matrix.compiler }}"
+      echo "  Build type: ${{ matrix.build_type }}"
+      echo "============================================"
+      sleep 0.5
+
+stages:
+  cross-compile:
+    steps:
+      - action: build
+        matrix:
+          values:
+            platform:
+              - linux:
+                  compiler: ["gcc", "clang"]
+              - windows:
+                  compiler: ["msvc", "mingw"]
+            build_type: ["Release", "Debug"]
+          strategy:
+            max_parallel: 4
+            fail_fast: false
+
+# This configuration generates 8 combinations:
+# 
+# Platform: linux
+#   - Release + gcc
+#   - Release + clang
+#   - Debug + gcc
+#   - Debug + clang
+#
+# Platform: windows
+#   - Release + msvc
+#   - Release + mingw
+#   - Debug + msvc
+#   - Debug + mingw
+#
+# Matrix variables available in actions:
+#   ${{ matrix.platform }}   - linux, windows
+#   ${{ matrix.compiler }}   - gcc, clang, msvc, mingw
+#   ${{ matrix.build_type }} - Release, Debug
+

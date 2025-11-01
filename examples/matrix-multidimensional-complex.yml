@@ -1,0 +1,70 @@
+project:
+  name: "multidim-matrix-complex"
+
+actions:
+  - name: configure
+    run: |
+      echo "Configuring build environment..."
+      echo "  OS: ${{ matrix.os }}"
+      echo "  Version: ${{ matrix.version }}"
+      echo "  Architecture: ${{ matrix.arch }}"
+      echo "  Compiler: ${{ matrix.compiler }}"
+
+  - name: build
+    run: |
+      echo "Building project..."
+      echo "  Configuration: ${{ matrix.config }}"
+      echo "  Target: ${{ matrix.os }}-${{ matrix.arch }}"
+      echo "  Toolchain: ${{ matrix.compiler }}"
+
+  - name: test
+    run: |
+      echo "Running tests on ${{ matrix.os }} ${{ matrix.version }}..."
+      sleep 1
+
+stages:
+  # Full build matrix with multiple nested dimensions
+  full-build:
+    steps:
+      - action: configure
+      - action: build
+        require: [configure]
+        matrix:
+          values:
+            os:
+              - ubuntu:
+                  version: ["20.04", "22.04"]
+                  arch: ["amd64", "arm64"]
+                  compiler: ["gcc-11", "gcc-12", "clang-14"]
+              - centos:
+                  version: ["7", "8", "9"]
+                  arch: ["amd64"]
+                  compiler: ["gcc"]
+              - alpine:
+                  version: ["3.18", "3.19"]
+                  arch: ["amd64", "arm64"]
+                  compiler: ["gcc", "clang"]
+            config: ["Release", "Debug"]
+          strategy:
+            max_parallel: 8
+            fail_fast: false
+      - action: test
+        require: [build]
+
+# This generates a large matrix:
+# 
+# Ubuntu combinations: 2 versions × 2 archs × 3 compilers = 12
+# CentOS combinations: 3 versions × 1 arch × 1 compiler = 3  
+# Alpine combinations: 2 versions × 2 archs × 2 compilers = 8
+# Subtotal: 23 OS configurations
+#
+# With 2 config types (Release, Debug):
+# Total: 23 × 2 = 46 build combinations
+#
+# Matrix variables:
+#   ${{ matrix.os }}       - ubuntu, centos, alpine
+#   ${{ matrix.version }}  - OS version (20.04, 7, 3.18, etc.)
+#   ${{ matrix.arch }}     - amd64, arm64
+#   ${{ matrix.compiler }} - gcc-11, gcc-12, clang-14, gcc, clang
+#   ${{ matrix.config }}   - Release, Debug
+

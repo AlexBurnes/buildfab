@@ -9,6 +9,7 @@ This document provides comprehensive documentation of buildfab features with det
 - [Action Variants](#action-variants)
 - [Conditional Execution](#conditional-execution)
 - [Matrix Feature](#matrix-feature)
+  - [Multi-Dimensional Matrices](#multi-dimensional-matrices)
 - [Include System](#include-system)
 - [Variable Interpolation](#variable-interpolation)
 - [Built-in Actions](#built-in-actions)
@@ -292,6 +293,145 @@ actions:
       echo "Running tests on ${{ matrix.os }}"
       # Your test commands here
 ```
+
+### Multi-Dimensional Matrices
+
+buildfab supports multi-dimensional matrices where dimensions can have nested sub-dimensions. This enables complex build matrices like testing multiple OS versions with different compiler sets.
+
+#### Simple Multi-Dimensional Matrix
+
+```yaml
+stages:
+  cross-compile:
+    steps:
+      - action: build
+        matrix:
+          values:
+            platform:
+              - linux:
+                  compiler: ["gcc", "clang"]
+              - windows:
+                  compiler: ["msvc", "mingw"]
+            build_type: ["Release", "Debug"]
+          strategy:
+            max_parallel: 4
+
+actions:
+  - name: build
+    run: |
+      echo "Building for ${{ matrix.platform }} with ${{ matrix.compiler }}"
+      echo "Build type: ${{ matrix.build_type }}"
+```
+
+This generates **8 combinations**:
+- `linux × gcc × Release`
+- `linux × gcc × Debug`
+- `linux × clang × Release`
+- `linux × clang × Debug`
+- `windows × msvc × Release`
+- `windows × msvc × Debug`
+- `windows × mingw × Release`
+- `windows × mingw × Debug`
+
+#### Complex Multi-Dimensional Matrix
+
+For more complex scenarios with varying sub-dimensions per main dimension:
+
+```yaml
+stages:
+  full-build:
+    steps:
+      - action: build-and-test
+        matrix:
+          values:
+            images:
+              - centos7:
+                  compiler: "gcc"
+              - centos8:
+                  compiler: ["gcc", "clang"]
+              - centos9:
+                  compiler: ["gcc", "clang", "icc"]
+            builds: ["Release", "Debug"]
+          strategy:
+            max_parallel: 6
+            fail_fast: false
+
+actions:
+  - name: build-and-test
+    run: |
+      echo "Building on ${{ matrix.images }}"
+      echo "Compiler: ${{ matrix.compiler }}"
+      echo "Config: ${{ matrix.builds }}"
+```
+
+This generates **12 combinations**:
+- CentOS 7: 1 compiler × 2 build types = 2 combinations
+- CentOS 8: 2 compilers × 2 build types = 4 combinations  
+- CentOS 9: 3 compilers × 2 build types = 6 combinations
+- **Total: 12 combinations**
+
+#### Flat Variable Naming
+
+All matrix variables are flattened to a single level for easy access:
+- `${{ matrix.images }}` - The main dimension value (e.g., "centos7", "centos8")
+- `${{ matrix.compiler }}` - The sub-dimension value (e.g., "gcc", "clang", "icc")
+- `${{ matrix.builds }}` - Another dimension value (e.g., "Release", "Debug")
+
+**Note**: Variables use flat naming (`matrix.compiler`) instead of nested naming (`matrix.images.compiler`). This prevents naming conflicts and simplifies variable access in actions.
+
+#### Step Naming with Multi-Dimensional Matrices
+
+Generated steps include all matrix dimensions in their names for clear identification:
+
+```
+build-and-test.Release.gcc.centos7
+build-and-test.Release.gcc.centos8
+build-and-test.Release.clang.centos8
+build-and-test.Debug.icc.centos9
+```
+
+Each step name follows the pattern: `action.value1.value2.value3` (alphabetically sorted dimensions).
+
+#### Real-World Example: Container Testing
+
+```yaml
+stages:
+  container-tests:
+    steps:
+      - action: container-test
+        matrix:
+          values:
+            image:
+              - python:
+                  tag: ["3.9", "3.10", "3.11"]
+                  suite: ["unit", "integration"]
+              - node:
+                  tag: ["18", "20"]
+                  suite: ["unit", "e2e"]
+              - alpine:
+                  tag: ["3.18"]
+                  suite: ["unit"]
+          strategy:
+            max_parallel: 6
+            continue_on_error: true
+
+actions:
+  - name: container-test
+    container:
+      image:
+        from: ${{ matrix.image }}:${{ matrix.tag }}
+      run: |
+        echo "Testing in ${{ matrix.image }}:${{ matrix.tag }}"
+        echo "Running suite: ${{ matrix.suite }}"
+```
+
+This generates:
+- Python: 3 versions × 2 suites = 6 combinations
+- Node: 2 versions × 2 suites = 4 combinations
+- Alpine: 1 version × 1 suite = 1 combination
+- **Total: 11 container test combinations**
+
+See `examples/matrix-multidimensional-*.yml` for complete working examples.
 
 ### Matrix Strategy Options
 

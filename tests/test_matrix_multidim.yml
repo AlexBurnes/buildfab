@@ -1,0 +1,47 @@
+project:
+  name: "matrix-multidim"
+  modules: ["matrix-multidim-testing"]
+
+actions:
+
+  - name: build-action
+    run: |
+      echo "=== Matrix Combination ==="
+      echo "Build type: ${{ matrix.builds }}"
+      echo "Image: ${{ matrix.images }}"
+      echo "Compiler: ${{ matrix.compiler }}"
+      echo "Full: ${{ matrix.builds }} ${{ matrix.images }} ${{ matrix.compiler }}"
+      echo "=========================="
+
+stages:
+
+  matrix-multidim:
+    steps:
+      - action: build-action
+        matrix:
+          values:
+            images:
+              - centos7:
+                  compiler: "gcc"
+              - centos8:
+                  compiler: ["gcc", "clang"]
+              - centos9:
+                  compiler: ["gcc", "clang", "icc"]
+            builds: ["Release", "Debug"]
+          strategy:
+            max_parallel: 4
+
+# Expected output: 12 combinations
+# Release centos7 gcc
+# Debug centos7 gcc
+# Release centos8 gcc
+# Release centos8 clang
+# Debug centos8 gcc
+# Debug centos8 clang
+# Release centos9 gcc
+# Release centos9 clang
+# Release centos9 icc
+# Debug centos9 gcc
+# Debug centos9 clang
+# Debug centos9 icc
+

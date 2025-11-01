@@ -255,6 +255,8 @@ buildfab provides a comprehensive automation framework with powerful features fo
 - **YAML-driven configuration** with intuitive syntax and modular organization
 - **DAG-based execution** with parallel processing and dependency management
 - **Matrix feature** for parallel execution across multiple configurations
+  - **Multi-dimensional matrices** with nested sub-dimensions for complex build matrices
+  - Flat variable naming (`matrix.images`, `matrix.compiler`) for easy access
 - **Matrix on stages** for cross-compiler builds and multi-platform testing
 - **Pool-based concurrency control** with global and matrix-specific limits
 - **Built-in actions** for common tasks (git checks, version validation)

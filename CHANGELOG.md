@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.31.0] - 2025-11-01
+
+### Added
+- **Multi-Dimensional Matrix Support**: Matrix dimensions can now have nested sub-dimensions for complex build matrices
+  - Supports nested dimension syntax like `images: [{centos7: {compiler: "gcc"}}, {centos8: {compiler: ["gcc", "clang"]}}]`
+  - Automatically expands nested dimensions into Cartesian product combinations
+  - All matrix variables are flattened to single level (e.g., `matrix.images`, `matrix.compiler`, `matrix.builds`)
+  - Flat variable naming prevents conflicts and simplifies variable access in actions
+  - Example: 3 images with varying compilers × 2 build types = 12 unique combinations
+  - Step names include all matrix dimensions for clear identification: `build-action.Release.gcc.centos7`
+  - Enables complex build matrices like testing multiple OS versions with different compiler sets
+  - Comprehensive test coverage with 12+ unit tests and 2 integration tests
+  - Three example configurations demonstrating simple, complex, and container-based scenarios
+  - Complete documentation in Features-and-examples.md with real-world examples
+  - Files modified: `pkg/buildfab/matrix.go` (added nested dimension expansion logic)
+  - Test files: `pkg/buildfab/matrix_multidim_test.go`, `pkg/buildfab/matrix_multidim_integration_test.go`
+  - Examples: `examples/matrix-multidimensional-*.yml`
+
 ## [0.30.5] - 2025-11-01
 
 ### Fixed

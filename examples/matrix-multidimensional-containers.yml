@@ -1,0 +1,63 @@
+project:
+  name: "multidim-matrix-containers"
+
+actions:
+  - name: container-test
+    container:
+      image:
+        from: ${{ matrix.image }}:${{ matrix.tag }}
+      run: |
+        echo "Testing in container: ${{ matrix.image }}:${{ matrix.tag }}"
+        echo "Running test suite: ${{ matrix.suite }}"
+        echo "Python version: $(python3 --version 2>&1 || echo 'N/A')"
+        echo "Node version: $(node --version 2>&1 || echo 'N/A')"
+        
+        # Simulate test execution
+        case "${{ matrix.suite }}" in
+          unit)
+            echo "Running unit tests..."
+            ;;
+          integration)
+            echo "Running integration tests..."
+            ;;
+          e2e)
+            echo "Running end-to-end tests..."
+            ;;
+        esac
+
+stages:
+  container-tests:
+    steps:
+      - action: container-test
+        matrix:
+          values:
+            image:
+              - python:
+                  tag: ["3.9", "3.10", "3.11"]
+                  suite: ["unit", "integration"]
+              - node:
+                  tag: ["18", "20"]
+                  suite: ["unit", "e2e"]
+              - alpine:
+                  tag: ["3.18"]
+                  suite: ["unit"]
+          strategy:
+            max_parallel: 6
+            fail_fast: false
+            continue_on_error: true
+
+# This generates:
+# 
+# Python: 3 versions × 2 suites = 6 combinations
+# Node: 2 versions × 2 suites = 4 combinations
+# Alpine: 1 version × 1 suite = 1 combination
+# Total: 11 container test combinations
+#
+# Matrix variables:
+#   ${{ matrix.image }} - python, node, alpine
+#   ${{ matrix.tag }}   - version tag
+#   ${{ matrix.suite }} - test suite type
+#
+# Each combination runs in its own Docker container with the
+# specified image and tag.
+
