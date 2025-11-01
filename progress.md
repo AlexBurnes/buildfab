@@ -2,6 +2,15 @@
 
 ## What Works
 
+- **Matrix Action Variable Interpolation Fix** (Unreleased - November 1, 2025): Successfully fixed critical bug where matrix actions failed with "no run command specified" error (100% complete)
+  - **Problems Fixed** - (1) Loop variable capture bug in `ExpandMatrixToStepsWithActions()` causing all interpolated actions to be identical, (2) Missing global variable propagation preventing interpolation of `version.branch`, `os`, `arch`, etc.
+  - **Root Causes** - Taking address of loop variable `&matrixAction` captured final iteration's value for all pointers, MatrixExpander only received matrix CLI overrides without full global variable set
+  - **Solutions** - (1) Fixed loop variable capture with explicit copy: `actionCopy := matrixAction; interpolatedActions[stepName] = &actionCopy`, (2) Enhanced MatrixExpander to accept both matrix overrides and global variables, (3) Updated all NewMatrixExpander calls to pass r.opts.Variables
+  - **Variable Priority** - globalVars (version.branch, os, arch, version.*) → matrix variables (matrix.test_name) with matrix variables overriding
+  - **Files Modified** - `pkg/buildfab/matrix.go` (fixed loop variable, added globalVars), `pkg/buildfab/simple.go` (pass globals, return interpolated actions), `pkg/buildfab/buildfab.go` (pass globals in 3 paths)
+  - **Testing Complete** - Verified matrix-action works with all variables interpolated correctly, verified matrix-stage preserves variable substitution
+  - **Production Ready** - Matrix actions now fully functional with complete variable interpolation support
+
 - **Timestamp Timing Fix** (v0.30.1 - October 31, 2025): Successfully fixed timestamps to show actual execution start time instead of output display time (100% complete)
   - **Problem Fixed** - Timestamps were showing output display time instead of actual execution start time
   - **Root Cause** - Timestamps generated at display time in `showStepStart()` instead of capturing when execution begins

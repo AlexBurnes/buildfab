@@ -13,22 +13,34 @@ import (
 
 // MatrixExpander handles matrix expansion and job creation
 type MatrixExpander struct {
-	config        *Config
-	cliMatrixVars map[string]string // CLI-provided matrix variables
+	config         *Config
+	cliMatrixVars  map[string]string // CLI-provided matrix variables (for overriding matrix values)
+	globalVars     map[string]string // All global variables for interpolation
 }
 
 // NewMatrixExpander creates a new matrix expander
+// First optional parameter: cliMatrixVars (matrix-specific overrides)
+// Second optional parameter: globalVars (all global variables for interpolation)
 func NewMatrixExpander(config *Config, cliMatrixVars ...map[string]string) *MatrixExpander {
 	var matrixVars map[string]string
+	var globalVars map[string]string
+	
 	if len(cliMatrixVars) > 0 {
 		matrixVars = cliMatrixVars[0]
 	} else {
 		matrixVars = make(map[string]string)
 	}
 	
+	if len(cliMatrixVars) > 1 {
+		globalVars = cliMatrixVars[1]
+	} else {
+		globalVars = make(map[string]string)
+	}
+	
 	return &MatrixExpander{
 		config:        config,
 		cliMatrixVars: matrixVars,
+		globalVars:    globalVars,
 	}
 }
 
@@ -122,11 +134,9 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 		
 		// Merge with global variables from config for interpolation
 		interpolationVars := make(map[string]string)
-		// Add global variables first
-		if me.cliMatrixVars != nil {
-			for k, v := range me.cliMatrixVars {
-				interpolationVars[k] = v
-			}
+		// Add all global variables first (version.branch, os, etc.)
+		for k, v := range me.globalVars {
+			interpolationVars[k] = v
 		}
 		// Add matrix variables (will override globals if same key)
 		for k, v := range matrixVars {
@@ -136,7 +146,13 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 		// Interpolate variables in the action (use proper interpolation that handles defaults)
 		if matrixAction.Run != "" {
 			// Interpolate variables in the run command
-			matrixAction.Run, _ = InterpolateVariables(matrixAction.Run, interpolationVars)
+			interpolatedRun, err := InterpolateVariables(matrixAction.Run, interpolationVars)
+			if err != nil {
+				// If interpolation fails, keep the original and let execution handle the error
+				matrixAction.Run = interpolatedRun
+			} else {
+				matrixAction.Run = interpolatedRun
+			}
 		}
 		
 		// Interpolate variables in container configuration
@@ -230,11 +246,9 @@ func (me *MatrixExpander) ExpandMatrixToStepsWithActions(step *Step, action *Act
 		
 		// Merge with global variables from config for interpolation
 		interpolationVars := make(map[string]string)
-		// Add global variables first
-		if me.cliMatrixVars != nil {
-			for k, v := range me.cliMatrixVars {
-				interpolationVars[k] = v
-			}
+		// Add all global variables first (version.branch, os, etc.)
+		for k, v := range me.globalVars {
+			interpolationVars[k] = v
 		}
 		// Add matrix variables (will override globals if same key)
 		for k, v := range matrixVars {
@@ -244,7 +258,13 @@ func (me *MatrixExpander) ExpandMatrixToStepsWithActions(step *Step, action *Act
 		// Interpolate variables in the action (use proper interpolation that handles defaults)
 		if matrixAction.Run != "" {
 			// Interpolate variables in the run command
-			matrixAction.Run, _ = InterpolateVariables(matrixAction.Run, interpolationVars)
+			interpolatedRun, err := InterpolateVariables(matrixAction.Run, interpolationVars)
+			if err != nil {
+				// If interpolation fails, keep the original and let execution handle the error
+				matrixAction.Run = interpolatedRun
+			} else {
+				matrixAction.Run = interpolatedRun
+			}
 		}
 		
 		// Interpolate variables in container configuration
@@ -269,7 +289,9 @@ func (me *MatrixExpander) ExpandMatrixToStepsWithActions(step *Step, action *Act
 		me.config.Actions = append(me.config.Actions, matrixAction)
 		
 		// Store the interpolated action for later use
-		interpolatedActions[stepName] = &matrixAction
+		// Create a copy to avoid capturing the loop variable
+		actionCopy := matrixAction
+		interpolatedActions[stepName] = &actionCopy
 		
 		// Create new step that references the interpolated action
 		newStep := Step{

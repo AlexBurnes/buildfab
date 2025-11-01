@@ -1072,8 +1072,8 @@ func (r *Runner) expandMatrixSteps(steps []Step) ([]Step, error) {
 			}
 			
 			
-			// Create matrix expander with CLI matrix variables
-			expander := NewMatrixExpander(r.config, matrixVars)
+			// Create matrix expander with CLI matrix variables AND all global variables
+			expander := NewMatrixExpander(r.config, matrixVars, r.opts.Variables)
 			
 			// Expand matrix into individual steps with interpolated actions
 			matrixSteps, interpolatedActions, err := expander.ExpandMatrixToStepsWithActions(&step, &action)
@@ -1142,8 +1142,8 @@ func (r *Runner) expandMatrixStepsWithActions(steps []Step) ([]Step, map[string]
 				}
 			}
 			
-			// Create matrix expander with CLI matrix variables
-			expander := NewMatrixExpander(r.config, matrixVars)
+			// Create matrix expander with CLI matrix variables AND all global variables
+			expander := NewMatrixExpander(r.config, matrixVars, r.opts.Variables)
 			
 			// Expand matrix into individual steps with interpolated actions
 			matrixSteps, interpolatedActions, err := expander.ExpandMatrixToStepsWithActions(&step, &action)
@@ -1209,8 +1209,8 @@ func (r *Runner) expandMatrixStepsWithPools(steps []Step) ([]Step, map[string]*A
 				}
 			}
 			
-			// Create matrix expander with CLI matrix variables
-			expander := NewMatrixExpander(r.config, matrixVars)
+			// Create matrix expander with CLI matrix variables AND all global variables
+			expander := NewMatrixExpander(r.config, matrixVars, r.opts.Variables)
 			
 			// Expand matrix into individual steps with interpolated actions
 			matrixSteps, interpolatedActions, err := expander.ExpandMatrixToStepsWithActions(&step, &action)

@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.30.5] - 2025-11-01
+
+### Fixed
+- **Matrix Action Variable Interpolation**: Fixed matrix actions failing with "no run command specified" error
+  - Root cause 1: Loop variable capture bug in `ExpandMatrixToStepsWithActions()` - all action pointers pointed to the same memory location
+  - Root cause 2: MatrixExpander was only receiving matrix-specific CLI variables, not all global variables (version.branch, os, etc.)
+  - Fixed by creating proper copies of interpolated actions instead of taking addresses of loop variables
+  - MatrixExpander now receives both matrix overrides and all global variables for interpolation
+  - Action Run commands now properly interpolate all variables including version.branch, platform variables, and matrix variables
+  - Matrix actions now work correctly in both SimpleRunner and complex Runner
+  - Files modified: `pkg/buildfab/matrix.go` (fixed loop variable capture, added globalVars field), `pkg/buildfab/simple.go` (pass global variables to expander, return interpolated actions), `pkg/buildfab/buildfab.go` (pass global variables to expander)
+
 ## [0.30.4] - 2025-11-01
 
 ### Fixed

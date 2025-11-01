@@ -137,7 +137,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s [%s]\n\n", stageName, timestamp)
 
     // Expand matrix steps into individual steps before creating output manager
-    expandedSteps, matrixJobs, err := r.expandMatrixSteps(stepsWithExpandedStages)
+    expandedSteps, matrixJobs, matrixInterpolatedActions, err := r.expandMatrixSteps(stepsWithExpandedStages)
     if err != nil {
         return fmt.Errorf("failed to expand matrix steps: %w", err)
     }
@@ -168,17 +168,11 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         }
     }
 
-    // Create interpolated actions for matrix steps
-    // We need to expand matrix steps to get interpolated actions
-    interpolatedActions := make(map[string]*Action)
-    for _, step := range expandedSteps {
-        // Check if this is a matrix-expanded step (has a dot in the name)
-        if strings.Contains(step.Action, ".") {
-            // Get the action from config (it should be already added by matrix expansion)
-            if action, exists := r.config.GetAction(step.Action); exists {
-                interpolatedActions[step.Action] = &action
-            }
-        }
+    // Use interpolated actions from matrix expansion
+    interpolatedActions := matrixInterpolatedActions
+    
+    if r.opts.Debug {
+        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Using %d interpolated actions from matrix expansion\n", len(interpolatedActions))
     }
     
     // Create step callback based on verbosity level
@@ -1522,9 +1516,10 @@ func (r *SimpleRunner) expandStageReferences(steps []Step) ([]Step, error) {
     return expandedSteps, nil
 }
 
-func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob, error) {
+func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob, map[string]*Action, error) {
     var expandedSteps []Step
     var matrixJobs []MatrixStageJob
+    allInterpolatedActions := make(map[string]*Action)
 
     if r.opts.Debug {
         fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: processing %d steps\n", len(steps))
@@ -1549,7 +1544,7 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
                 // Get the referenced stage
                 referencedStage, exists := r.config.GetStage(step.Stage)
                 if !exists {
-                    return nil, nil, fmt.Errorf("stage not found: %s", step.Stage)
+                    return nil, nil, nil, fmt.Errorf("stage not found: %s", step.Stage)
                 }
 
                 // Extract matrix variables from CLI variables
@@ -1560,8 +1555,8 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
                     }
                 }
 
-                // Create matrix expander with CLI matrix variables
-                expander := NewMatrixExpander(r.config, cliMatrixVars)
+                // Create matrix expander with CLI matrix variables AND all global variables
+                expander := NewMatrixExpander(r.config, cliMatrixVars, r.opts.Variables)
 
                 // Generate matrix combinations
                 matrixValues := make(map[string][]interface{})
@@ -1617,7 +1612,7 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
                     expandedStageSteps, err := r.expandStageReferences(referencedStage.Steps)
                     if err != nil {
                         r.opts.Variables = originalVars
-                        return nil, nil, fmt.Errorf("failed to expand stage %s for matrix job %d: %w", step.Stage, jobIdx, err)
+                        return nil, nil, nil, fmt.Errorf("failed to expand stage %s for matrix job %d: %w", step.Stage, jobIdx, err)
                     }
 
                     // Restore original variables
@@ -1744,7 +1739,12 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
                 // Get the action for this step
                 action, exists := r.config.GetAction(step.Action)
                 if !exists {
-                    return nil, nil, fmt.Errorf("action not found: %s", step.Action)
+                    return nil, nil, nil, fmt.Errorf("action not found: %s", step.Action)
+                }
+
+                // Debug: Print action details before expansion
+                if r.opts.Debug {
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Original action %s: Run=%q, Uses=%q\n", action.Name, action.Run, action.Uses)
                 }
 
                 // Extract matrix variables from CLI variables
@@ -1757,13 +1757,27 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
                 }
                 
 
-                // Create matrix expander with CLI matrix variables
-                expander := NewMatrixExpander(r.config, matrixVars)
+                // Create matrix expander with CLI matrix variables AND all global variables
+                expander := NewMatrixExpander(r.config, matrixVars, r.opts.Variables)
 
-                // Expand matrix into individual steps
-                matrixSteps, err := expander.ExpandMatrixToSteps(&step, &action)
+                // Expand matrix into individual steps with interpolated actions
+                matrixSteps, interpolatedActions, err := expander.ExpandMatrixToStepsWithActions(&step, &action)
                 if err != nil {
-                    return nil, nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+                    return nil, nil, nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.Action, err)
+                }
+                
+                // Debug: Print interpolated actions
+                if r.opts.Debug {
+                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Created %d interpolated actions\n", len(interpolatedActions))
+                    for actionName, interpolatedAction := range interpolatedActions {
+                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Interpolated action %s: Run=%q, Uses=%q\n", 
+                            actionName, interpolatedAction.Run, interpolatedAction.Uses)
+                    }
+                }
+                
+                // Store interpolated actions in the overall map
+                for actionName, interpolatedAction := range interpolatedActions {
+                    allInterpolatedActions[actionName] = interpolatedAction
                 }
 
                 // Assign pool ID if max_parallel is specified
@@ -1800,10 +1814,11 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
     }
 
     if r.opts.Debug {
-        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: returning %d expanded steps, %d matrix jobs\n", len(expandedSteps), len(matrixJobs))
+        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] expandMatrixSteps: returning %d expanded steps, %d matrix jobs, %d interpolated actions\n", 
+            len(expandedSteps), len(matrixJobs), len(allInterpolatedActions))
     }
 
-    return expandedSteps, matrixJobs, nil
+    return expandedSteps, matrixJobs, allInterpolatedActions, nil
 }
 
 // findFirstSteps finds steps that can start the matrix job (no dependencies within the job)

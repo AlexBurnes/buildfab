@@ -8,6 +8,7 @@ actions:
   - name: echo-test-one
     run: |
       echo "Matrix test one: ${{ matrix.test_name - unknown }}"
+      echo "branch ${{ version.branch }}"      
       sleep 1
 
   - name: echo-test-two
