@@ -597,8 +597,18 @@ func (r *Runner) shouldExecuteStepByCondition(ctx context.Context, step Step) (b
 		return true, nil
 	}
 	
-	// Evaluate the if condition using the expression evaluator
-	shouldExecute, err := evaluateCondition(step.If, r.opts.Variables)
+	// Merge step-level variables with global variables for condition evaluation
+	// Step variables (including matrix variables) take precedence
+	mergedVars := make(map[string]string)
+	for k, v := range r.opts.Variables {
+		mergedVars[k] = v
+	}
+	for k, v := range step.Variables {
+		mergedVars[k] = v
+	}
+	
+	// Evaluate the if condition using the expression evaluator with merged variables
+	shouldExecute, err := evaluateCondition(step.If, mergedVars)
 	if err != nil {
 		return false, fmt.Errorf("failed to evaluate if condition for step %s: %w", step.Action, err)
 	}

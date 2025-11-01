@@ -39,3 +39,12 @@ stages:
             test_name: ["test1", "test2"]
           strategy:
             max_parallel: 1
+
+  matrix-action:
+    steps:
+      - action: echo-test-one
+        matrix:
+          values:
+            test_name: ["test1", "test2"]
+          strategy:
+            max_parallel: 1

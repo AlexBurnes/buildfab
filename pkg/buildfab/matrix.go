@@ -120,27 +120,40 @@ func (me *MatrixExpander) ExpandMatrixToSteps(step *Step, action *Action) ([]Ste
 		}
 		matrixAction.Name = me.generateStepName(baseName, combination, step.Matrix.Values) // Generate name with matrix values
 		
-		// Interpolate variables in the action
+		// Merge with global variables from config for interpolation
+		interpolationVars := make(map[string]string)
+		// Add global variables first
+		if me.cliMatrixVars != nil {
+			for k, v := range me.cliMatrixVars {
+				interpolationVars[k] = v
+			}
+		}
+		// Add matrix variables (will override globals if same key)
+		for k, v := range matrixVars {
+			interpolationVars[k] = v
+		}
+		
+		// Interpolate variables in the action (use proper interpolation that handles defaults)
 		if matrixAction.Run != "" {
 			// Interpolate variables in the run command
-			matrixAction.Run = me.interpolateVariables(matrixAction.Run, matrixVars)
+			matrixAction.Run, _ = InterpolateVariables(matrixAction.Run, interpolationVars)
 		}
 		
 		// Interpolate variables in container configuration
 		if matrixAction.Container != nil {
 			// Interpolate container image
 			if matrixAction.Container.Image.From != "" {
-				matrixAction.Container.Image.From = me.interpolateVariables(matrixAction.Container.Image.From, matrixVars)
+				matrixAction.Container.Image.From, _ = InterpolateVariables(matrixAction.Container.Image.From, interpolationVars)
 			}
 			
 			// Interpolate container run command
 			if matrixAction.Container.Run != "" {
-				matrixAction.Container.Run = me.interpolateVariables(matrixAction.Container.Run, matrixVars)
+				matrixAction.Container.Run, _ = InterpolateVariables(matrixAction.Container.Run, interpolationVars)
 			}
 			
 			// Interpolate environment variables
 			for key, value := range matrixAction.Container.Env {
-				matrixAction.Container.Env[key] = me.interpolateVariables(value, matrixVars)
+				matrixAction.Container.Env[key], _ = InterpolateVariables(value, interpolationVars)
 			}
 		}
 		
@@ -192,18 +205,18 @@ func (me *MatrixExpander) ExpandMatrixToStepsWithActions(step *Step, action *Act
 	interpolatedActions := make(map[string]*Action)
 	
 	for _, combination := range combinations {
-		// Create matrix variables for this combination
+		// Create matrix variables for this combination (with "matrix." prefix)
 		matrixVars := make(map[string]string)
 		for key, value := range combination {
-			matrixVars[key] = fmt.Sprintf("%v", value)
+			matrixVars[fmt.Sprintf("matrix.%s", key)] = fmt.Sprintf("%v", value)
 		}
 		
 		// Generate step name with matrix values (use custom name if provided, otherwise action name)
 		baseName := step.GetStepName()
 		stepName := me.generateStepName(baseName, combination, step.Matrix.Values)
 		
-		// Create description with matrix values
-		description := me.interpolateVariables(step.Description, matrixVars)
+		// Create description with matrix values (use proper interpolation that handles defaults)
+		description, _ := InterpolateVariables(step.Description, matrixVars)
 		
 		// Create a new action with matrix variables interpolated
 		matrixAction := *action // Copy the original action
@@ -215,27 +228,40 @@ func (me *MatrixExpander) ExpandMatrixToStepsWithActions(step *Step, action *Act
 		}
 		matrixAction.Name = stepName // Generate name with matrix values
 		
-		// Interpolate variables in the action
+		// Merge with global variables from config for interpolation
+		interpolationVars := make(map[string]string)
+		// Add global variables first
+		if me.cliMatrixVars != nil {
+			for k, v := range me.cliMatrixVars {
+				interpolationVars[k] = v
+			}
+		}
+		// Add matrix variables (will override globals if same key)
+		for k, v := range matrixVars {
+			interpolationVars[k] = v
+		}
+		
+		// Interpolate variables in the action (use proper interpolation that handles defaults)
 		if matrixAction.Run != "" {
 			// Interpolate variables in the run command
-			matrixAction.Run = me.interpolateVariables(matrixAction.Run, matrixVars)
+			matrixAction.Run, _ = InterpolateVariables(matrixAction.Run, interpolationVars)
 		}
 		
 		// Interpolate variables in container configuration
 		if matrixAction.Container != nil {
 			// Interpolate container image
 			if matrixAction.Container.Image.From != "" {
-				matrixAction.Container.Image.From = me.interpolateVariables(matrixAction.Container.Image.From, matrixVars)
+				matrixAction.Container.Image.From, _ = InterpolateVariables(matrixAction.Container.Image.From, interpolationVars)
 			}
 			
 			// Interpolate container run command
 			if matrixAction.Container.Run != "" {
-				matrixAction.Container.Run = me.interpolateVariables(matrixAction.Container.Run, matrixVars)
+				matrixAction.Container.Run, _ = InterpolateVariables(matrixAction.Container.Run, interpolationVars)
 			}
 			
 			// Interpolate environment variables
 			for key, value := range matrixAction.Container.Env {
-				matrixAction.Container.Env[key] = me.interpolateVariables(value, matrixVars)
+				matrixAction.Container.Env[key], _ = InterpolateVariables(value, interpolationVars)
 			}
 		}
 		
