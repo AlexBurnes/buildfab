@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- **Library API Documentation**: Created comprehensive `docs/Library-API.md` for using buildfab as a library
+  - Detailed API reference for all public methods (Configuration, Execution, Variables)
+  - Quick start guide and 5 practical examples
+  - Migration guide from v0.29.1 to v0.32.0
+  - Custom callbacks, container support, and advanced topics
+  - Based on real-world usage patterns from pre-push utility
+- **Cleanup Plan**: Created `docs/Cleanup-plan-deprecated-code.md` for removing deprecated flat DAG code
+  - Identified 7 deprecated functions (~2,210 lines total)
+  - Verified no external dependencies on deprecated code
+  - Detailed removal plan for v0.33.0 release
+  - Risk assessment and migration paths
+
+### Refactoring
+- **Code Cleanup**: Removed 196 lines of deprecated flat DAG code from `pkg/buildfab/simple.go`
+  - Removed commented-out old execution path
+  - Hierarchical DAG is now the only execution path in SimpleRunner
+  - All tests passing with zero race conditions
+
 ## [0.32.0] - 2025-11-05
 
 ### Changed
