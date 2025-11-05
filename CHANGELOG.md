@@ -9,12 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Documentation
-- **Library API Documentation**: Created comprehensive `docs/Library-API.md` for using buildfab as a library
+- **Library API Documentation**: Created comprehensive `docs/Library.md` for using buildfab as a library
   - Detailed API reference for all public methods (Configuration, Execution, Variables)
   - Quick start guide and 5 practical examples
   - Migration guide from v0.29.1 to v0.32.0
   - Custom callbacks, container support, and advanced topics
   - Based on real-world usage patterns from pre-push utility
+  - Deduplicated: Merged old Library.md with Library-API.md (kept comprehensive 782-line version)
+- **Documentation Organization**: Reorganized docs directory into logical catalogs (51 files organized)
+  - **docs/User/**: User-facing documentation (6 files: Project-specification, YAML-syntax, Features, Practical-applications, Comparison, Caching)
+  - **docs/Devel/**: Development documentation (39 files: Container implementations, Matrix features, Bug fixes, Sprint summaries, Feature plans)
+  - **docs/ (root)**: Core documentation (6 files: Build, Deploy, Developer-workflow, Git-integration, Library, User index)
+  - **docs/User.md**: New index file with quick links, documentation index, quick start guide, and common tasks
+  - **Updated README.md**: Fixed all links to reorganized documentation, added clear categories
 
 ### Refactoring
 - **Major Code Cleanup**: Removed 1,697 lines of deprecated flat DAG code
