@@ -378,7 +378,7 @@ func main() {
 }
 ```
 
-## What's New in v0.20.0
+## Legacy Features (v0.20.0 and earlier)
 
 ### Parallel Pool Feature (Major)
 
@@ -543,7 +543,7 @@ Whether you're a solo developer looking for better automation, a team standardiz
 ---
 
 **buildfab** - Universal Local Automation Platform  
-Version 0.20.0 | October 2025 | Apache License 2.0
+Version 0.32.0 | November 2025 | Apache License 2.0
 
 **Project**: https://github.com/AlexBurnes/buildfab  
 **Documentation**: https://github.com/AlexBurnes/buildfab/tree/master/docs  
