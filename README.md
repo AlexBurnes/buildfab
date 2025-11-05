@@ -267,7 +267,7 @@ buildfab provides a comprehensive automation framework with powerful features fo
 - **Library API** for embedding in other tools
 - **Cross-platform support** (Linux, Windows, macOS)
 
-📖 **See [Features and Examples](docs/Features-and-examples.md) for comprehensive documentation with detailed examples and usage patterns.**
+📖 **See [User Documentation](docs/User.md) for comprehensive documentation with detailed examples and usage patterns.**
 
 ## Quick Start
 
@@ -555,7 +555,7 @@ func main() {
 
 ## Configuration
 
-See [Project Specification](docs/Project-specification.md) for complete configuration reference.
+See [Project Specification](docs/User/Project-specification.md) for complete configuration reference.
 
 ### Include Feature
 
@@ -824,14 +824,25 @@ go test ./... -race
 
 ## Documentation
 
-- [Features and Examples](docs/Features-and-examples.md) - Comprehensive features documentation with detailed examples
-- [YAML Syntax Reference](docs/YAML-syntax-reference.md) - Complete YAML configuration syntax reference
-- [Comparison with Others](docs/Comparison-with-others.md) - Detailed comparison with Taskfile, GitHub Actions, Make, and other tools
-- [Release Announcement](docs/Release-announcement.md) - Latest release highlights and feature overview
-- [Project Specification](docs/Project-specification.md) - Complete technical specification
-- [API Reference](docs/Library.md) - Library API documentation
+### User Documentation
+- [User Documentation Index](docs/User.md) - Overview of all user documentation
+- [Features and Examples](docs/User/Features-and-examples.md) - Comprehensive features with detailed examples
+- [YAML Syntax Reference](docs/User/YAML-syntax-reference.md) - Complete configuration syntax reference
+- [Comparison with Others](docs/User/Comparison-with-others.md) - Comparison with Taskfile, GitHub Actions, Make
+- [Project Specification](docs/User/Project-specification.md) - Complete technical specification
+- [Caching](docs/User/Caching.md) - Caching feature documentation
+
+### API and Library
+- [Library API Reference](docs/Library.md) - Complete Go library API documentation
+
+### Build and Development
 - [Developer Workflow](docs/Developer-workflow.md) - Development setup and workflow
 - [Build System](docs/Build.md) - Build and packaging documentation
+- [Deploy Documentation](docs/Deploy.md) - CI/CD and deployment
+- [Git Integration](docs/Git-integration-info.md) - Git hook integration
+
+### Development Documentation
+- [Development Documentation](docs/Devel/) - Implementation details, plans, and analysis
 
 ## License
 
