@@ -51,20 +51,43 @@ Removed 1,697 lines of deprecated flat DAG code:
 - Single execution path (no more confusion about which DAG to use)
 - Significantly improved code maintainability
 
-### 📚 Comprehensive Library Documentation
+### 📚 Complete Documentation Overhaul
 
-New `docs/Library.md` with complete Go library API reference:
-- 10 core API methods documented with examples
-- 5 practical usage examples (basic, variables, timeouts, matrix builds, callbacks)
+**Library API Documentation** - `docs/Library.md` (782 lines):
+- 10 core API methods with detailed examples
+- 5 practical usage patterns (basic, variables, timeouts, matrix, callbacks)
 - Migration guide from v0.29.1 to v0.32.0
+- Custom callbacks and advanced integration topics
 - Based on real-world usage from pre-push utility
 
-### 📁 Documentation Organization
+**v0.32.0 Feature Documentation** (~630 new lines):
+- **Hierarchical DAG Execution Model** - Complete explanation of job-based architecture
+  - Job vs step execution model
+  - Execution waves and dependency resolution
+  - Nested matrix hierarchical expansion
+  - Sliding window dependencies for concurrency control
+  - Condition-based skip smart behavior
+- **Advanced Matrix Features** - All v0.32.0 enhancements documented
+  - Nested matrix support with examples
+  - Complex NOT expressions (operator precedence)
+  - Matrix variable propagation
+  - User dependency inheritance
+  - Global max_parallel enforcement
+- **Container Support** - Comprehensive container configuration reference
+  - Complete syntax reference (image, engine, resources, volumes, environment)
+  - Docker/Podman engine auto-detection
+  - Resource limits (CPU, memory, network modes)
+  - Volume mounting patterns with variable interpolation
+  - Advanced examples (multi-platform, caching, container matrix)
+  - Troubleshooting guide and best practices
 
-Reorganized 51 documentation files into logical catalogs:
-- **docs/User/**: 6 user-facing documents (specification, syntax, features, examples)
-- **docs/Devel/**: 39 development documents (implementation details, plans, analysis)
-- **docs/User.md**: New comprehensive index for easy navigation
+**Documentation Organization** (51 files):
+- **docs/User/**: 6 user-facing documents (now 100% complete for v0.32.0)
+- **docs/Devel/**: 40 development documents (implementation details, plans, analysis)
+- **docs/User.md**: Comprehensive index with quick start guide
+- **docs/Release-announcement.md**: Updated to v0.32.0 with all new features
+
+**Total Documentation**: Over 1,400 lines of new content covering all v0.32.0 features
 
 ### 🔧 Expression Parsing Improvements
 
