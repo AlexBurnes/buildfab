@@ -275,12 +275,14 @@ if: "semverCompare(version.version, '1.0.0') >= 0"
 | Caching | ✅ Local | ⚙️ Shell | ✅ Cloud | ⚙️ Timestamps |
 | Parallelism | ✅ Pools | ⚙️ Basic | ✅ Strategy | ⚙️ -j flag |
 | Expressions | ✅ Full | ⚙️ Basic | ✅ Full | ❌ No |
-| Git Hooks | ✅ Built-in | ❌ No | ❌ No | ❌ No |
+| Git Hooks | ✅ Library† | ❌ No | ❌ No | ❌ No |
 | Library API | ✅ Go | ❌ No | ❌ No | ❌ No |
 | Startup | <10ms | <10ms | 30-60s | <5ms |
 | Local First | ✅ Yes | ✅ Yes | ❌ No | ✅ Yes |
 
-**See [Detailed Comparison](Comparison-with-others.md) for comprehensive analysis.**
+**† Git Hooks**: Provided by external [pre-push utility](https://github.com/AlexBurnes/pre-push) which uses buildfab as its execution engine.
+
+**See [Detailed Comparison](User/Comparison-with-others.md) for comprehensive analysis.**
 
 ## Practical Applications
 
@@ -385,9 +387,13 @@ stages:
 buildfab run pre-push
 ```
 
-3. Install git hook:
+3. Install git hook (using pre-push utility):
 ```bash
-buildfab install-hook
+# Install pre-push utility
+curl -sSL https://github.com/AlexBurnes/pre-push/releases/latest/download/install.sh | bash
+
+# Install git hook
+pre-push install
 ```
 
 ### Library Usage
@@ -544,7 +550,7 @@ buildfab provides:
 - ✅ **Blazing performance** with instant startup
 - ✅ **Modern capabilities** (matrices, containers, pools)
 - ✅ **Simple configuration** (familiar YAML)
-- ✅ **Developer-friendly** (git hooks, library API)
+- ✅ **Developer-friendly** (library API, git hook support via pre-push)
 - ✅ **Cross-platform** (works everywhere)
 
 ### The Result
