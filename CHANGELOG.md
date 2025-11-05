@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2025-11-05
+
 ### Documentation
 - **Library API Documentation**: Created comprehensive `docs/Library.md` for using buildfab as a library
   - Detailed API reference for all public methods (Configuration, Execution, Variables)
@@ -18,10 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Deduplicated: Merged old Library.md with Library-API.md (kept comprehensive 782-line version)
 - **Documentation Organization**: Reorganized docs directory into logical catalogs (51 files organized)
   - **docs/User/**: User-facing documentation (6 files: Project-specification, YAML-syntax, Features, Practical-applications, Comparison, Caching)
-  - **docs/Devel/**: Development documentation (39 files: Container implementations, Matrix features, Bug fixes, Sprint summaries, Feature plans)
-  - **docs/ (root)**: Core documentation (6 files: Build, Deploy, Developer-workflow, Git-integration, Library, User index)
+  - **docs/Devel/**: Development documentation (40 files: Container implementations, Matrix features, Bug fixes, Sprint summaries, Feature plans)
+  - **docs/ (root)**: Core documentation (7 files: Build, Deploy, Developer-workflow, Git-integration, Library, Release-announcement, User index)
   - **docs/User.md**: New index file with quick links, documentation index, quick start guide, and common tasks
   - **Updated README.md**: Fixed all links to reorganized documentation, added clear categories
+  - **docs/Release-announcement.md**: Updated to v0.32.0, moved to docs root, all features highlighted
 - **v0.32.0 Feature Documentation**: Added comprehensive documentation for all v0.32.0 features (~630 lines)
   - **docs/User/Project-specification.md**: Added "Execution Model (v0.32.0)" section (~130 lines)
     * Job-based execution model: jobs vs steps, parallelism vs sequential
@@ -74,8 +77,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Hierarchical DAG is now the only execution path**
   - **All tests passing with zero race conditions**
   - **Code reduced**: 4,845 → 3,528 lines in buildfab.go (27% reduction)
-
-## [0.32.0] - 2025-11-05
 
 ### Changed
 - **Hierarchical DAG Architecture (Major Refactoring)**: Replaced flat DAG with hierarchical job-based execution model
