@@ -10,14 +10,137 @@ Buildfab is a Go library and CLI utility that provides a flexible framework for 
 
 ### Core Features
 - **YAML-driven configuration**: Define stages and actions in `project.yml`
-- **DAG-based execution**: Parallel execution with explicit dependencies
+- **Hierarchical DAG execution**: Job-based parallel execution with dependency resolution (v0.32.0)
 - **Built-in action registry**: Extensible system for common automation tasks
 - **Custom action support**: Execute shell commands and external tools
 - **Variable interpolation**: Dynamic configuration with `${{ }}` syntax
 - **Matrix execution**: Run actions and stages across multiple configurations (compilers, platforms, versions)
 - **Matrix on stages**: Apply matrix to entire stages for cross-compiler builds and multi-platform testing
+- **Container support**: Native Docker/Podman integration with resource management
 - **Error policy management**: Configurable stop/warn behavior per step
 - **Cross-platform compatibility**: Linux, Windows, macOS (amd64/arm64)
+
+### Execution Model (v0.32.0)
+
+buildfab uses a **hierarchical DAG architecture** for executing workflows:
+
+#### Job-Based Execution
+
+- **Jobs**: Matrix combinations and non-matrix steps form individual job nodes
+- **Steps**: Each job contains an ordered sequence of steps to execute
+- **Parallelism**: Jobs execute in parallel waves based on dependencies
+- **Sequential**: Steps within a job execute sequentially
+- **Dependencies**: Jobs depend on other jobs (not individual steps)
+
+#### Execution Waves
+
+Jobs are organized into dependency-ordered waves:
+
+1. **Wave 1**: All jobs with no dependencies start first
+2. **Wave 2**: Once Wave 1 completes, jobs depending only on Wave 1 start
+3. **Wave N**: Process continues until all jobs complete
+
+Within each wave, jobs execute in parallel (respecting `max_parallel` limit).
+
+#### Matrix Build Execution
+
+When a step has a matrix configuration:
+- Each matrix combination creates one **job**
+- Each job runs the same sequence of **steps**
+- Jobs execute in parallel waves
+- Sliding window dependencies control concurrency (via `max_parallel`)
+
+**Example**:
+```yaml
+stages:
+  test:
+    steps:
+      - action: test-platform
+        matrix:
+          values:
+            platform: [linux, darwin, windows]
+          strategy:
+            max_parallel: 2
+# Creates 3 jobs: linux, darwin, windows
+# Only 2 run concurrently (3rd waits for first to complete)
+# All jobs run the same action: test-platform
+```
+
+#### Nested Matrix Support
+
+Matrix on stage references expands hierarchically:
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: configure
+      - action: compile
+      - action: test
+
+  cross-compiler:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: [gcc, clang]
+# Creates 2 jobs: compiler=gcc, compiler=clang
+# Each job runs sequentially: configure → compile → test
+# Both jobs execute in parallel
+```
+
+**Benefits of Hierarchical DAG** (v0.32.0):
+- ✅ Better handling of nested matrices (matrix on stage reference)
+- ✅ Improved parallelism control with sliding window dependencies
+- ✅ No more hanging scenarios in complex matrix builds
+- ✅ Clearer execution model (jobs are the unit of parallelism)
+- ✅ Proper dependency resolution between matrix combinations
+
+#### Sliding Window Dependencies
+
+When `max_parallel` is set on a matrix, buildfab automatically injects sliding window dependencies:
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: build-variant
+        matrix:
+          values:
+            variant: [v1, v2, v3, v4, v5]
+          strategy:
+            max_parallel: 2
+# Execution pattern:
+# Wave 1: v1, v2 start
+# Wave 2: v3 starts when v1 completes
+# Wave 3: v4 starts when v2 completes
+# Wave 4: v5 starts when v3 completes
+```
+
+This prevents resource exhaustion while maintaining throughput.
+
+#### Condition-Based Skips
+
+Condition skips (`if` conditions) don't block sliding window dependencies:
+
+```yaml
+steps:
+  - action: build
+    matrix:
+      values:
+        os: [centos7, centos8, centos9]
+        compiler: [gcc, clang]
+    if: "!(matrix.os == 'centos7' && matrix.compiler == 'clang')"
+    strategy:
+      max_parallel: 2
+# If centos7-clang is skipped due to condition:
+# - It doesn't block centos8-gcc from starting (sliding window continues)
+# - Explicit user dependencies would still wait for it
+```
+
+**Key Distinction**:
+- **Sliding window dependencies**: Auto-injected for parallelism control (condition skips don't block)
+- **User dependencies** (`require`, `depends_on`): Explicit dependencies (condition skips do block)
 
 ## 2) Library API
 

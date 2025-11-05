@@ -10,6 +10,8 @@ This document provides comprehensive documentation of buildfab features with det
 - [Conditional Execution](#conditional-execution)
 - [Matrix Feature](#matrix-feature)
   - [Multi-Dimensional Matrices](#multi-dimensional-matrices)
+  - [Advanced Matrix Features (v0.32.0)](#advanced-matrix-features-v0320)
+- [Container Support](#container-support)
 - [Include System](#include-system)
 - [Variable Interpolation](#variable-interpolation)
 - [Built-in Actions](#built-in-actions)
@@ -629,6 +631,510 @@ This configuration:
 - All steps have access to `${{ matrix.platform }}` variable
 
 For detailed matrix feature documentation, see [Matrix Feature Documentation](Matrix-feature.md).
+
+### Advanced Matrix Features (v0.32.0)
+
+buildfab v0.32.0 introduced significant improvements to matrix execution with the hierarchical DAG architecture.
+
+#### Nested Matrix Support
+
+Matrix on stage references now works correctly with proper job-based execution:
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: configure
+      - action: compile
+        require: [configure]
+      - action: test
+        require: [compile]
+
+  cross-compiler:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: [gcc, clang]
+            version: ["11", "12", "13"]
+# Creates 6 jobs (gcc-11, gcc-12, gcc-13, clang-11, clang-12, clang-13)
+# Each job runs sequentially: configure → compile → test
+# All 6 jobs execute in parallel (respecting max_parallel)
+```
+
+**How It Works**:
+1. Matrix expansion creates one **job** per combination
+2. Each job contains all steps from the referenced stage
+3. Steps within a job execute **sequentially**
+4. Jobs execute in **parallel waves**
+
+#### Sliding Window Dependencies
+
+When using `max_parallel` with matrix builds, buildfab creates sliding window dependencies to control concurrency:
+
+```yaml
+stages:
+  test:
+    steps:
+      - action: test-platform
+        matrix:
+          values:
+            platform: [p1, p2, p3, p4, p5, p6]
+          strategy:
+            max_parallel: 3
+```
+
+**Execution Pattern**:
+```
+Time →
+Wave 1:  p1  p2  p3  (3 jobs start)
+Wave 2:  p4          (starts when p1 completes)
+Wave 3:  p5          (starts when p2 completes)
+Wave 4:  p6          (starts when p3 completes)
+```
+
+This prevents all 6 jobs from starting simultaneously, avoiding resource exhaustion.
+
+#### Condition-Based Skips with Sliding Window
+
+Condition skips don't block sliding window dependencies (v0.32.0 fix):
+
+```yaml
+stages:
+  build:
+    steps:
+      - action: build
+        matrix:
+          values:
+            os: [centos7, centos8, centos9]
+            compiler: [gcc, clang]
+        if: "!(matrix.os == 'centos7' && matrix.compiler == 'clang')"
+        strategy:
+          max_parallel: 2
+# If centos7-clang is skipped due to condition:
+# - Next job in sliding window can still start
+# - Doesn't block centos8-gcc from running
+# - Only 2 jobs run concurrently at any time
+```
+
+**Smart Skip Behavior** (v0.32.0):
+- **Sliding window dependencies**: Condition skips don't block (parallelism maintained)
+- **User dependencies** (`require`, `depends_on`): Condition skips do block (safety maintained)
+
+#### Complex NOT Expressions
+
+The NOT operator now correctly handles complex nested conditions:
+
+```yaml
+steps:
+  - action: build
+    if: "!(matrix.images == 'centos7' && matrix.compiler == 'clang')"
+    # Skips only this specific combination
+  
+  - action: deploy
+    if: "!((os == 'windows' || os == 'darwin') && env.CI == 'true')"
+    # Skips deploy on Windows/macOS in CI
+
+  - action: test
+    if: "!(matrix.variant == 'debug') && version.type == 'release'"
+    # Skips debug variant for release builds
+```
+
+**Operator Precedence** (v0.32.0 fix):
+- Binary operators (`&&`, `||`) evaluated before unary (`!`)
+- Parentheses properly respected
+- Complex nested expressions work correctly
+
+#### Matrix Variable Propagation
+
+Matrix variables correctly propagate in all scenarios (v0.32.0 fix):
+
+```yaml
+stages:
+  inner-build:
+    steps:
+      - action: compile
+        run: gcc ${{ matrix.flags }} -o app main.c
+      - action: test
+        run: ./app --mode=${{ matrix.mode }}
+
+  outer-matrix:
+    steps:
+      - stage: inner-build
+        matrix:
+          values:
+            flags: ["-O0", "-O2", "-O3"]
+            mode: ["debug", "release"]
+# All steps in inner-build have access to matrix.flags and matrix.mode
+# Variables propagate correctly through stage references
+```
+
+#### User Dependencies with Matrix Jobs
+
+User dependencies (`require`, `depends_on`) are properly inherited by matrix jobs:
+
+```yaml
+stages:
+  ci:
+    steps:
+      - action: prepare
+      
+      - action: build
+        require: [prepare]
+        matrix:
+          values:
+            platform: [linux, darwin, windows]
+# Each of the 3 matrix jobs (linux, darwin, windows)
+# properly depends on "prepare" step
+# All 3 jobs wait for prepare to complete before starting
+```
+
+#### Global max_parallel Enforcement
+
+Global `max_parallel` setting is properly enforced (v0.32.0 fix):
+
+```yaml
+project:
+  max_parallel: 4
+
+stages:
+  test:
+    steps:
+      - action: test-variant
+        matrix:
+          values:
+            variant: [v1, v2, v3, v4, v5, v6, v7, v8]
+# Even though matrix has 8 combinations,
+# only 4 jobs run concurrently (global limit enforced)
+```
+
+**Priority Rules**:
+- Matrix `max_parallel` creates dedicated pool
+- Effective limit = `min(global_max_parallel, matrix_max_parallel)`
+- Global setting provides hard upper limit
+
+## Container Support
+
+buildfab provides native container integration with Docker and Podman for running actions in isolated environments.
+
+### Basic Container Action
+
+```yaml
+actions:
+  - name: test
+    run: go test ./...
+
+  - name: test-in-container
+    container:
+      image:
+        from: golang:1.22
+        pull: missing
+      run_action: test
+      volumes:
+        - $PWD:/workspace
+      environment:
+        - GOMODCACHE=/workspace/.cache
+```
+
+Run the container action:
+```bash
+buildfab action test-in-container
+```
+
+### Container Configuration Reference
+
+#### Image Configuration
+
+```yaml
+container:
+  image:
+    from: "golang:1.22"      # Container image name (required)
+    pull: missing            # Pull policy: always, missing, never (default: missing)
+```
+
+**Pull Policies**:
+- `always`: Always pull image before running (ensures latest)
+- `missing`: Pull only if image not found locally (default, faster)
+- `never`: Never pull, use local image only (offline builds)
+
+#### Engine Selection
+
+```yaml
+container:
+  engine: podman            # Explicitly use podman (default: auto-detect)
+```
+
+buildfab automatically detects available engines in order:
+1. Docker (if `docker` command available)
+2. Podman (if `podman` command available)
+
+Specify `engine` to force a specific container runtime.
+
+#### Resource Limits
+
+```yaml
+container:
+  cpu: 2                    # CPU cores limit (default: unlimited)
+  memory: "4G"              # Memory limit: 4G, 2048M, etc. (default: unlimited)
+  network: host             # Network mode: host, bridge, none (default: bridge)
+```
+
+**Network Modes**:
+- `host`: Use host network stack (fastest, less isolated)
+- `bridge`: Bridged network (default, balanced)
+- `none`: No network access (maximum isolation)
+
+#### Volume Mounting
+
+Mount host directories into the container:
+
+```yaml
+container:
+  volumes:
+    - $PWD:/workspace                      # Mount current directory
+    - $HOME/.cache:/cache                  # Mount cache directory
+    - ./config:/app/config:ro              # Read-only mount
+    - /tmp:/tmp                            # Mount temp directory
+```
+
+**Volume Syntax**: `<host-path>:<container-path>[:ro]`
+- `host-path`: Absolute or relative path on host (variables supported)
+- `container-path`: Absolute path in container
+- `:ro`: Optional read-only flag
+
+**Variable Interpolation in Volumes**:
+```yaml
+volumes:
+  - ${{ env.HOME }}/.cache:/cache
+  - ${{ PWD }}/build:/workspace/build
+```
+
+#### Environment Variables
+
+Pass environment variables to the container:
+
+```yaml
+container:
+  environment:
+    - GO111MODULE=on                       # Set specific value
+    - GOPATH                               # Pass from host environment
+    - GOCACHE=/workspace/.cache            # Set container-specific path
+    - BUILD_TYPE=${{ version.build-type }} # Use buildfab variables
+```
+
+**Environment Syntax**:
+- `KEY=value`: Set variable to specific value
+- `KEY`: Pass variable from host environment
+- Supports variable interpolation with `${{ }}`
+
+#### Working Directory
+
+```yaml
+container:
+  workdir: /workspace        # Working directory inside container (default: /)
+```
+
+#### Running Actions/Stages in Container
+
+**Run a single action**:
+```yaml
+container:
+  image:
+    from: golang:1.22
+  run_action: test           # Action name to run inside container
+```
+
+**Run a complete stage**:
+```yaml
+container:
+  image:
+    from: golang:1.22
+  run_stage: integration     # Stage name to run inside container
+```
+
+### Advanced Container Examples
+
+#### Multi-Platform Testing with Containers
+
+```yaml
+actions:
+  - name: test
+    run: go test ./...
+
+  - name: test-distro
+    container:
+      image:
+        from: ${{ matrix.distro }}
+        pull: missing
+      run_action: test
+      volumes:
+        - $PWD:/workspace
+      workdir: /workspace
+      environment:
+        - CGO_ENABLED=0
+
+stages:
+  test-all:
+    steps:
+      - action: test-distro
+        matrix:
+          values:
+            distro: [ubuntu:22.04, alpine:latest, debian:12]
+          strategy:
+            max_parallel: 2
+# Tests run in 3 different distros, 2 concurrent at a time
+```
+
+#### Container Build with Caching
+
+```yaml
+actions:
+  - name: build
+    run: go build -o bin/app ./cmd/app
+
+  - name: build-cached
+    container:
+      image:
+        from: golang:1.22
+        pull: missing
+      run_action: build
+      volumes:
+        - $PWD:/workspace
+        - $HOME/.cache/go-build:/root/.cache/go-build
+        - $HOME/.cache/go-mod:/go/pkg/mod
+      workdir: /workspace
+      environment:
+        - GOCACHE=/root/.cache/go-build
+        - GOMODCACHE=/go/pkg/mod
+        - CGO_ENABLED=0
+```
+
+#### Container with Resource Limits
+
+```yaml
+actions:
+  - name: intensive-task
+    container:
+      image:
+        from: buildpack:latest
+      cpu: 4                          # Limit to 4 CPU cores
+      memory: "8G"                    # Limit to 8GB RAM
+      network: none                   # No network access
+      run_action: compile
+      volumes:
+        - $PWD:/workspace
+      workdir: /workspace
+```
+
+#### Container Matrix Build
+
+```yaml
+actions:
+  - name: cross-compile
+    run: GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -o bin/app-${{ matrix.os }}-${{ matrix.arch }}
+
+  - name: build-matrix
+    container:
+      image:
+        from: golang:1.22
+      run_action: cross-compile
+      volumes:
+        - $PWD:/workspace
+      workdir: /workspace
+
+stages:
+  release:
+    steps:
+      - action: build-matrix
+        matrix:
+          values:
+            os: [linux, darwin, windows]
+            arch: [amd64, arm64]
+# Creates 6 container jobs (linux-amd64, linux-arm64, darwin-amd64, etc.)
+# Each job runs cross-compile action in isolated container
+```
+
+### Container Requirements
+
+**Buildfab Binary**:
+- Must be available for `run_action` and `run_stage` to work
+- Auto-discovered from: `/usr/local/bin`, `/usr/bin`, `$HOME/bin`, `./scripts`
+- Or provide explicit path in configuration
+
+**Container Engine**:
+- Docker or Podman must be installed and available in PATH
+- User must have permissions to run containers
+
+### Container Troubleshooting
+
+#### Container Engine Not Found
+
+```
+Error: no container engine found (docker or podman required)
+```
+
+**Solution**:
+```bash
+# Install Docker
+sudo apt install docker.io         # Ubuntu/Debian
+sudo systemctl start docker
+
+# Or install Podman
+sudo apt install podman             # Ubuntu/Debian
+```
+
+#### Buildfab Binary Not Found
+
+```
+Error: buildfab binary not found, required for run_action/run_stage
+```
+
+**Solution**:
+```bash
+# Install buildfab to standard directory
+sudo cp bin/buildfab /usr/local/bin/
+
+# Or add to PATH
+export PATH=$PATH:$(pwd)/bin
+```
+
+#### Permission Denied
+
+```
+Error: permission denied while trying to connect to Docker daemon
+```
+
+**Solution**:
+```bash
+# Add user to docker group
+sudo usermod -aG docker $USER
+# Log out and log back in
+
+# Or use Podman (rootless by default)
+sudo apt install podman
+```
+
+#### Volume Mount Issues
+
+```
+Error: invalid mount specification
+```
+
+**Solution**:
+- Use absolute paths or `$PWD` for host paths
+- Ensure host directory exists
+- Check permissions on host directory
+- Use `:ro` for read-only mounts when possible
+
+### Container Best Practices
+
+1. **Use specific image tags**: `golang:1.22` not `golang:latest`
+2. **Cache dependencies**: Mount cache directories for faster builds
+3. **Set resource limits**: Prevent runaway processes
+4. **Use pull: missing**: Faster for local development
+5. **Minimize volumes**: Only mount what's needed
+6. **Set working directory**: Ensure consistent execution context
+7. **Test locally first**: Verify container config before CI
 
 ## Include System
 
