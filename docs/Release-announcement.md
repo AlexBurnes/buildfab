@@ -1,6 +1,6 @@
 # buildfab: Universal Build Orchestration System
 
-**Release v0.20.0** | October 2025
+**Release v0.32.0** | November 2025
 
 ## Introduction
 
@@ -27,6 +27,58 @@ buildfab provides **one `.project.yml` file** that works everywhere:
 - ✅ **In Git hooks**: Automated validation
 
 Built in Go, buildfab combines the simplicity of task runners like Taskfile with the advanced features of GitHub Actions, delivering **CI/CD-grade capabilities** without cloud dependency.
+
+## What's New in v0.32.0
+
+### 🎯 Hierarchical DAG Architecture (Major Refactoring)
+
+The most significant update in v0.32.0 is the complete redesign of the execution engine with a **hierarchical DAG architecture**:
+
+- **Job-Based Execution**: Matrix combinations now form "job nodes" containing sequential steps
+- **Improved Parallelism**: Jobs execute in parallel waves, steps within jobs execute sequentially
+- **Nested Matrix Support**: Matrix on stage references now works correctly (previously would hang)
+- **Better Performance**: Proper dependency waiting with semaphore-based concurrency control
+- **Fixed Issues**: Resolved infinite loops and hanging scenarios in complex matrix builds
+- **Thread-Safe**: Zero race conditions detected in extensive testing
+
+**Impact**: Complex nested matrix builds that previously failed or hung now work flawlessly.
+
+### 🧹 Major Code Cleanup
+
+Removed 1,697 lines of deprecated flat DAG code:
+- 11 deprecated functions eliminated from core executor
+- 27% reduction in buildfab.go (4,845 → 3,528 lines)
+- Single execution path (no more confusion about which DAG to use)
+- Significantly improved code maintainability
+
+### 📚 Comprehensive Library Documentation
+
+New `docs/Library.md` with complete Go library API reference:
+- 10 core API methods documented with examples
+- 5 practical usage examples (basic, variables, timeouts, matrix builds, callbacks)
+- Migration guide from v0.29.1 to v0.32.0
+- Based on real-world usage from pre-push utility
+
+### 📁 Documentation Organization
+
+Reorganized 51 documentation files into logical catalogs:
+- **docs/User/**: 6 user-facing documents (specification, syntax, features, examples)
+- **docs/Devel/**: 39 development documents (implementation details, plans, analysis)
+- **docs/User.md**: New comprehensive index for easy navigation
+
+### 🔧 Expression Parsing Improvements
+
+- Fixed logical NOT operator (`!`) parsing in complex expressions
+- Improved operator precedence handling (binary before unary)
+- Better parentheses handling for nested conditions
+- Complex expressions like `!(matrix.images == 'centos7' && matrix.compiler == 'clang')` now work correctly
+
+### ✨ Enhanced Matrix Builds
+
+- Matrix variables correctly propagate in nested scenarios
+- Condition-based skips don't block sliding window dependencies
+- User dependencies (`require`, `depends_on`) properly inherited by matrix jobs
+- Global `max_parallel` setting now properly enforced
 
 ## What is buildfab?
 

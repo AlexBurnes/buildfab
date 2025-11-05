@@ -826,6 +826,7 @@ go test ./... -race
 
 ### User Documentation
 - [User Documentation Index](docs/User.md) - Overview of all user documentation
+- [Release Announcement](docs/Release-announcement.md) - Latest release highlights and new features
 - [Features and Examples](docs/User/Features-and-examples.md) - Comprehensive features with detailed examples
 - [YAML Syntax Reference](docs/User/YAML-syntax-reference.md) - Complete configuration syntax reference
 - [Comparison with Others](docs/User/Comparison-with-others.md) - Comparison with Taskfile, GitHub Actions, Make

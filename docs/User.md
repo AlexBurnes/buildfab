@@ -9,6 +9,7 @@ This directory contains user-facing documentation for buildfab - a Go-based CLI 
 ## Quick Links
 
 - [Installation & Getting Started](../README.md)
+- [Release Announcement](Release-announcement.md) - What's new in v0.32.0
 - [Project Specification](User/Project-specification.md) - Complete feature reference
 - [YAML Syntax Reference](User/YAML-syntax-reference.md) - Configuration syntax
 - [Examples](../examples/) - Working configuration examples
