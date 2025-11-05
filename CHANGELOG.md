@@ -22,6 +22,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **docs/ (root)**: Core documentation (6 files: Build, Deploy, Developer-workflow, Git-integration, Library, User index)
   - **docs/User.md**: New index file with quick links, documentation index, quick start guide, and common tasks
   - **Updated README.md**: Fixed all links to reorganized documentation, added clear categories
+- **v0.32.0 Feature Documentation**: Added comprehensive documentation for all v0.32.0 features (~630 lines)
+  - **docs/User/Project-specification.md**: Added "Execution Model (v0.32.0)" section (~130 lines)
+    * Job-based execution model: jobs vs steps, parallelism vs sequential
+    * Execution waves: dependency-ordered parallel execution
+    * Matrix build execution: how combinations create jobs
+    * Nested matrix support: hierarchical expansion explained
+    * Sliding window dependencies: automatic concurrency control
+    * Condition-based skips: smart behavior with dependencies
+    * User dependencies vs sliding window dependencies distinction
+    * Benefits of hierarchical DAG architecture
+  - **docs/User/Features-and-examples.md**: Added "Advanced Matrix Features (v0.32.0)" section (~180 lines)
+    * Nested matrix support with job creation examples
+    * Sliding window dependencies execution pattern visualization
+    * Condition-based skips with sliding window (don't block)
+    * Complex NOT expressions working correctly (v0.32.0 fix)
+    * Operator precedence rules documented
+    * Matrix variable propagation in nested scenarios
+    * User dependencies inheritance by matrix jobs
+    * Global max_parallel enforcement and priority rules
+  - **docs/User/Features-and-examples.md**: Added "Container Support" section (~320 lines)
+    * Complete container configuration reference (image, engine, resources, volumes, environment, workdir)
+    * Image pull policies (always, missing, never)
+    * Engine auto-detection (Docker/Podman) and explicit selection
+    * Resource limits: CPU cores, memory, network modes
+    * Volume mounting: syntax, examples, variable interpolation
+    * Environment variable passing with interpolation support
+    * run_action and run_stage execution in containers
+    * Advanced examples: multi-platform testing, caching, resource limits, container matrix builds
+    * Container requirements: buildfab binary location, engine availability
+    * Comprehensive troubleshooting: engine not found, binary not found, permissions, volume issues
+    * Best practices: specific tags, caching, resource limits, testing
+  - **Result**: All v0.32.0 features now fully documented, user documentation 100% complete
 
 ### Refactoring
 - **Major Code Cleanup**: Removed 1,697 lines of deprecated flat DAG code
