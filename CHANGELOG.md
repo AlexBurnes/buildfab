@@ -15,11 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Migration guide from v0.29.1 to v0.32.0
   - Custom callbacks, container support, and advanced topics
   - Based on real-world usage patterns from pre-push utility
-- **Cleanup Plan**: Created `docs/Cleanup-plan-deprecated-code.md` for removing deprecated flat DAG code
-  - Identified 7 deprecated functions (~2,210 lines total)
-  - Verified no external dependencies on deprecated code
-  - Detailed removal plan for v0.33.0 release
-  - Risk assessment and migration paths
 
 ### Refactoring
 - **Major Code Cleanup**: Removed 1,697 lines of deprecated flat DAG code
