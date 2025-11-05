@@ -93,14 +93,39 @@ func ParseExpression(expr string, ctx *ExpressionContext) (*ExpressionResult, er
 func parseExpression(expr string, ctx *ExpressionContext) (*ExpressionResult, error) {
 	expr = strings.TrimSpace(expr)
 
-	// Handle parentheses first
+	// Handle parentheses first - but only if they wrap the ENTIRE expression
 	if strings.HasPrefix(expr, "(") && strings.HasSuffix(expr, ")") {
-		inner := strings.TrimSpace(expr[1 : len(expr)-1])
-		return parseExpression(inner, ctx)
+		// Check if removing the outer parens leaves a balanced expression
+		inner := expr[1 : len(expr)-1]
+		parenCount := 0
+		isBalanced := true
+		for _, char := range inner {
+			if char == '(' {
+				parenCount++
+			} else if char == ')' {
+				parenCount--
+			}
+			// If count goes negative, we have more closing than opening
+			if parenCount < 0 {
+				isBalanced = false
+				break
+			}
+		}
+		
+		// Only strip if the inner expression is balanced (count == 0) and never went negative
+		if isBalanced && parenCount == 0 {
+			return parseExpression(strings.TrimSpace(inner), ctx)
+		}
 	}
 
-	// Handle logical operators (&&, ||, !)
-	if result, err := parseLogicalExpression(expr, ctx); err == nil {
+	// Handle binary logical operators (&&, ||) BEFORE unary (!) for correct precedence
+	// This ensures "!A && B" is parsed as "(!A) && B" not "!(A && B)"
+	if result, err := parseBinaryLogicalExpression(expr, ctx); err == nil {
+		return result, nil
+	}
+
+	// Handle unary NOT operator (!)
+	if result, err := parseUnaryLogicalExpression(expr, ctx); err == nil {
 		return result, nil
 	}
 
@@ -122,25 +147,8 @@ func parseExpression(expr string, ctx *ExpressionContext) (*ExpressionResult, er
 	return nil, fmt.Errorf("unable to parse expression: %s", expr)
 }
 
-// parseLogicalExpression handles &&, ||, ! operators
-func parseLogicalExpression(expr string, ctx *ExpressionContext) (*ExpressionResult, error) {
-	// Handle NOT operator
-	if strings.HasPrefix(expr, "!") {
-		operand := strings.TrimSpace(expr[1:])
-		// Handle parentheses for NOT operator
-		if strings.HasPrefix(operand, "(") && strings.HasSuffix(operand, ")") {
-			operand = strings.TrimSpace(operand[1 : len(operand)-1])
-		}
-		result, err := parseExpression(operand, ctx)
-		if err != nil {
-			return nil, err
-		}
-		return &ExpressionResult{
-			Value: !toBool(result),
-			Type:  "bool",
-		}, nil
-	}
-
+// parseBinaryLogicalExpression handles &&, || operators
+func parseBinaryLogicalExpression(expr string, ctx *ExpressionContext) (*ExpressionResult, error) {
 	// Handle AND operator - need to be careful about parentheses
 	if strings.Contains(expr, " && ") {
 		// Find the AND operator that's not inside parentheses
@@ -153,7 +161,11 @@ func parseLogicalExpression(expr string, ctx *ExpressionContext) (*ExpressionRes
 				parenCount--
 			} else if char == '&' && i+1 < len(expr) && expr[i+1] == '&' && parenCount == 0 {
 				// Check if this is a complete && operator
-				if i > 0 && expr[i-1] == ' ' && i+2 < len(expr) && expr[i+2] == ' ' {
+				// We need space before and space after the &&
+				hasSpaceBefore := i > 0 && expr[i-1] == ' '
+				hasSpaceAfter := i+2 < len(expr) && expr[i+2] == ' '
+				
+				if hasSpaceBefore && hasSpaceAfter {
 					andPos = i
 					break
 				}
@@ -166,12 +178,12 @@ func parseLogicalExpression(expr string, ctx *ExpressionContext) (*ExpressionRes
 
 			leftResult, err := parseExpression(left, ctx)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to parse left side of &&: %w", err)
 			}
 
 			rightResult, err := parseExpression(right, ctx)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to parse right side of &&: %w", err)
 			}
 
 			return &ExpressionResult{
@@ -221,7 +233,26 @@ func parseLogicalExpression(expr string, ctx *ExpressionContext) (*ExpressionRes
 		}
 	}
 
-	return nil, fmt.Errorf("not a logical expression")
+	return nil, fmt.Errorf("not a binary logical expression")
+}
+
+// parseUnaryLogicalExpression handles ! (NOT) operator
+func parseUnaryLogicalExpression(expr string, ctx *ExpressionContext) (*ExpressionResult, error) {
+	// Handle NOT operator
+	if strings.HasPrefix(expr, "!") {
+		operand := strings.TrimSpace(expr[1:])
+		// Don't strip parentheses here - parseExpression will handle them
+		result, err := parseExpression(operand, ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &ExpressionResult{
+			Value: !toBool(result),
+			Type:  "bool",
+		}, nil
+	}
+	
+	return nil, fmt.Errorf("not a unary logical expression")
 }
 
 // parseComparisonExpression handles ==, !=, <, <=, >, >=, = operators

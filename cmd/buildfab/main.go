@@ -70,20 +70,20 @@ func displayVersionInfo(cfg *buildfab.Config) {
 
 // Global flags
 var (
-	verboseLevel  int
-	quiet         bool
-	debug         bool
-	dryRun        bool
-	configPath    string
-	maxParallel   int
-	workingDir    string
-	only          []string
-	withRequires  bool
-	envVars       []string
-	showGraph     bool
-	matrixVars    map[string]string // Dynamic matrix variables from CLI flags
-	versionFlag   bool              // Version flag
-	versionOnlyFlag bool            // Version-only flag
+	verboseLevel    int
+	quiet           bool
+	debug           bool
+	dryRun          bool
+	configPath      string
+	maxParallel     int
+	workingDir      string
+	only            []string
+	withRequires    bool
+	envVars         []string
+	showGraph       bool
+	matrixVars      map[string]string // Dynamic matrix variables from CLI flags
+	versionFlag     bool              // Version flag
+	versionOnlyFlag bool              // Version-only flag
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -482,16 +482,16 @@ func runStageDirect(cmd *cobra.Command, args []string) error {
 	
 	// Create simple run options
 	opts := &buildfab.SimpleRunOptions{
-		ConfigPath:  configPath,
-		MaxParallel: maxParallel,
+		ConfigPath:   configPath,
+		MaxParallel:  maxParallel,
 		VerboseLevel: effectiveVerboseLevel,
-		Debug:       debug,
-		DryRun:      dryRun,
-		Variables:   variables,
-		WorkingDir:  workingDir,
-		Output:      os.Stdout,
-		ErrorOutput: os.Stderr,
-		Only:        only,
+		Debug:        debug,
+		DryRun:       dryRun,
+		Variables:    variables,
+		WorkingDir:   workingDir,
+		Output:       os.Stdout,
+		ErrorOutput:  os.Stderr,
+		Only:         only,
 		WithRequires: withRequires,
 	}
 	
@@ -617,16 +617,16 @@ func runActionDirect(cmd *cobra.Command, args []string) error {
 		effectiveVerboseLevel = 1
 	}
 	opts := &buildfab.SimpleRunOptions{
-		ConfigPath:  configPath,
-		MaxParallel: maxParallel,
+		ConfigPath:   configPath,
+		MaxParallel:  maxParallel,
 		VerboseLevel: effectiveVerboseLevel,
-		Debug:       debug,
-		DryRun:      dryRun,
-		Variables:   variables,
-		WorkingDir:  workingDir,
-		Output:      os.Stdout,
-		ErrorOutput: os.Stderr,
-		Only:        only,
+		Debug:        debug,
+		DryRun:       dryRun,
+		Variables:    variables,
+		WorkingDir:   workingDir,
+		Output:       os.Stdout,
+		ErrorOutput:  os.Stderr,
+		Only:         only,
 	}
 	
 	// Create simple runner

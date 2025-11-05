@@ -60,6 +60,7 @@ type SimpleRunOptions struct {
     Only               []string          // Only run steps matching these labels
     WithRequires       bool              // Include required dependencies when running single step
     BuildfabBinaryPath string            // Path to buildfab binary for run_action/run_stage (optional, auto-detected if not specified)
+    StepCallback       StepCallback      // Optional callback for step execution (mainly for tests)
 }
 
 // DefaultSimpleRunOptions returns default simple run options
@@ -108,7 +109,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
 
     // Debug output
     if r.opts.Debug {
-        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] SimpleRunner.RunStage: stageName=%s\n", stageName)
+        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] SimpleRunner.RunStage: stageName=%s (using hierarchical DAG)\n", stageName)
         fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Steps: %+v\n", stage.Steps)
         for i, step := range stage.Steps {
             fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Step %d: %+v\n", i, step)
@@ -118,7 +119,12 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
         }
     }
 
+    // Always use hierarchical DAG execution (the correct architecture)
+    return r.runStageWithHierarchicalDAG(ctx, stageName, stage)
+    
+    // OLD FLAT DAG CODE BELOW - DEPRECATED, WILL BE REMOVED
     // First, expand stage references into their constituent steps
+    /*
     stepsWithExpandedStages, err := r.expandStageReferences(stage.Steps)
     if err != nil {
         return fmt.Errorf("failed to expand stage references: %w", err)
@@ -174,6 +180,17 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     if r.opts.Debug {
         fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Using %d interpolated actions from matrix expansion\n", len(interpolatedActions))
     }
+    
+    // Add interpolated actions to config so DAG builder can find them
+    // Store original actions count to restore later
+    originalActionsCount := len(r.config.Actions)
+    for _, interpolatedAction := range interpolatedActions {
+        r.config.Actions = append(r.config.Actions, *interpolatedAction)
+    }
+    defer func() {
+        // Restore original actions after execution
+        r.config.Actions = r.config.Actions[:originalActionsCount]
+    }()
     
     // Create step callback based on verbosity level
     var stepCallback StepCallback
@@ -299,6 +316,7 @@ func (r *SimpleRunner) RunStage(ctx context.Context, stageName string) error {
     }
 
     return err
+    */
 }
 
 // RunAction executes a specific action with automatic output handling
@@ -1021,6 +1039,11 @@ func (r *SimpleRunner) printTerminatedSummary(stageName string, results []StepRe
             statusCounts[result.Status]++
         }
 
+        // Combine both types of skips for display (they show the same to users)
+        totalSkipped := statusCounts[StepStatusSkipped] + statusCounts[StepStatusSkippedCondition]
+        statusCounts[StepStatusSkipped] = totalSkipped
+        delete(statusCounts, StepStatusSkippedCondition)
+
         // Define status order for consistent display
         statusOrder := []StepStatus{
             StepStatusError,
@@ -1121,6 +1144,11 @@ func (r *SimpleRunner) printSummary(stageName string, success bool, results []St
         for _, result := range results {
             statusCounts[result.Status]++
         }
+
+        // Combine both types of skips for display (they show the same to users)
+        totalSkipped := statusCounts[StepStatusSkipped] + statusCounts[StepStatusSkippedCondition]
+        statusCounts[StepStatusSkipped] = totalSkipped
+        delete(statusCounts, StepStatusSkippedCondition)
 
         // Define status order for consistent display
         statusOrder := []StepStatus{
@@ -1618,6 +1646,88 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
                     // Restore original variables
                     r.opts.Variables = originalVars
 
+                    // Check if any expanded steps have matrix configurations and expand them
+                    // This handles nested matrix scenarios where both the outer stage reference
+                    // and inner steps have matrix configurations
+                    if r.opts.Debug {
+                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Checking %d expanded steps for nested matrix configurations\n", len(expandedStageSteps))
+                        for i, s := range expandedStageSteps {
+                            fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG]   Step %d: Action=%s, Stage=%s, HasMatrix=%v\n", i, s.Action, s.Stage, s.Matrix != nil)
+                        }
+                    }
+                    var fullyExpandedSteps []Step
+                    for _, expandedStep := range expandedStageSteps {
+                        if expandedStep.Matrix != nil && expandedStep.Action != "" {
+                            if r.opts.Debug {
+                                fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding nested matrix for step %s\n", expandedStep.Action)
+                            }
+                            // This step has a matrix configuration - expand it
+                            action, exists := r.config.GetAction(expandedStep.Action)
+                            if !exists {
+                                return nil, nil, nil, fmt.Errorf("action not found: %s", expandedStep.Action)
+                            }
+                            
+                            // Create a temporary expander with the job's matrix variables already set
+                            tempExpander := NewMatrixExpander(r.config, cliMatrixVars, r.opts.Variables)
+                            tempExpander.globalVars = jobVariables // Use job variables that include outer matrix vars
+                            
+                            nestedMatrixSteps, nestedInterpolatedActions, err := tempExpander.ExpandMatrixToStepsWithActions(&expandedStep, &action)
+                            if err != nil {
+                                return nil, nil, nil, fmt.Errorf("failed to expand nested matrix for step %s in job %d: %w", expandedStep.Action, jobIdx, err)
+                            }
+                            
+                            // Add nested matrix variables to each expanded step's variables
+                            // This ensures the outer matrix variables are preserved
+                            for i := range nestedMatrixSteps {
+                                if nestedMatrixSteps[i].Variables == nil {
+                                    nestedMatrixSteps[i].Variables = make(map[string]string)
+                                }
+                                // Add outer matrix variables first
+                                for k, v := range matrixVars {
+                                    if _, exists := nestedMatrixSteps[i].Variables[k]; !exists {
+                                        nestedMatrixSteps[i].Variables[k] = v
+                                    }
+                                }
+                            }
+                            
+                            // Store interpolated actions with unique names to avoid collisions
+                            // Each nested matrix step needs a unique action name across all jobs
+                            for i, nestedStep := range nestedMatrixSteps {
+                                // Original action name from nested expansion
+                                originalActionName := nestedStep.Action
+                                // Create unique action name: <baseName>.<jobIdx>.<originalActionName>
+                                uniqueActionName := fmt.Sprintf("%s.%d.%s", baseName, jobIdx, originalActionName)
+                                
+                                // Find the corresponding interpolated action
+                                if interpolatedAction, exists := nestedInterpolatedActions[originalActionName]; exists {
+                                    // Create a copy of the action with the unique name
+                                    uniqueAction := *interpolatedAction
+                                    uniqueAction.Name = uniqueActionName
+                                    
+                                    // Store using the unique name
+                                    allInterpolatedActions[uniqueActionName] = &uniqueAction
+                                    
+                                    // Update the step's Action field to match
+                                    nestedMatrixSteps[i].Action = uniqueActionName
+                                    
+                                    if r.opts.Debug {
+                                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Stored interpolated action: %s → %s\n", originalActionName, uniqueActionName)
+                                    }
+                                } else if r.opts.Debug {
+                                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Warning: No interpolated action found for step %d: %s\n", i, originalActionName)
+                                }
+                            }
+                            
+                            fullyExpandedSteps = append(fullyExpandedSteps, nestedMatrixSteps...)
+                        } else {
+                            // No matrix on this step - keep as-is
+                            fullyExpandedSteps = append(fullyExpandedSteps, expandedStep)
+                        }
+                    }
+                    
+                    // Replace expandedStageSteps with fully expanded steps
+                    expandedStageSteps = fullyExpandedSteps
+
                     // Apply matrix variables to all expanded steps and ensure unique names
                     for stepIdx := range expandedStageSteps {
                         // Merge matrix variables into step variables
@@ -1632,6 +1742,8 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
                         originalStepName := expandedStageSteps[stepIdx].GetStepName()
                         uniqueName := fmt.Sprintf("%s.%d.%s", baseName, jobIdx, originalStepName)
 
+                        // Keep the Action field as-is (it's the key to find the interpolated action)
+                        // Only update the Name field for uniqueness
                         if expandedStageSteps[stepIdx].Name == "" {
                             expandedStageSteps[stepIdx].Name = uniqueName
                         } else {
@@ -1642,11 +1754,19 @@ func (r *SimpleRunner) expandMatrixSteps(steps []Step) ([]Step, []MatrixStageJob
                         if step.OnError != "" && expandedStageSteps[stepIdx].OnError == "" {
                             expandedStageSteps[stepIdx].OnError = step.OnError
                         }
+                        // Inherit if condition from parent step (combine with AND if child has one)
                         if step.If != "" {
                             if expandedStageSteps[stepIdx].If == "" {
                                 expandedStageSteps[stepIdx].If = step.If
                             } else {
-                                expandedStageSteps[stepIdx].If = fmt.Sprintf("(%s) && (%s)", step.If, expandedStageSteps[stepIdx].If)
+                                combinedIf := fmt.Sprintf("(%s) && (%s)", step.If, expandedStageSteps[stepIdx].If)
+                                if r.opts.Debug {
+                                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Combining if conditions:\n")
+                                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG]   Parent: %s\n", step.If)
+                                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG]   Child:  %s\n", expandedStageSteps[stepIdx].If)
+                                    fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG]   Combined: %s\n", combinedIf)
+                                }
+                                expandedStageSteps[stepIdx].If = combinedIf
                             }
                         }
                     }
@@ -1853,12 +1973,29 @@ func (r *SimpleRunner) findFirstSteps(steps []Step) []string {
         }
     }
     
-    // If no first steps found (all steps have dependencies), return all steps
-    // This handles the case where dependencies are external to the job
+    // Handle edge cases:
+    // - If no first steps found (all have dependencies): they depend on external steps, return all
+    // - If all steps are first steps (no internal deps) AND no external deps: sequential, return first only
     if len(firstSteps) == 0 {
+        // All steps have dependencies - assume external, return all
         for _, step := range steps {
             firstSteps = append(firstSteps, step.GetStepName())
         }
+    } else if len(firstSteps) == len(steps) {
+        // All steps are independent - check if they have ANY dependencies
+        hasAnyDeps := false
+        for _, step := range steps {
+            if len(step.Require) > 0 || len(step.DependsOn) > 0 {
+                hasAnyDeps = true
+                break
+            }
+        }
+        
+        // If no dependencies at all, use sequential (first step only)
+        if !hasAnyDeps && len(steps) > 0 {
+            firstSteps = []string{steps[0].GetStepName()}
+        }
+        // Otherwise keep all (they have external deps)
     }
     
     return firstSteps
@@ -1899,10 +2036,20 @@ func (r *SimpleRunner) findLastSteps(steps []Step) []string {
         }
     }
     
-    // If no last steps found (circular dependencies or all steps have dependents), return all steps
-    if len(lastSteps) == 0 {
-        for _, step := range steps {
-            lastSteps = append(lastSteps, step.GetStepName())
+    // Handle edge cases:
+    // - If no last steps found OR all steps are last steps (no internal dependents),
+    //   check if they have external dependents vs no dependents at all
+    if len(lastSteps) == 0 || len(lastSteps) == len(steps) {
+        if len(lastSteps) == len(steps) {
+            // All steps are last steps - use declaration order for sequential execution
+            if len(steps) > 0 {
+                lastSteps = []string{steps[len(steps)-1].GetStepName()}
+            }
+        } else {
+            // No last steps found (shouldn't happen) - return all
+            for _, step := range steps {
+                lastSteps = append(lastSteps, step.GetStepName())
+            }
         }
     }
     
@@ -1957,8 +2104,15 @@ func (r *SimpleRunner) injectSlidingWindowDependencies(steps []Step, matrixJobs 
                 
                 if !hasDep {
                     firstStep.Require = append(firstStep.Require, lastStepName)
+                    
+                    // Mark this dependency as a sliding window dependency
+                    if firstStep.SlidingWindowDependencies == nil {
+                        firstStep.SlidingWindowDependencies = make(map[string]bool)
+                    }
+                    firstStep.SlidingWindowDependencies[lastStepName] = true
+                    
                     if r.opts.Debug {
-                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Injected dependency: %s depends on %s (job %d → job %d)\n",
+                        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Injected sliding window dependency: %s depends on %s (job %d → job %d)\n",
                             firstStep.GetStepName(), lastStepName, i, previousJobIdx)
                     }
                 }
@@ -1967,4 +2121,228 @@ func (r *SimpleRunner) injectSlidingWindowDependencies(steps []Step, matrixJobs 
     }
     
     return steps
+}
+
+// runStageWithHierarchicalDAG executes a stage using the hierarchical DAG architecture
+func (r *SimpleRunner) runStageWithHierarchicalDAG(ctx context.Context, stageName string, stage Stage) error {
+    if r.opts.Debug {
+        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Using hierarchical DAG execution for stage: %s\n", stageName)
+    }
+    
+    // Start timing
+    stageStart := time.Now()
+    timestamp := formatISO8601Timestamp(stageStart)
+    fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s [%s] (hierarchical DAG)\n\n", stageName, timestamp)
+    
+    // Build hierarchical DAG from stage steps
+    dag, err := r.buildHierarchicalDAG(stage.Steps)
+    if err != nil {
+        return fmt.Errorf("failed to build hierarchical DAG: %w", err)
+    }
+    
+    if r.opts.Debug {
+        fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Created hierarchical DAG with %d jobs and %d steps\n",
+            dag.CountTotalJobs(), dag.CountTotalSteps())
+    }
+    
+    // Create callback based on verbosity level
+    var callback JobExecutionCallback
+    var multilineCallback *MultilineJobCallback
+    var orderedCallback *OrderedJobCallback
+    
+    if r.opts.VerboseLevel == 0 {
+        // Quiet mode: use multiline callback (shows all steps upfront, updates dynamically)
+        multilineCallback = NewMultilineJobCallback(dag, r.opts.Output, r.opts.ErrorOutput, r.opts.VerboseLevel, r.opts.Debug, r.config, r.opts.ConfigPath, r.opts.Variables)
+        // Connect user-provided StepCallback if exists (mainly for tests)
+        if r.opts.StepCallback != nil {
+            multilineCallback.SetStepCallback(r.opts.StepCallback)
+        }
+        callback = multilineCallback
+    } else {
+        // Verbose mode: use ordered callback (shows steps in order as they complete)
+        orderedCallback = NewOrderedJobCallback(dag, r.opts.Output, r.opts.ErrorOutput, r.opts.VerboseLevel, r.opts.Debug, r.config, r.opts.ConfigPath, r.opts.Variables)
+        // Connect user-provided StepCallback if exists (mainly for tests)
+        if r.opts.StepCallback != nil {
+            orderedCallback.SetStepCallback(r.opts.StepCallback)
+        }
+        callback = orderedCallback
+    }
+    
+    // Create RunOptions for executor
+    execOpts := &RunOptions{
+        ConfigPath:         r.opts.ConfigPath,
+        MaxParallel:        r.opts.MaxParallel,
+        VerboseLevel:       r.opts.VerboseLevel,
+        Debug:              r.opts.Debug,
+        DryRun:             r.opts.DryRun,
+        Variables:          r.opts.Variables,
+        WorkingDir:         r.opts.WorkingDir,
+        Input:              r.opts.Input,
+        Output:             r.opts.Output,
+        ErrorOutput:        r.opts.ErrorOutput,
+        Only:               r.opts.Only,
+        WithRequires:       r.opts.WithRequires,
+        BuildfabBinaryPath: r.opts.BuildfabBinaryPath,
+    }
+    
+    // Initialize multiline display if using multiline callback
+    if multilineCallback != nil {
+        multilineCallback.Initialize()
+        defer multilineCallback.Cleanup()
+    }
+    
+    // Create and run hierarchical executor
+    executor := NewHierarchicalExecutor(dag, r.config, execOpts, callback)
+    // Transfer custom registry if exists (for tests)
+    if r.registry != nil {
+        executor.registry = r.registry
+    }
+    err = executor.Execute(ctx)
+    
+    // Calculate stage duration
+    stageDuration := time.Since(stageStart)
+    
+    // Get results from callback
+    var results []StepResult
+    if multilineCallback != nil {
+        results = multilineCallback.GetResults()
+    } else if orderedCallback, ok := callback.(*OrderedJobCallback); ok {
+        results = orderedCallback.GetResults()
+    }
+    
+    // Print results
+    r.printHierarchicalResults(stageName, stageDuration, results)
+    
+    return err
+}
+
+// buildHierarchicalDAG builds a hierarchical DAG from stage steps
+func (r *SimpleRunner) buildHierarchicalDAG(steps []Step) (*HierarchicalDAG, error) {
+    dag := NewHierarchicalDAG()
+    
+    // Extract matrix variables from CLI
+    cliMatrixVars := make(map[string]string)
+    for key, value := range r.opts.Variables {
+        if strings.HasPrefix(key, "matrix.") {
+            cliMatrixVars[key] = value
+        }
+    }
+    
+    // Create job expander
+    expander := NewJobExpander(r.config, cliMatrixVars, r.opts.Variables)
+    
+    // Expand each step into jobs
+    jobCounter := 0
+    for _, step := range steps {
+        // Check if step has matrix
+        if step.Matrix != nil {
+            // Expand matrix to jobs
+            jobs, err := expander.ExpandMatrixToJobs(&step)
+            if err != nil {
+                return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.GetStepName(), err)
+            }
+            
+            // Inject sliding window dependencies if needed
+            if step.Matrix.Strategy.MaxParallel > 0 {
+                expander.InjectSlidingWindowDependencies(jobs, step.Matrix.Strategy.MaxParallel)
+            }
+            
+            // Add jobs to DAG
+            for _, job := range jobs {
+                dag.AddRootJob(job)
+            }
+            jobCounter += len(jobs)
+        } else {
+            // Non-matrix step: create a single job with one step
+            // Use step name as job ID so dependencies can be resolved
+            jobID := step.GetStepName()
+            job := NewJobNode(jobID, step.GetStepName(), nil)
+            
+            if step.Action != "" {
+                action, exists := r.config.GetAction(step.Action)
+                if !exists {
+                    return nil, fmt.Errorf("action not found: %s", step.Action)
+                }
+                
+                execStepID := fmt.Sprintf("%s.0", jobID)
+                execStep := ExecutableStep{
+                    ID:          execStepID,
+                    DisplayName: step.GetStepName(),
+                    Action:      &action,
+                    Variables:   step.Variables,
+                    If:          step.If,
+                    OnError:     step.OnError,
+                }
+                job.AddStep(execStep)
+            }
+            
+            // Add user dependencies to job
+            for _, dep := range step.Require {
+                job.AddDependency(dep, false) // Not a sliding window dependency
+            }
+            for _, dep := range step.DependsOn {
+                job.AddDependency(dep, false)
+            }
+            
+            dag.AddRootJob(job)
+            jobCounter++
+        }
+    }
+    
+    return dag, nil
+}
+
+// printHierarchicalResults prints execution results for hierarchical DAG
+func (r *SimpleRunner) printHierarchicalResults(stageName string, duration time.Duration, results []StepResult) {
+    // Count results by status
+    statusCounts := make(map[StepStatus]int)
+    for _, result := range results {
+        statusCounts[result.Status]++
+    }
+    
+    // Combine both skip types
+    totalSkipped := statusCounts[StepStatusSkipped] + statusCounts[StepStatusSkippedCondition]
+    
+    // Determine overall status
+    hasError := statusCounts[StepStatusError] > 0
+    hasWarn := statusCounts[StepStatusWarn] > 0
+    
+    var statusIcon, statusText, statusColor string
+    if hasError {
+        statusIcon = "💥"
+        statusText = "FAILED"
+        statusColor = colorRed
+    } else if hasWarn {
+        statusIcon = "⚠️"
+        statusText = "WARNING"
+        statusColor = colorYellow
+    } else {
+        statusIcon = "🎉"
+        statusText = "SUCCESS"
+        statusColor = colorGreen
+    }
+    
+    // Print summary
+    fmt.Fprintf(r.opts.Output, "\n")
+    fmt.Fprintf(r.opts.Output, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+    fmt.Fprintf(r.opts.Output, "%s %s%s%s - %s in %.3fs\n", statusIcon, statusColor, statusText, colorReset, stageName, duration.Seconds())
+    fmt.Fprintf(r.opts.Output, "\n")
+    fmt.Fprintf(r.opts.Output, "📊 Summary:\n")
+    
+    // Print status counts
+    fmt.Fprintf(r.opts.Output, "   %s✗%s %serror%s      %d\n", 
+        colorGray, colorReset, colorGray, colorReset, statusCounts[StepStatusError])
+    fmt.Fprintf(r.opts.Output, "   %s!%s %swarn%s       %d\n", 
+        colorGray, colorReset, colorGray, colorReset, statusCounts[StepStatusWarn])
+    
+    okCount := statusCounts[StepStatusOK]
+    okColor := colorGray
+    if okCount > 0 {
+        okColor = colorGreen
+    }
+    fmt.Fprintf(r.opts.Output, "   %s✓%s %sok%s         %d\n", 
+        okColor, colorReset, okColor, colorReset, okCount)
+    
+    fmt.Fprintf(r.opts.Output, "   %s→%s %sskipped%s    %d\n", 
+        colorGray, colorReset, colorGray, colorReset, totalSkipped)
 }

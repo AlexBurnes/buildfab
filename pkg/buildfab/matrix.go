@@ -300,6 +300,7 @@ func (me *MatrixExpander) ExpandMatrixToStepsWithActions(step *Step, action *Act
 			Require:     step.Require, // Keep original dependencies
 			OnError:     step.OnError,
 			If:          step.If,
+			Variables:   matrixVars, // Add matrix variables to step for if condition evaluation
 		}
 		
 		steps = append(steps, newStep)

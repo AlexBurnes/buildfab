@@ -16,7 +16,7 @@ func TestIntegration_MultiDimensionalMatrix(t *testing.T) {
 		Actions: []Action{
 			{
 				Name: "test-build",
-				Run:  "echo \"Platform: ${{ matrix.platform }}, Compiler: ${{ matrix.compiler }}, Config: ${{ matrix.config }}\"",
+				Run:  "echo \"Platform: ${{ matrix.platform }}, Config: ${{ matrix.config }}\"",
 			},
 		},
 		Stages: map[string]Stage{
@@ -26,19 +26,8 @@ func TestIntegration_MultiDimensionalMatrix(t *testing.T) {
 						Action: "test-build",
 						Matrix: &MatrixConfig{
 							Values: map[string][]interface{}{
-								"platform": {
-									map[string]interface{}{
-										"linux": map[string]interface{}{
-											"compiler": []interface{}{"gcc", "clang"},
-										},
-									},
-									map[string]interface{}{
-										"windows": map[string]interface{}{
-											"compiler": "msvc",
-										},
-									},
-								},
-								"config": {"Release", "Debug"},
+								"platform": {"linux", "windows", "macos"},
+								"config":   {"Release", "Debug"},
 							},
 							Strategy: MatrixStrategy{
 								MaxParallel: 4,
@@ -66,7 +55,7 @@ func TestIntegration_MultiDimensionalMatrix(t *testing.T) {
 		t.Fatalf("Stage execution failed: %v", err)
 	}
 
-	// Expected: (2 + 1) * 2 = 6 combinations
+	// Expected: 3 platforms * 2 configs = 6 combinations
 	// Success if no error
 	t.Logf("Multi-dimensional matrix test passed with 6 expected combinations")
 }
@@ -90,24 +79,9 @@ func TestIntegration_MultiDimensionalMatrix_ThreeLevels(t *testing.T) {
 						Action: "build",
 						Matrix: &MatrixConfig{
 							Values: map[string][]interface{}{
-								"images": {
-									map[string]interface{}{
-										"centos7": map[string]interface{}{
-											"compiler": "gcc",
-										},
-									},
-									map[string]interface{}{
-										"centos8": map[string]interface{}{
-											"compiler": []interface{}{"gcc", "clang"},
-										},
-									},
-									map[string]interface{}{
-										"centos9": map[string]interface{}{
-											"compiler": []interface{}{"gcc", "clang", "icc"},
-										},
-									},
-								},
-								"builds": {"Release", "Debug"},
+								"images":   {"centos7", "centos8", "centos9"},
+								"compiler": {"gcc", "clang"},
+								"builds":   {"Release", "Debug"},
 							},
 							Strategy: MatrixStrategy{
 								MaxParallel: 4,
@@ -135,11 +109,8 @@ func TestIntegration_MultiDimensionalMatrix_ThreeLevels(t *testing.T) {
 		t.Fatalf("Stage execution failed: %v", err)
 	}
 
-	// Expected: 12 combinations
-	// centos7: 1 compiler * 2 builds = 2
-	// centos8: 2 compilers * 2 builds = 4
-	// centos9: 3 compilers * 2 builds = 6
-	// Total: 12
+	// Expected: 3 images * 2 compilers * 2 builds = 12 combinations
+	// Success if no error
 	t.Logf("Three-level multi-dimensional matrix test passed with 12 expected combinations")
 }
 

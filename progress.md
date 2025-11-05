@@ -2,7 +2,24 @@
 
 ## What Works
 
-- **Matrix Action Variable Interpolation Fix** (Unreleased - November 1, 2025): Successfully fixed critical bug where matrix actions failed with "no run command specified" error (100% complete)
+- **Hierarchical DAG Architecture** (v0.32.0 - November 5, 2025): Successfully replaced flat DAG with hierarchical job-based execution model (100% complete - PHASE 1)
+  - **Architecture Change** - Jobs are now the unit of parallelism, steps within jobs execute sequentially
+  - **Matrix Support** - Matrix combinations form job nodes, nested matrices (matrix-on-stage) now work correctly
+  - **Critical Bug Fixed** - Resolved infinite loop hanging in matrix-image-build scenario
+  - **Execution Model** - Wave-based execution with semaphore-controlled parallelism within waves
+  - **Dependency Management** - Explicit vs sliding window dependencies properly distinguished, dependency waiting implemented
+  - **Output Modes** - Quiet mode: MultilineOutputManager (all steps upfront), Verbose mode: OrderedOutputManager (sequential display)
+  - **Thread Safety** - Zero race conditions detected with `go test -race`
+  - **Test Coverage** - 100% of tests passing (100+ tests, 26s execution), includes all integration tests
+  - **Files Created** - `job_node.go` (251 lines), `job_expander.go` (388 lines), `hierarchical_executor.go` (584 lines), `job_callback.go` (481 lines)
+  - **Files Modified** - `simple.go` (uses hierarchical DAG by default), `buildfab.go` (delegates to hierarchical DAG), `types.go` (added Message field)
+  - **Tests Updated** - All integration tests updated to work with hierarchical DAG
+  - **Documentation** - `docs/adr/005-hierarchical-dag-architecture.md`, `docs/Hierarchical-DAG-design.md`
+  - **Old Code** - Flat DAG deprecated and commented out (will be removed in next phase)
+  - **Production Ready** - All real-world scenarios working (matrix-skiped, matrix-compiler, matrix-image-build, matrix-stream)
+  - **Next Phase** - Code cleanup: remove deprecated flat DAG, update docs, add migration guide
+
+- **Matrix Action Variable Interpolation Fix** (v0.30.5 - November 1, 2025): Successfully fixed critical bug where matrix actions failed with "no run command specified" error (100% complete)
   - **Problems Fixed** - (1) Loop variable capture bug in `ExpandMatrixToStepsWithActions()` causing all interpolated actions to be identical, (2) Missing global variable propagation preventing interpolation of `version.branch`, `os`, `arch`, etc.
   - **Root Causes** - Taking address of loop variable `&matrixAction` captured final iteration's value for all pointers, MatrixExpander only received matrix CLI overrides without full global variable set
   - **Solutions** - (1) Fixed loop variable capture with explicit copy: `actionCopy := matrixAction; interpolatedActions[stepName] = &actionCopy`, (2) Enhanced MatrixExpander to accept both matrix overrides and global variables, (3) Updated all NewMatrixExpander calls to pass r.opts.Variables

@@ -86,7 +86,7 @@ func TestOnErrorPolicyWithTestActions(t *testing.T) {
 			},
 			stageName:      "test-stage",
 			wantStatus:     StepStatusOK,
-			wantMessage:    "executed successfully",
+			wantMessage:    "Test action succeeded",
 			wantStageError: false,
 			wantWarnings:   0,
 			wantErrors:     0,

@@ -81,8 +81,9 @@ type Step struct {
 	Matrix      *MatrixConfig     `yaml:"matrix,omitempty"`     // Matrix configuration for this step
 	Variables   map[string]string `yaml:"variables,omitempty"`  // Step-level variable overrides
 	
-	// Pool assignment (internal, not from YAML)
-	PoolID      string   `yaml:"-"` // Pool identifier for this step (e.g., "matrix-build")
+	// Internal fields (not from YAML)
+	PoolID                    string          `yaml:"-"` // Pool identifier for this step (e.g., "matrix-build")
+	SlidingWindowDependencies map[string]bool `yaml:"-"` // Track which Require dependencies are from sliding window injection
 }
 
 // GetStepName returns the name to use for this step in the DAG
@@ -179,7 +180,8 @@ const (
 	StatusOK
 	StatusWarn
 	StatusError
-	StatusSkipped
+	StatusSkipped            // Skipped due to dependency failure
+	StatusSkippedCondition   // Skipped due to if condition not met (doesn't block dependents)
 )
 
 // String returns the string representation of the status
@@ -197,6 +199,8 @@ func (s Status) String() string {
 		return "ERROR"
 	case StatusSkipped:
 		return "SKIPPED"
+	case StatusSkippedCondition:
+		return "SKIPPED_CONDITION"
 	default:
 		return "UNKNOWN"
 	}
@@ -304,10 +308,46 @@ func (r *Runner) RunStage(ctx context.Context, stageName string) error {
 		return fmt.Errorf("stage not found: %s", stageName)
 	}
 
-	// Use the internal executor for actual execution
-	// We need to import the internal packages, but since this is a public API,
-	// we'll create a simple implementation that works with the existing structure
-	return r.runStageInternal(ctx, stageName)
+	// Delegate to SimpleRunner which uses the hierarchical DAG (the default execution engine)
+	// Ensure output and error output have defaults
+	output := r.opts.Output
+	if output == nil {
+		output = os.Stdout
+	}
+	errorOutput := r.opts.ErrorOutput
+	if errorOutput == nil {
+		errorOutput = os.Stderr
+	}
+	
+	// Use Project.MaxParallel if opts.MaxParallel is not set
+	maxParallel := r.opts.MaxParallel
+	if maxParallel == 0 && r.config.Project.MaxParallel > 0 {
+		maxParallel = r.config.Project.MaxParallel
+	}
+	
+	simpleOpts := &SimpleRunOptions{
+		ConfigPath:         r.opts.ConfigPath,
+		MaxParallel:        maxParallel,
+		VerboseLevel:       r.opts.VerboseLevel,
+		Debug:              r.opts.Debug,
+		DryRun:             r.opts.DryRun,
+		Variables:          r.opts.Variables,
+		WorkingDir:         r.opts.WorkingDir,
+		Input:              r.opts.Input,
+		Output:             output,
+		ErrorOutput:        errorOutput,
+		Only:               r.opts.Only,
+		WithRequires:       r.opts.WithRequires,
+		BuildfabBinaryPath: r.opts.BuildfabBinaryPath,
+		StepCallback:       r.opts.StepCallback,
+	}
+	
+	simpleRunner := NewSimpleRunner(r.config, simpleOpts)
+	// Transfer custom registry from Runner to SimpleRunner (for tests)
+	if r.registry != nil {
+		simpleRunner.registry = r.registry
+	}
+	return simpleRunner.RunStage(ctx, stageName)
 }
 
 // RunAction executes a specific action
@@ -1378,12 +1418,88 @@ func (r *Runner) expandMatrixStageStepsWithPools(steps []Step) ([]Step, map[stri
 				// Restore original variables
 				r.opts.Variables = originalVars
 				
-				// Apply matrix variables to all expanded steps and ensure unique names
+				// Determine base name for step renaming
 				baseName := step.Stage
 				if step.Name != "" {
 					baseName = step.Name
 				}
 				
+				// Check if any expanded steps have matrix configurations and expand them
+				// This handles nested matrix scenarios where both the outer stage reference
+				// and inner steps have matrix configurations
+				if r.opts.Debug {
+					fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Checking %d expanded steps for nested matrix configurations\n", len(expandedStageSteps))
+					for i, s := range expandedStageSteps {
+						fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG]   Step %d: Action=%s, Stage=%s, HasMatrix=%v\n", i, s.Action, s.Stage, s.Matrix != nil)
+					}
+				}
+				var fullyExpandedSteps []Step
+				for _, expandedStep := range expandedStageSteps {
+					if expandedStep.Matrix != nil && expandedStep.Action != "" {
+						if r.opts.Debug {
+							fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Expanding nested matrix for step %s\n", expandedStep.Action)
+						}
+						// This step has a matrix configuration - expand it
+						action, exists := r.config.GetAction(expandedStep.Action)
+						if !exists {
+							return nil, nil, nil, nil, fmt.Errorf("action not found: %s", expandedStep.Action)
+						}
+						
+						// Create a temporary expander with the job's matrix variables already set
+						tempExpander := NewMatrixExpander(r.config, cliMatrixVars)
+						tempExpander.globalVars = jobVariables // Use job variables that include outer matrix vars
+						
+						nestedMatrixSteps, nestedInterpolatedActions, err := tempExpander.ExpandMatrixToStepsWithActions(&expandedStep, &action)
+						if err != nil {
+							return nil, nil, nil, nil, fmt.Errorf("failed to expand nested matrix for step %s in job %d: %w", expandedStep.Action, jobIdx, err)
+						}
+						
+						// Add nested matrix variables to each expanded step's variables
+						// This ensures the outer matrix variables are preserved
+						for i := range nestedMatrixSteps {
+							if nestedMatrixSteps[i].Variables == nil {
+								nestedMatrixSteps[i].Variables = make(map[string]string)
+							}
+							// Add outer matrix variables first
+							for k, v := range matrixVars {
+								if _, exists := nestedMatrixSteps[i].Variables[k]; !exists {
+									nestedMatrixSteps[i].Variables[k] = v
+								}
+							}
+						}
+						
+						// Store interpolated actions with renamed keys to match unique step names
+						// The step names will be renamed later to include job index, so we need to
+						// pre-compute those names and store the actions with the correct keys
+						for i, nestedStep := range nestedMatrixSteps {
+							// The step name from the nested expansion
+							originalStepName := nestedStep.Action
+							// This will be renamed later to include baseName and jobIdx
+							// Format: <baseName>.<jobIdx>.<originalStepName>
+							uniqueStepName := fmt.Sprintf("%s.%d.%s", baseName, jobIdx, originalStepName)
+							
+							// Find the corresponding interpolated action
+							if interpolatedAction, exists := nestedInterpolatedActions[originalStepName]; exists {
+								allInterpolatedActions[uniqueStepName] = interpolatedAction
+								if r.opts.Debug {
+									fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Stored interpolated action: %s → %s\n", originalStepName, uniqueStepName)
+								}
+							} else if r.opts.Debug {
+								fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Warning: No interpolated action found for step %d: %s\n", i, originalStepName)
+							}
+						}
+						
+						fullyExpandedSteps = append(fullyExpandedSteps, nestedMatrixSteps...)
+					} else {
+						// No matrix on this step - keep as-is
+						fullyExpandedSteps = append(fullyExpandedSteps, expandedStep)
+					}
+				}
+				
+				// Replace expandedStageSteps with fully expanded steps
+				expandedStageSteps = fullyExpandedSteps
+				
+				// Apply matrix variables to all expanded steps and ensure unique names
 				for stepIdx := range expandedStageSteps {
 					// Merge matrix variables into step variables
 					if expandedStageSteps[stepIdx].Variables == nil {
@@ -1398,6 +1514,13 @@ func (r *Runner) expandMatrixStageStepsWithPools(steps []Step) ([]Step, map[stri
 					// Generate unique name: <baseName>.<jobIdx>.<originalStepName>
 					// This ensures steps from different matrix jobs have different names
 					uniqueName := fmt.Sprintf("%s.%d.%s", baseName, jobIdx, originalStepName)
+					
+					// Update the Action field to match the interpolated action key
+					// This is critical for nested matrix expansions where we store
+					// interpolated actions with unique names
+					if expandedStageSteps[stepIdx].Action != "" {
+						expandedStageSteps[stepIdx].Action = uniqueName
+					}
 					
 					if expandedStageSteps[stepIdx].Name == "" {
 						expandedStageSteps[stepIdx].Name = uniqueName
@@ -1619,12 +1742,29 @@ func (r *Runner) findFirstSteps(steps []Step) []string {
 		}
 	}
 	
-	// If no first steps found (all steps have dependencies), return all steps
-	// This handles the case where dependencies are external to the job
+	// Handle edge cases:
+	// - If no first steps found (all have dependencies): they depend on external steps, return all
+	// - If all steps are first steps (no internal deps) AND no external deps: sequential, return first only
 	if len(firstSteps) == 0 {
+		// All steps have dependencies - assume external, return all
 		for _, step := range steps {
 			firstSteps = append(firstSteps, step.GetStepName())
 		}
+	} else if len(firstSteps) == len(steps) {
+		// All steps are independent - check if they have ANY dependencies
+		hasAnyDeps := false
+		for _, step := range steps {
+			if len(step.Require) > 0 || len(step.DependsOn) > 0 {
+				hasAnyDeps = true
+				break
+			}
+		}
+		
+		// If no dependencies at all, use sequential (first step only)
+		if !hasAnyDeps && len(steps) > 0 {
+			firstSteps = []string{steps[0].GetStepName()}
+		}
+		// Otherwise keep all (they have external deps)
 	}
 	
 	return firstSteps
@@ -1665,10 +1805,21 @@ func (r *Runner) findLastSteps(steps []Step) []string {
 		}
 	}
 	
-	// If no last steps found (circular dependencies or all steps have dependents), return all steps
-	if len(lastSteps) == 0 {
-		for _, step := range steps {
-			lastSteps = append(lastSteps, step.GetStepName())
+	// Handle edge cases:
+	// - If no last steps found OR all steps are last steps (no internal dependents),
+	//   check if they have external dependents vs no dependents at all
+	if len(lastSteps) == 0 || len(lastSteps) == len(steps) {
+		if len(lastSteps) == len(steps) {
+			// All steps are last steps - check if any have dependents (external)
+			// For now, if all are last, assume no internal dependents, use declaration order
+			if len(steps) > 0 {
+				lastSteps = []string{steps[len(steps)-1].GetStepName()}
+			}
+		} else {
+			// No last steps found (shouldn't happen) - return all
+			for _, step := range steps {
+				lastSteps = append(lastSteps, step.GetStepName())
+			}
 		}
 	}
 	
@@ -1723,8 +1874,15 @@ func (r *Runner) injectSlidingWindowDependencies(steps []Step, matrixJobs []Matr
 				
 				if !hasDep {
 					firstStep.Require = append(firstStep.Require, lastStepName)
+					
+					// Mark this dependency as a sliding window dependency
+					if firstStep.SlidingWindowDependencies == nil {
+						firstStep.SlidingWindowDependencies = make(map[string]bool)
+					}
+					firstStep.SlidingWindowDependencies[lastStepName] = true
+					
 					if r.opts.Debug {
-						fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Injected dependency: %s depends on %s (job %d → job %d)\n",
+						fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] Injected sliding window dependency: %s depends on %s (job %d → job %d)\n",
 							firstStep.GetStepName(), lastStepName, i, previousJobIdx)
 					}
 				}
@@ -2395,15 +2553,15 @@ func (r *Runner) executeDAGWithCallback(ctx context.Context, dag map[string]*DAG
 				
 				// Check if step should be executed based on conditions
 				if !r.shouldExecuteStep(ctx, node) {
-					result := Result{
-						Name:   nodeName,
-						Status: StatusSkipped,
-						Message: "skipped (condition not met)",
-					}
+				result := Result{
+					Name:   nodeName,
+					Status: StatusSkippedCondition,
+					Message: "skipped (condition not met)",
+				}
 					
 					// Call step callback for skipped step
 					if r.opts.StepCallback != nil {
-						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0, "")
+						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkippedCondition, "skipped (condition not met)", 0, "")
 					}
 					
 					resultChan <- result
@@ -2830,10 +2988,11 @@ func (r *Runner) shouldExecuteStep(ctx context.Context, node *DAGNode) bool {
 
 // DAGNode represents a node in the execution DAG
 type DAGNode struct {
-	Step         Step
-	Action       Action
-	Dependencies []string
-	Dependents   []string
+	Step                      Step
+	Action                    Action
+	Dependencies              []string
+	Dependents                []string
+	SlidingWindowDependencies map[string]bool // Track which dependencies are from sliding window (for matrix parallelism)
 }
 
 // StreamingOutputManager manages which step's output should be streamed
@@ -2933,10 +3092,11 @@ func (r *Runner) buildDAG(steps []Step) (map[string]*DAGNode, error) {
 		nodeName := step.GetStepName()
 		
 		node := &DAGNode{
-			Step:         step,
-			Action:       action,
-			Dependencies: step.Require,
-			Dependents:   []string{},
+			Step:                      step,
+			Action:                    action,
+			Dependencies:              step.Require,
+			Dependents:                []string{},
+			SlidingWindowDependencies: step.SlidingWindowDependencies,
 		}
 		
 		dag[nodeName] = node
@@ -3172,26 +3332,32 @@ func (r *Runner) executeDAGWithOrderedStreaming(ctx context.Context, dag map[str
 				}
 				mu.Unlock()
 				
-				// Check if step should be executed based on conditions
-				if !r.shouldExecuteStep(ctx, node) {
-					result := Result{
-						Name:   nodeName,
-						Status: StatusSkipped,
-						Message: "skipped (condition not met)",
-					}
-					
-					// Call step callback for skipped step
-					if r.opts.StepCallback != nil {
-						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0, "")
-					}
-					
-					select {
-					case resultChan <- result:
-					case <-ctxDone:
-						return
-					}
-					continue
+			// Check if step should be executed based on conditions
+			if !r.shouldExecuteStep(ctx, node) {
+				mu.Lock()
+				status[nodeName] = StatusSkippedCondition
+				completed[nodeName] = true
+				executing[nodeName] = false
+				mu.Unlock()
+				
+				result := Result{
+					Name:   nodeName,
+					Status: StatusSkippedCondition,
+					Message: "skipped (condition not met)",
 				}
+				
+				// Call step callback for skipped step
+				if r.opts.StepCallback != nil {
+					r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkippedCondition, "skipped (condition not met)", 0, "")
+				}
+				
+				select {
+				case resultChan <- result:
+				case <-ctxDone:
+					return
+				}
+				continue
+			}
 				
 				// Submit the step to the execution pool instead of spawning unlimited goroutines
 				// Find the step configuration by matching step name (GetStepName handles unique names for matrix steps)
@@ -3602,26 +3768,32 @@ func (r *Runner) executeDAGWithParallel(ctx context.Context, dag map[string]*DAG
 				}
 				mu.Unlock()
 				
-				// Check if step should be executed based on conditions
-				if !r.shouldExecuteStep(ctx, node) {
-					result := Result{
-						Name:   nodeName,
-						Status: StatusSkipped,
-						Message: "skipped (condition not met)",
-					}
-					
-					// Call step callback for skipped step
-					if r.opts.StepCallback != nil {
-						r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkipped, "skipped (condition not met)", 0, "")
-					}
-					
-					select {
-					case resultChan <- result:
-					case <-ctxDone:
-						return
-					}
-					continue
+			// Check if step should be executed based on conditions
+			if !r.shouldExecuteStep(ctx, node) {
+				mu.Lock()
+				status[nodeName] = StatusSkippedCondition
+				completed[nodeName] = true
+				executing[nodeName] = false
+				mu.Unlock()
+				
+				result := Result{
+					Name:   nodeName,
+					Status: StatusSkippedCondition,
+					Message: "skipped (condition not met)",
 				}
+				
+				// Call step callback for skipped step
+				if r.opts.StepCallback != nil {
+					r.opts.StepCallback.OnStepComplete(ctx, nodeName, StepStatusSkippedCondition, "skipped (condition not met)", 0, "")
+				}
+				
+				select {
+				case resultChan <- result:
+				case <-ctxDone:
+					return
+				}
+				continue
+			}
 				
 				// Execute the node in parallel
 				go func(nodeName string, node *DAGNode) {
@@ -3677,8 +3849,9 @@ func (r *Runner) getReadyStepsLockedWithStatus(dag map[string]*DAGNode, status m
 	var ready []string
 	
 	for nodeName, node := range dag {
-		// Skip if already completed (OK, Error, or Skipped) or currently executing
-		if status[nodeName] == StatusOK || status[nodeName] == StatusError || status[nodeName] == StatusSkipped {
+		// Skip if already completed (OK, Error, or any type of Skipped) or currently executing
+		if status[nodeName] == StatusOK || status[nodeName] == StatusError || 
+		   status[nodeName] == StatusSkipped || status[nodeName] == StatusSkippedCondition {
 			continue
 		}
 		if executing[nodeName] {
@@ -3689,8 +3862,13 @@ func (r *Runner) getReadyStepsLockedWithStatus(dag map[string]*DAGNode, status m
 		// Steps with skipped/failed dependencies will be marked as skipped in execution loop
 		allDepsDone := true
 		for _, dep := range node.Dependencies {
-			if status[dep] == StatusPending {
+			depStatus := status[dep]
+			// Dependency is not done if it's still pending or running
+			if depStatus == StatusPending || depStatus == StatusRunning {
 				allDepsDone = false
+				if r.opts.Debug {
+					fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] %s waiting for dependency %s (status: %s)\n", nodeName, dep, depStatus)
+				}
 				break
 			}
 		}
@@ -3734,9 +3912,34 @@ func (r *Runner) hasFailedDependency(node *DAGNode, failed map[string]bool) bool
 }
 
 // hasFailedOrSkippedDependency checks if any required dependency has failed or been skipped
+// Note: For sliding window dependencies (matrix parallelism control), StatusSkippedCondition doesn't block
+// For explicit user dependencies, both StatusSkipped and StatusSkippedCondition block
 func (r *Runner) hasFailedOrSkippedDependency(node *DAGNode, status map[string]Status) bool {
 	for _, dep := range node.Dependencies {
-		if status[dep] == StatusError || status[dep] == StatusSkipped {
+		depStatus := status[dep]
+		
+		// Always block on errors
+		if depStatus == StatusError {
+			return true
+		}
+		
+		// Block on dependency-based skips
+		if depStatus == StatusSkipped {
+			return true
+		}
+		
+		// For condition-based skips, only block if it's NOT a sliding window dependency
+		if depStatus == StatusSkippedCondition {
+			// If this is a sliding window dependency, don't block
+			isSlidingWindow := node.SlidingWindowDependencies != nil && node.SlidingWindowDependencies[dep]
+			if r.opts.Debug {
+				fmt.Fprintf(r.opts.ErrorOutput, "[DEBUG] %s checking dep %s (StatusSkippedCondition): isSlidingWindow=%v, map=%v\n", 
+					node.Step.GetStepName(), dep, isSlidingWindow, node.SlidingWindowDependencies)
+			}
+			if isSlidingWindow {
+				continue // Sliding window dep with condition skip doesn't block
+			}
+			// Otherwise it's an explicit dependency, so block
 			return true
 		}
 	}
@@ -3744,10 +3947,29 @@ func (r *Runner) hasFailedOrSkippedDependency(node *DAGNode, status map[string]S
 }
 
 // getFailedOrSkippedDependencyNames returns the names of failed or skipped dependencies
+// Note: For sliding window dependencies, StatusSkippedCondition is NOT included
 func (r *Runner) getFailedOrSkippedDependencyNames(node *DAGNode, status map[string]Status) []string {
 	var deps []string
 	for _, dep := range node.Dependencies {
-		if status[dep] == StatusError || status[dep] == StatusSkipped {
+		depStatus := status[dep]
+		
+		// Always include errors
+		if depStatus == StatusError {
+			deps = append(deps, dep)
+			continue
+		}
+		
+		// Include dependency-based skips
+		if depStatus == StatusSkipped {
+			deps = append(deps, dep)
+			continue
+		}
+		
+		// For condition-based skips, only include if NOT a sliding window dependency
+		if depStatus == StatusSkippedCondition {
+			if node.SlidingWindowDependencies != nil && node.SlidingWindowDependencies[dep] {
+				continue // Skip sliding window deps with condition skip
+			}
 			deps = append(deps, dep)
 		}
 	}

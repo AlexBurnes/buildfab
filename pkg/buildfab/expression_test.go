@@ -629,3 +629,80 @@ func TestComplexExpressions(t *testing.T) {
 		})
 	}
 }
+
+// TestMatrixVariablesWithNOT tests matrix variables in if conditions with NOT operator
+// This is a regression test for the issue where matrix variables were not available
+// during if condition evaluation, causing expressions like:
+// !(matrix.images == 'centos7' && matrix.compiler == 'clang')
+// to fail with "unable to parse expression" error.
+func TestMatrixVariablesWithNOT(t *testing.T) {
+	tests := []struct {
+		name      string
+		expr      string
+		variables map[string]string
+		expected  bool
+	}{
+		{
+			name: "NOT with matrix variables - should skip",
+			expr: "!(matrix.images == 'centos7' && matrix.compiler == 'clang')",
+			variables: map[string]string{
+				"matrix.images":   "centos7",
+				"matrix.compiler": "clang",
+			},
+			expected: false, // !(true && true) = !true = false
+		},
+		{
+			name: "NOT with matrix variables - should run (different image)",
+			expr: "!(matrix.images == 'centos7' && matrix.compiler == 'clang')",
+			variables: map[string]string{
+				"matrix.images":   "centos8",
+				"matrix.compiler": "clang",
+			},
+			expected: true, // !(false && true) = !false = true
+		},
+		{
+			name: "NOT with matrix variables - should run (different compiler)",
+			expr: "!(matrix.images == 'centos7' && matrix.compiler == 'clang')",
+			variables: map[string]string{
+				"matrix.images":   "centos7",
+				"matrix.compiler": "gcc",
+			},
+			expected: true, // !(true && false) = !false = true
+		},
+		{
+			name: "NOT with matrix variables - should run (both different)",
+			expr: "!(matrix.images == 'centos7' && matrix.compiler == 'clang')",
+			variables: map[string]string{
+				"matrix.images":   "centos9",
+				"matrix.compiler": "gcc",
+			},
+			expected: true, // !(false && false) = !false = true
+		},
+		{
+			name: "NOT with matrix variables and OR",
+			expr: "!(matrix.type == 'debug' || matrix.arch == 'arm64')",
+			variables: map[string]string{
+				"matrix.type": "release",
+				"matrix.arch": "amd64",
+			},
+			expected: true, // !(false || false) = !false = true
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := NewExpressionContext(tt.variables)
+			result, err := EvaluateExpression(tt.expr, ctx)
+			
+			if err != nil {
+				t.Errorf("unexpected error evaluating expression: %v", err)
+				return
+			}
+			
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v for expression: %s with variables: %v", 
+					tt.expected, result, tt.expr, tt.variables)
+			}
+		})
+	}
+}

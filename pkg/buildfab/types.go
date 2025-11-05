@@ -22,6 +22,7 @@ type StepResult struct {
 	Duration   time.Duration
 	Output     string
 	Error      error
+	Message    string // Custom message from action Result (for built-in actions)
 }
 
 // StepStatus represents the execution status of a step
@@ -33,7 +34,8 @@ const (
 	StepStatusOK
 	StepStatusWarn
 	StepStatusError
-	StepStatusSkipped
+	StepStatusSkipped            // Skipped due to dependency failure
+	StepStatusSkippedCondition   // Skipped due to if condition not met (doesn't block dependents)
 )
 
 // String returns the string representation of StepStatus
@@ -51,6 +53,8 @@ func (s StepStatus) String() string {
 		return "error"
 	case StepStatusSkipped:
 		return "skipped"
+	case StepStatusSkippedCondition:
+		return "skipped"  // Display as "skipped" to users (internal distinction only)
 	default:
 		return "unknown"
 	}

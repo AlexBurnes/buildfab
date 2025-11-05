@@ -8,6 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.0] - 2025-11-05
+
+### Changed
+- **Hierarchical DAG Architecture (Major Refactoring)**: Replaced flat DAG with hierarchical job-based execution model
+  - **New execution model**: Matrix combinations form "job nodes," each containing sequential steps
+  - **Architecture**: Jobs are the unit of parallelism, steps within jobs execute sequentially
+  - **Nested matrix support**: Matrix on stage reference now works correctly (matrix-compiler, matrix-image-build)
+  - **Fixed hanging issue**: Resolved infinite loop in matrix-image-build scenario
+  - **Improved parallelism**: Sliding window dependencies at job level, not step level
+  - **Better dependency handling**: Explicit vs sliding window dependencies properly distinguished
+  - **Ordered output**: Hierarchical DAG flattens to deterministic sequential display
+  - **Output modes**: Quiet mode uses MultilineOutputManager, verbose uses OrderedOutputManager
+  - **Parallel strategy**: Semaphore-based concurrency control with proper dependency waiting
+  - **Error propagation**: Jobs propagate errors to stage level correctly
+  - **Built-in action support**: Result.Message from built-in actions now preserved
+  - **Thread-safe**: Zero race conditions detected with `go test -race`
+  - **Test coverage**: 100% of tests passing (100+ tests, 26s execution time)
+  - **Files created**: `pkg/buildfab/job_node.go` (251 lines), `pkg/buildfab/job_expander.go` (388 lines), `pkg/buildfab/hierarchical_executor.go` (584 lines), `pkg/buildfab/job_callback.go` (481 lines)
+  - **Files modified**: `pkg/buildfab/simple.go` (now uses hierarchical DAG by default), `pkg/buildfab/buildfab.go` (Runner.RunStage delegates to hierarchical DAG), `pkg/buildfab/types.go` (added Message field to StepResult)
+  - **Documentation**: `docs/adr/005-hierarchical-dag-architecture.md`, `docs/Hierarchical-DAG-design.md`
+  - **Old flat DAG code**: Deprecated and commented out (will be removed in future version)
+
+### Fixed
+- **Logical NOT operator parsing**: Fixed `!` operator evaluation in complex combined conditions
+  - Expression parser now correctly handles operator precedence (binary before unary)
+  - Parentheses stripping logic refined to only strip outermost encompassing parentheses
+  - Complex expressions like `!(matrix.images == 'centos7' && matrix.compiler == 'clang')` now work correctly
+  - Files modified: `pkg/buildfab/expression.go`
+- **Matrix variable interpolation**: Fixed matrix variables not being available in nested matrix scenarios
+  - Added `Variables` field to `Step` struct to carry matrix variables for if condition evaluation
+  - Matrix jobs now properly inherit user dependencies (`require`, `depends_on`)
+  - Files modified: `pkg/buildfab/matrix.go`, `pkg/buildfab/job_expander.go`
+- **Condition-based skips**: New `StatusSkippedCondition` status to distinguish from dependency-based skips
+  - Condition skips don't block sliding window dependencies
+  - Explicit dependencies still block on condition skips
+  - Files modified: `pkg/buildfab/buildfab.go`, `pkg/buildfab/types.go`
+- **Global max_parallel enforcement**: Project.MaxParallel now properly applied when opts.MaxParallel not set
+  - Files modified: `pkg/buildfab/buildfab.go`
+
 ## [0.31.0] - 2025-11-01
 
 ### Added

@@ -1,0 +1,115 @@
+project:
+  name: "matrix-multidim"
+  modules: ["matrix-multidim-testing"]
+
+actions:
+
+  - name: build-action
+    run: |
+      echo "=== Build Matrix Combination ==="
+      echo "Build type: ${{ matrix.builds }}"
+      echo "Image: ${{ matrix.images-undefined }}"
+      echo "Compiler: ${{ matrix.compiler }}"
+      echo "Full: ${{ matrix.builds }} ${{ matrix.images-undefined }} ${{ matrix.compiler }}"
+      echo "=========================="
+      sleep 1
+
+  - name: cleanup-action
+    run: |
+      echo "=== Cleanup Matrix Combination ==="
+      echo "Build type: ${{ matrix.builds }}"
+      echo "Image: ${{ matrix.images-undefined }}"
+      echo "Compiler: ${{ matrix.compiler }}"
+      echo "Full: ${{ matrix.builds }} ${{ matrix.images-undefined }} ${{ matrix.compiler }}"
+      echo "=========================="
+
+  - name: test-action
+    run: |
+      echo "=== Test Matrix Combination ==="
+      echo "Build type: ${{ matrix.builds }}"
+      echo "Image: ${{ matrix.images-undefined }}"
+      echo "Compiler: ${{ matrix.compiler }}"
+      echo "Full: ${{ matrix.builds }} ${{ matrix.images-undefined }} ${{ matrix.compiler }}"
+      echo "=========================="
+
+  - name: image-build
+    container:
+      engine: podman
+      image:
+        from: ${{ matrix.images }}
+      run_stage: matrix-image-build
+
+stages:
+
+  build-stage:
+    steps:
+      - action: build-action
+        if: "!(matrix.builds == 'DebugWithRelInfo')"
+      - action: cleanup-action
+      - action: test-action
+
+  matrix-skiped:
+    steps:
+      - action: build-action
+        if: "!(matrix.images == 'centos7' && matrix.compiler == 'clang')"
+        matrix:
+          values:
+            images: ["centos7", "centos8", "centos9"]
+            builds: ["Release", "Debug"]
+            compiler: ["gcc", "clang"]
+          strategy:
+            max_parallel: 1
+
+  matrix-build:
+    steps:
+      - action: build-action
+        if: "!(matrix.images == 'centos7' && matrix.compiler == 'clang')"
+        matrix:
+          values:
+            images: ["centos7", "centos8", "centos9"]
+            builds: ["Release", "Debug"]
+          strategy:
+            max_parallel: 1
+
+  matrix-compiler:
+    steps:
+      - stage: matrix-build
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+          strategy:
+            max_parallel: 1
+
+  images-build:
+    steps:
+      - action: image-build
+        matrix:
+          values:
+            images: ["almalinux", "debian", "alpine"]
+          strategy:
+            max_parallel: 1
+
+  matrix-image-build:
+    steps:
+      - stage: build-stage
+        if: "!((os == 'almalinux' || os == 'ubuntu') && matrix.compiler == 'clang')"
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+            builds: ["Release", "Debug", "DebugWithRelInfo"]
+          strategy:
+            max_parallel: 1
+
+# matrix-skiped:
+# Expected output: 10 combinations
+# Release centos7 gcc
+# Debug centos7 gcc
+# Release centos8 gcc
+# Release centos8 clang
+# Debug centos8 gcc
+# Debug centos8 clang
+# Release centos9 gcc
+# Release centos9 clang
+# Debug centos9 gcc
+# Debug centos9 clang
+

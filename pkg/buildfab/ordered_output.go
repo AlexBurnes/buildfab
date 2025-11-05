@@ -40,6 +40,7 @@ type OrderedOutputManager struct {
     variables          map[string]string                // Global variables for interpolation
     stepVariables      map[string]map[string]string    // Step-specific variables for interpolation
     buildfabBinaryPath string                           // Path to buildfab binary for run_action/run_stage
+    recursionDepth     int                              // Protect against infinite recursion in checkAndShow* functions
 }
 
 // StepOutputData contains all output data for a step
@@ -159,6 +160,15 @@ func (o *OrderedOutputManager) OnStepStart(ctx context.Context, stepName string)
 func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
     o.mu.Lock()
 
+    // Prevent duplicate completion calls (idempotent)
+    if data, exists := o.stepData[stepName]; exists && data.Completed {
+        if o.debug {
+            fmt.Fprintf(o.errorOutput, "[DEBUG] OnStepComplete: %s already completed, ignoring duplicate call\n", stepName)
+        }
+        o.mu.Unlock()
+        return
+    }
+
     if o.debug {
         fmt.Fprintf(o.errorOutput, "[DEBUG] OnStepComplete: %s (status: %s)\n", stepName, status)
         o.debugPrintState()
@@ -193,9 +203,10 @@ func (o *OrderedOutputManager) OnStepComplete(ctx context.Context, stepName stri
     o.mu.Unlock()
 
     // Check if any completed steps can now be shown in order
+    // Note: These functions have their own loop protection
     o.checkAndShowCompletedSteps()
 
-    // Check if next step can be shown
+    // Check if next step can be shown  
     o.checkAndShowNextStep()
 }
 
@@ -333,9 +344,13 @@ func (o *OrderedOutputManager) checkAndShowCompletedSteps() {
         fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowCompletedSteps: checking for completed steps to show\n")
     }
 
-    // Show all steps that can be shown in order
+    // Show all steps that can be shown in order (limit iterations to prevent infinite loops)
+    maxIterations := len(o.steps) + 5 // Allow a few extra iterations beyond total steps
+    iterations := 0
     shownAny := true
-    for shownAny {
+    
+    for shownAny && iterations < maxIterations {
+        iterations++
         shownAny = false
         
         // Acquire mutex to check state
@@ -390,6 +405,10 @@ func (o *OrderedOutputManager) checkAndShowCompletedSteps() {
             o.currentStep = ""
             o.mu.Unlock()
         }
+    }
+    
+    if iterations >= maxIterations && o.debug {
+        fmt.Fprintf(o.errorOutput, "[DEBUG] checkAndShowCompletedSteps: hit iteration limit (%d), breaking loop\n", maxIterations)
     }
 }
 
@@ -858,16 +877,30 @@ func (c *OrderedStepCallback) OnStepStart(ctx context.Context, stepName string) 
 
 // OnStepComplete implements StepCallback interface
 func (c *OrderedStepCallback) OnStepComplete(ctx context.Context, stepName string, status StepStatus, message string, duration time.Duration, bufferedOutput string) {
-    c.manager.OnStepComplete(ctx, stepName, status, message, duration, bufferedOutput)
-
-    // Collect result for summary (thread-safe)
+    // Check if already completed to prevent duplicate result collection
     c.mu.Lock()
-    c.results = append(c.results, StepResult{
-        StepName: stepName,
-        Status:   status,
-        Duration: duration,
-    })
+    alreadyCompleted := false
+    for _, result := range c.results {
+        if result.StepName == stepName {
+            alreadyCompleted = true
+            break
+        }
+    }
     c.mu.Unlock()
+    
+    // Only call manager and collect result once
+    if !alreadyCompleted {
+        c.manager.OnStepComplete(ctx, stepName, status, message, duration, bufferedOutput)
+
+        // Collect result for summary (thread-safe)
+        c.mu.Lock()
+        c.results = append(c.results, StepResult{
+            StepName: stepName,
+            Status:   status,
+            Duration: duration,
+        })
+        c.mu.Unlock()
+    }
 }
 
 // OnStepOutput implements StepCallback interface
