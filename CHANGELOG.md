@@ -22,10 +22,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Risk assessment and migration paths
 
 ### Refactoring
-- **Code Cleanup**: Removed 196 lines of deprecated flat DAG code from `pkg/buildfab/simple.go`
-  - Removed commented-out old execution path
-  - Hierarchical DAG is now the only execution path in SimpleRunner
-  - All tests passing with zero race conditions
+- **Major Code Cleanup**: Removed 1,697 lines of deprecated flat DAG code
+  - **Removed from `pkg/buildfab/simple.go`**: 196 lines (commented-out old execution path)
+  - **Removed from `pkg/buildfab/buildfab.go`**: 1,317 lines (11 deprecated functions)
+    * `RunStageWithSteps()` - Public method for pre-expanded steps (6 lines)
+    * `expandMatrixSteps()` - Basic matrix expansion (71 lines)
+    * `expandMatrixStepsWithActions()` - Matrix with interpolation (66 lines)
+    * `expandMatrixStepsWithPools()` - Matrix with pools (114 lines)
+    * `expandMatrixStageStepsWithPools()` - Nested matrix expansion (382 lines)
+    * `findFirstSteps()` - First step detection for flat DAG (60 lines)
+    * `findLastSteps()` - Last step detection for flat DAG (56 lines)
+    * `injectSlidingWindowDependencies()` - Old sliding window logic (67 lines)
+    * `runStageInternal()` - Old stage execution entry point (145 lines)
+    * `executeStageWithCallback()` - Callback-based execution (51 lines)
+    * `executeDAGWithOrderedStreaming()` - Old DAG executor (299 lines)
+  - **Removed test file**: `pkg/buildfab/matrix_stage_test.go` (380 lines)
+  - **Hierarchical DAG is now the only execution path**
+  - **All tests passing with zero race conditions**
+  - **Code reduced**: 4,845 → 3,528 lines in buildfab.go (27% reduction)
 
 ## [0.32.0] - 2025-11-05
 
