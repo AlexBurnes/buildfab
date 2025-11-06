@@ -586,3 +586,116 @@ func TestHierarchicalDAG_ExplicitDependencyBlocksOnConditionSkip(t *testing.T) {
     }
 }
 
+// TestHierarchicalDAG_SkippedStepSkipsRemainingStepsInJob tests that when a step
+// in a job is skipped due to a condition, all subsequent steps in the same job are also skipped
+func TestHierarchicalDAG_SkippedStepSkipsRemainingStepsInJob(t *testing.T) {
+    // Create config with multiple actions and a stage
+    config := &Config{
+        Project: Project{Name: "test"},
+        Actions: []Action{
+            {Name: "build", Run: "echo build"},
+            {Name: "cleanup", Run: "echo cleanup"},
+            {Name: "test", Run: "echo test"},
+        },
+        Stages: map[string]Stage{
+            "ci": {
+                Steps: []Step{
+                    {Action: "build", If: "matrix.type != 'skip-me'"},
+                    {Action: "cleanup"}, // No condition - should be skipped when build is skipped
+                    {Action: "test"},    // No condition - should be skipped when build is skipped
+                },
+            },
+        },
+    }
+    
+    // Create a step with matrix that will skip some combinations
+    step := &Step{
+        Stage: "ci",
+        Matrix: &MatrixConfig{
+            Values: map[string][]interface{}{
+                "type": []interface{}{"normal", "skip-me"},
+            },
+        },
+    }
+    
+    // Create expander and expand
+    expander := NewJobExpander(config, nil, nil)
+    jobs, err := expander.ExpandMatrixToJobs(step)
+    
+    if err != nil {
+        t.Fatalf("Failed to expand matrix: %v", err)
+    }
+    
+    // Verify we got 2 jobs
+    if len(jobs) != 2 {
+        t.Fatalf("Expected 2 jobs, got %d", len(jobs))
+    }
+    
+    // Each job should have 3 steps (build, cleanup, test)
+    for i, job := range jobs {
+        if len(job.Steps) != 3 {
+            t.Errorf("Expected job %d to have 3 steps, got %d", i, len(job.Steps))
+        }
+    }
+    
+    // Create DAG and executor
+    dag := NewHierarchicalDAG()
+    for _, job := range jobs {
+        dag.AddRootJob(job)
+    }
+    
+    opts := DefaultRunOptions()
+    opts.VerboseLevel = 0
+    callback := NewMockJobCallback()
+    executor := NewHierarchicalExecutor(dag, config, opts, callback)
+    
+    // Execute the DAG
+    ctx := context.Background()
+    err = executor.Execute(ctx)
+    
+    if err != nil {
+        t.Fatalf("Failed to execute DAG: %v", err)
+    }
+    
+    // Verify job 0 (type=normal): all 3 steps should execute
+    job0 := jobs[0]
+    if len(job0.Results) != 3 {
+        t.Errorf("Expected job 0 to have 3 results, got %d", len(job0.Results))
+    }
+    for i, result := range job0.Results {
+        if result.Status != StepStatusOK {
+            t.Errorf("Expected job 0 step %d to have status OK, got %v", i, result.Status)
+        }
+    }
+    
+    // Verify job 1 (type=skip-me): build should be skipped, cleanup and test should also be skipped
+    job1 := jobs[1]
+    if len(job1.Results) != 3 {
+        t.Errorf("Expected job 1 to have 3 results, got %d", len(job1.Results))
+    }
+    
+    // All steps should be skipped due to condition
+    for i, result := range job1.Results {
+        if result.Status != StepStatusSkippedCondition {
+            t.Errorf("Expected job 1 step %d to have status SkippedCondition, got %v", i, result.Status)
+        }
+    }
+    
+    // Verify the callback recorded the expected events
+    jobsStarted := callback.GetJobsStarted()
+    if len(jobsStarted) != 2 {
+        t.Errorf("Expected 2 jobs to start, got %d", len(jobsStarted))
+    }
+    
+    jobsCompleted := callback.GetJobsCompleted()
+    if len(jobsCompleted) != 2 {
+        t.Errorf("Expected 2 jobs to complete, got %d", len(jobsCompleted))
+    }
+    
+    // Expected: 6 steps total (3 from job 0, 3 from job 1)
+    stepsCompleted := callback.GetStepsCompleted()
+    if len(stepsCompleted) != 6 {
+        t.Errorf("Expected 6 steps to complete, got %d", len(stepsCompleted))
+    }
+}
+

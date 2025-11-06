@@ -17,6 +17,9 @@ type JobNode struct {
     Steps     []ExecutableStep // Sequential list of steps to execute in this job
     ChildJobs []*JobNode       // Nested jobs (for matrix within matrix scenarios)
     
+    // Conditions
+    If string // Job-level condition expression (from parent step)
+    
     // Dependencies
     Dependencies      []string        // Job IDs this job depends on
     SlidingWindowDeps map[string]bool // Which dependencies are sliding window (for parallelism control)
@@ -270,7 +273,8 @@ func (h *HierarchicalDAG) getJobsInTopologicalOrder() []*JobNode {
     // Simple topological sort using wave assignment
     jobMap := make(map[string]*JobNode)
     for _, job := range h.RootJobs {
-        h.addJobToMap(job, jobMap)
+        // Only add root jobs, not their children (children are handled by flattenJobSteps)
+        jobMap[job.ID] = job
     }
     
     assigned := make(map[string]bool)

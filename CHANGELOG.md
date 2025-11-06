@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.1] - 2025-11-06
+
+### Fixed
+- **Matrix Condition Skipping**: Fixed multiple issues with matrix job condition evaluation and skipping
+  - **Sequential step skipping**: When a step in a job is skipped due to a condition, all subsequent steps in the same job are now automatically skipped (previously they continued executing)
+  - **Parent condition evaluation**: Parent step's `if` conditions are now properly evaluated for each matrix combination and stored in jobs for execution-time evaluation
+  - **Visibility of filtered jobs**: Jobs filtered by parent conditions now appear in output as skipped rather than being completely invisible, providing better visibility of what was considered
+  - **Unique child job display names**: Child jobs from nested matrices now include all matrix variables (parent + child) in their display names to prevent duplicates when multiple root jobs create children with same nested matrix values
+  - **DAG flattening**: Fixed topological sort to only process root jobs and avoid including child jobs twice in the flat step list
+  - **Consistent skip icons**: Both quiet (`-q`) and verbose (`-v`) modes now use '→' for skipped jobs (previously verbose used '?')
+  - **Output cleanup**: Removed "(hierarchical DAG)" annotation from stage running message
+  - Files modified: `pkg/buildfab/hierarchical_executor.go`, `pkg/buildfab/job_expander.go`, `pkg/buildfab/job_node.go`, `pkg/buildfab/simple.go`, `pkg/buildfab/ordered_output.go`
+  - Added test: `TestHierarchicalDAG_SkippedStepSkipsRemainingStepsInJob` to verify sequential skipping behavior
+
+### Technical Details
+- **Job-level condition field**: Added `If` field to `JobNode` to store parent step conditions for evaluation during execution
+- **Condition evaluation**: Added `evaluateJobCondition` method to `HierarchicalExecutor` for job-level condition checking
+- **Display name generation**: Modified `expandNestedMatrixToJobs` to include all matrix variables (parent + child) when generating child job display names
+- **Status handling**: Updated `StepStatusSkippedCondition` handling in output managers to use '→' icon consistently
+
 ## [0.32.0] - 2025-11-05
 
 ### Documentation

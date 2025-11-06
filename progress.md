@@ -2,6 +2,18 @@
 
 ## What Works
 
+- **Matrix Condition Skipping Fixes** (v0.32.1 - November 6, 2025): Successfully fixed all critical matrix job condition evaluation and skipping issues (100% complete)
+  - **Sequential Step Skipping** - Steps after skipped step now automatically skip (no more orphan executions)
+  - **Parent Condition Evaluation** - Job-level conditions properly evaluated before execution
+  - **Filtered Job Visibility** - Jobs filtered by conditions appear as skipped (not invisible)
+  - **Unique Child Display Names** - Nested matrix child jobs include all dimensions for uniqueness
+  - **DAG Flattening** - Root jobs only processed once, children handled by recursion
+  - **Consistent Skip Icons** - Both modes use '→' for skipped (was '?' in verbose)
+  - **Clean Output** - Removed "(hierarchical DAG)" annotation from stage messages
+  - **Test Coverage** - New test `TestHierarchicalDAG_SkippedStepSkipsRemainingStepsInJob`, all tests pass
+  - **Files Modified** - 6 files (hierarchical_executor.go, job_expander.go, job_node.go, simple.go, ordered_output.go, hierarchical_integration_test.go)
+  - **Production Ready** - All matrix skipping scenarios work correctly with proper UX
+
 - **Hierarchical DAG Architecture** (v0.32.0 - November 5, 2025): Successfully replaced flat DAG with hierarchical job-based execution model (100% complete - PHASE 1)
   - **Architecture Change** - Jobs are now the unit of parallelism, steps within jobs execute sequentially
   - **Matrix Support** - Matrix combinations form job nodes, nested matrices (matrix-on-stage) now work correctly

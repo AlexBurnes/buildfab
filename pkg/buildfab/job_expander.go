@@ -126,6 +126,10 @@ func (je *JobExpander) expandStageMatrixToJobs(step *Step) ([]*JobNode, error) {
         // Create job node
         job := NewJobNode(jobID, displayName, matrixVars)
         
+        // Store parent step's if condition in the job
+        // The executor will evaluate this and skip the job if condition is not met
+        job.If = step.If
+        
         // Expand stage steps into this job's steps
         for stepIdx, stageStep := range stage.Steps {
             // Check if this stage step has its own matrix (nested matrix)
@@ -165,13 +169,6 @@ func (je *JobExpander) expandStageMatrixToJobs(step *Step) ([]*JobNode, error) {
             // TODO: Handle stageStep.Stage (nested stage reference)
         }
         
-        // Inherit parent if condition
-        if step.If != "" {
-            // Apply parent if condition to all steps (or to job level)
-            // For now, we can store it at job level and check before executing
-            // This requires adding If field to JobNode
-        }
-        
         jobs = append(jobs, job)
     }
     
@@ -199,7 +196,17 @@ func (je *JobExpander) expandNestedMatrixToJobs(step *Step, parentJobID string, 
         
         // Generate child job ID: parentID.childIndex
         childJobID := fmt.Sprintf("%s.%d", parentJobID, childIdx)
-        displayName := je.generateJobDisplayName(step.GetStepName(), combination, step.Matrix.Values)
+        
+        // Generate display name that includes BOTH parent and child matrix values for uniqueness
+        // Extract all matrix values from merged jobVars
+        allCombination := make(map[string]interface{})
+        for k, v := range jobVars {
+            if strings.HasPrefix(k, "matrix.") {
+                key := strings.TrimPrefix(k, "matrix.")
+                allCombination[key] = v
+            }
+        }
+        displayName := je.generateJobDisplayName(step.GetStepName(), allCombination, nil)
         
         // Create child job node
         childJob := NewJobNode(childJobID, displayName, childMatrixVars)
@@ -282,6 +289,15 @@ func (je *JobExpander) generateCombinationsRecursive(keys []string, keyIndex int
         current[key] = value
         je.generateCombinationsRecursive(keys, keyIndex+1, current, matrixValues, combinations)
     }
+}
+
+// evaluateCondition evaluates a condition expression with given variables
+func (je *JobExpander) evaluateCondition(condition string, variables map[string]string) (bool, error) {
+    // Create expression context with variables
+    ctx := NewExpressionContext(variables)
+    
+    // Evaluate the expression using the expression evaluator
+    return EvaluateExpression(condition, ctx)
 }
 
 // combinationToVariables converts a combination map to matrix variables

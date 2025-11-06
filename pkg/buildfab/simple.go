@@ -505,7 +505,7 @@ func (c *SimpleStepCallback) OnStepComplete(ctx context.Context, stepName string
         case StepStatusError:
             icon = "✗"
             color = colorRed
-        case StepStatusSkipped:
+        case StepStatusSkipped, StepStatusSkippedCondition:
             icon = "→"
             color = colorGray
         default:
@@ -1936,7 +1936,7 @@ func (r *SimpleRunner) runStageWithHierarchicalDAG(ctx context.Context, stageNam
     // Start timing
     stageStart := time.Now()
     timestamp := formatISO8601Timestamp(stageStart)
-    fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s [%s] (hierarchical DAG)\n\n", stageName, timestamp)
+    fmt.Fprintf(r.opts.Output, "▶️  Running stage: %s [%s]\n\n", stageName, timestamp)
     
     // Build hierarchical DAG from stage steps
     dag, err := r.buildHierarchicalDAG(stage.Steps)

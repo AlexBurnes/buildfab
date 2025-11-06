@@ -798,7 +798,7 @@ func (o *OrderedOutputManager) showStepResult(stepName string, status StepStatus
     case StepStatusError:
         icon = "✗"
         color = colorRed
-    case StepStatusSkipped:
+    case StepStatusSkipped, StepStatusSkippedCondition:
         icon = "→"
         color = colorGray
     default:
@@ -1582,7 +1582,7 @@ func (c *MultilineStepCallback) convertStepStatusToJobStatus(status StepStatus) 
         return JobStatusWarning
     case StepStatusError:
         return JobStatusError
-    case StepStatusSkipped:
+    case StepStatusSkipped, StepStatusSkippedCondition:
         return JobStatusSkipped
     default:
         return JobStatusPending

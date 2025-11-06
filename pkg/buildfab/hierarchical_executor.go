@@ -197,6 +197,49 @@ func (he *HierarchicalExecutor) executeJob(ctx context.Context, job *JobNode) er
         }
     }()
     
+    // Check job-level if condition (from parent step)
+    if job.If != "" {
+        // Merge job's matrix variables with global variables for condition evaluation
+        mergedVars := make(map[string]string)
+        for k, v := range he.opts.Variables {
+            mergedVars[k] = v
+        }
+        for k, v := range job.MatrixVars {
+            mergedVars[k] = v
+        }
+        
+        shouldExecute, err := he.evaluateJobCondition(job.If, mergedVars)
+        if err != nil {
+            if he.opts.VerboseLevel > 0 {
+                fmt.Fprintf(he.opts.ErrorOutput, "Warning: failed to evaluate job condition for %s: %v\n", job.DisplayName, err)
+            }
+            shouldExecute = false
+        }
+        
+        if !shouldExecute {
+            he.mu.Lock()
+            job.Status = JobExecutionStatusSkippedCondition
+            he.mu.Unlock()
+            
+            // Notify callback about all steps being skipped due to job condition
+            for i := range job.Steps {
+                step := &job.Steps[i]
+                result := StepResult{
+                    StepName: step.ID,
+                    Status:   StepStatusSkippedCondition,
+                    Duration: 0,
+                }
+                job.Results = append(job.Results, result)
+                
+                if he.callback != nil {
+                    he.callback.OnStepComplete(ctx, job, step, result)
+                }
+            }
+            
+            return nil
+        }
+    }
+    
     // Check if job should be skipped due to dependencies
     if he.shouldSkipJobDueToDependencies(job) {
         he.mu.Lock()
@@ -234,8 +277,24 @@ func (he *HierarchicalExecutor) executeJob(ctx context.Context, job *JobNode) er
     }
     
     // Execute steps sequentially within this job
+    stepSkipped := false  // Track if a step was skipped to skip remaining steps
     for i := range job.Steps {
         step := &job.Steps[i]
+        
+        // If a previous step was skipped, skip all remaining steps
+        if stepSkipped {
+            result := StepResult{
+                StepName: step.ID,
+                Status:   StepStatusSkippedCondition,
+                Duration: 0,
+            }
+            job.Results = append(job.Results, result)
+            
+            if he.callback != nil {
+                he.callback.OnStepComplete(ctx, job, step, result)
+            }
+            continue
+        }
         
         // Check step-level if condition
         if step.If != "" {
@@ -248,7 +307,7 @@ func (he *HierarchicalExecutor) executeJob(ctx context.Context, job *JobNode) er
             }
             
             if !shouldExecute {
-                // Skip this step but continue with next steps in job
+                // Skip this step and mark that subsequent steps should also be skipped
                 result := StepResult{
                     StepName: step.ID,
                     Status:   StepStatusSkippedCondition,
@@ -259,6 +318,8 @@ func (he *HierarchicalExecutor) executeJob(ctx context.Context, job *JobNode) er
                 if he.callback != nil {
                     he.callback.OnStepComplete(ctx, job, step, result)
                 }
+                
+                stepSkipped = true  // Mark to skip remaining steps
                 continue
             }
         }
@@ -428,6 +489,13 @@ func (he *HierarchicalExecutor) evaluateStepCondition(step *ExecutableStep, job 
     // Evaluate the condition
     ctx := NewExpressionContext(mergedVars)
     return EvaluateExpression(step.If, ctx)
+}
+
+// evaluateJobCondition evaluates a job-level condition expression
+func (he *HierarchicalExecutor) evaluateJobCondition(condition string, variables map[string]string) (bool, error) {
+    // Evaluate the condition using the expression evaluator
+    ctx := NewExpressionContext(variables)
+    return EvaluateExpression(condition, ctx)
 }
 
 // mergeVariables merges variable maps (later override earlier)
