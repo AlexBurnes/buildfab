@@ -2,6 +2,12 @@
 
 ## What Works
 
+- **Step Output Order Fix** (v0.32.3 - March 20, 2026): Fixed random step display order in quiet/verbose modes for parallel-eligible steps
+  - **Root Cause** - `getJobsInTopologicalOrder` iterated `map[string]*JobNode` — Go map iteration is random — so within-wave step order was non-deterministic
+  - **Fix** - Iterate `h.RootJobs` slice instead of map; preserves YAML declaration order within each dependency wave
+  - **Affects** - Both quiet (`-q`) and verbose modes: both use `FlattenToSteps` → `getJobsInTopologicalOrder` for display ordering
+  - **File Modified** - `pkg/buildfab/job_node.go` (`getJobsInTopologicalOrder`)
+
 - **Matrix Step Dependency Resolution Fix** (v0.32.2 - March 20, 2026): Fixed silent empty-stage execution when non-matrix step uses `require: [matrix-step-name]`
   - **Root Cause** - Matrix jobs get numeric IDs ("0","1","2"); `require:` by action name never resolved in wave builder → returned nil → 0 steps run, SUCCESS in 0.000s
   - **Fix** - Post-expansion dependency resolution pass in `buildHierarchicalDAG`: maps matrix step names to their expanded job IDs and rewrites `Dependencies` accordingly

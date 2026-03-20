@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.3] - 2026-03-20
+
+### Fixed
+- **Step output order in quiet and verbose modes**: Steps without explicit `require:` dependencies were displayed in random order when they could run in parallel
+  - Root cause: `getJobsInTopologicalOrder` built a `map[string]*JobNode` from `h.RootJobs` and iterated `for _, job := range jobMap` — Go map iteration is intentionally randomised, so jobs within the same dependency wave appeared in a different order on every run
+  - Fix: replaced map iteration with `for _, job := range h.RootJobs` (the insertion-order slice) — jobs within each wave are now always visited in YAML declaration order
+  - Both quiet mode (`-q`, `MultilineJobCallback`) and verbose mode (`OrderedJobCallback`) use `FlattenToSteps` → `getJobsInTopologicalOrder` for display ordering, so both are fixed
+  - File modified: `pkg/buildfab/job_node.go` (`getJobsInTopologicalOrder`)
+
 ## [0.32.2] - 2026-03-20
 
 ### Fixed

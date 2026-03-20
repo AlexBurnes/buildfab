@@ -268,28 +268,25 @@ func (h *HierarchicalDAG) FlattenToSteps() []ExecutableStep {
     return flatSteps
 }
 
-// getJobsInTopologicalOrder returns jobs in execution order (topological sort)
+// getJobsInTopologicalOrder returns jobs in execution order (topological sort).
+// Within each wave (set of jobs with equal dependency depth), jobs are ordered by
+// their declaration order in the YAML file — i.e. h.RootJobs insertion order.
+// This ensures deterministic, file-order output even when steps can run in parallel.
 func (h *HierarchicalDAG) getJobsInTopologicalOrder() []*JobNode {
-    // Simple topological sort using wave assignment
-    jobMap := make(map[string]*JobNode)
-    for _, job := range h.RootJobs {
-        // Only add root jobs, not their children (children are handled by flattenJobSteps)
-        jobMap[job.ID] = job
-    }
-    
     assigned := make(map[string]bool)
     var ordered []*JobNode
-    
-    // Keep assigning jobs until all are assigned
-    for len(assigned) < len(jobMap) {
+
+    // Keep assigning jobs until all are assigned.
+    // Iterate h.RootJobs (a slice) — NOT a map — so that jobs within the same
+    // wave are always visited in the order they were declared in the project file.
+    for len(ordered) < len(h.RootJobs) {
         var currentWave []*JobNode
-        
-        // Find jobs where all dependencies are assigned
-        for _, job := range jobMap {
+
+        for _, job := range h.RootJobs {
             if assigned[job.ID] {
                 continue
             }
-            
+
             allDepsAssigned := true
             for _, depID := range job.Dependencies {
                 if !assigned[depID] {
@@ -297,22 +294,21 @@ func (h *HierarchicalDAG) getJobsInTopologicalOrder() []*JobNode {
                     break
                 }
             }
-            
+
             if allDepsAssigned {
                 currentWave = append(currentWave, job)
                 assigned[job.ID] = true
             }
         }
-        
-        if len(currentWave) == 0 && len(assigned) < len(jobMap) {
-            // No progress - cycle detected, break to avoid infinite loop
+
+        if len(currentWave) == 0 {
+            // No progress — cycle detected, break to avoid infinite loop
             break
         }
-        
-        // Add current wave to ordered list (maintain ID order within wave for determinism)
+
         ordered = append(ordered, currentWave...)
     }
-    
+
     return ordered
 }
 
