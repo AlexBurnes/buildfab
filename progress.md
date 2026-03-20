@@ -2,6 +2,12 @@
 
 ## What Works
 
+- **Matrix Step Dependency Resolution Fix** (v0.32.2 - March 20, 2026): Fixed silent empty-stage execution when non-matrix step uses `require: [matrix-step-name]`
+  - **Root Cause** - Matrix jobs get numeric IDs ("0","1","2"); `require:` by action name never resolved in wave builder → returned nil → 0 steps run, SUCCESS in 0.000s
+  - **Fix** - Post-expansion dependency resolution pass in `buildHierarchicalDAG`: maps matrix step names to their expanded job IDs and rewrites `Dependencies` accordingly
+  - **File Modified** - `pkg/buildfab/simple.go` (`buildHierarchicalDAG`)
+  - **Tests Pass** - All pkg/buildfab tests pass with race detector
+
 - **Matrix Condition Skipping Fixes** (v0.32.1 - November 6, 2025): Successfully fixed all critical matrix job condition evaluation and skipping issues (100% complete)
   - **Sequential Step Skipping** - Steps after skipped step now automatically skip (no more orphan executions)
   - **Parent Condition Evaluation** - Job-level conditions properly evaluated before execution

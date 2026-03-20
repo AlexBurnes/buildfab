@@ -2023,7 +2023,7 @@ func (r *SimpleRunner) runStageWithHierarchicalDAG(ctx context.Context, stageNam
 // buildHierarchicalDAG builds a hierarchical DAG from stage steps
 func (r *SimpleRunner) buildHierarchicalDAG(steps []Step) (*HierarchicalDAG, error) {
     dag := NewHierarchicalDAG()
-    
+
     // Extract matrix variables from CLI
     cliMatrixVars := make(map[string]string)
     for key, value := range r.opts.Variables {
@@ -2031,10 +2031,15 @@ func (r *SimpleRunner) buildHierarchicalDAG(steps []Step) (*HierarchicalDAG, err
             cliMatrixVars[key] = value
         }
     }
-    
+
     // Create job expander
     expander := NewJobExpander(r.config, cliMatrixVars, r.opts.Variables)
-    
+
+    // Track matrix step name -> expanded job IDs for dependency resolution.
+    // When a non-matrix step declares require: [matrix-step-name], the name must
+    // be resolved to the actual numeric job IDs that the matrix expansion produced.
+    matrixStepToJobIDs := make(map[string][]string)
+
     // Expand each step into jobs
     jobCounter := 0
     for _, step := range steps {
@@ -2045,12 +2050,18 @@ func (r *SimpleRunner) buildHierarchicalDAG(steps []Step) (*HierarchicalDAG, err
             if err != nil {
                 return nil, fmt.Errorf("failed to expand matrix for step %s: %w", step.GetStepName(), err)
             }
-            
+
             // Inject sliding window dependencies if needed
             if step.Matrix.Strategy.MaxParallel > 0 {
                 expander.InjectSlidingWindowDependencies(jobs, step.Matrix.Strategy.MaxParallel)
             }
-            
+
+            // Record which job IDs this step name expands to
+            stepName := step.GetStepName()
+            for _, job := range jobs {
+                matrixStepToJobIDs[stepName] = append(matrixStepToJobIDs[stepName], job.ID)
+            }
+
             // Add jobs to DAG
             for _, job := range jobs {
                 dag.AddRootJob(job)
@@ -2061,13 +2072,13 @@ func (r *SimpleRunner) buildHierarchicalDAG(steps []Step) (*HierarchicalDAG, err
             // Use step name as job ID so dependencies can be resolved
             jobID := step.GetStepName()
             job := NewJobNode(jobID, step.GetStepName(), nil)
-            
+
             if step.Action != "" {
                 action, exists := r.config.GetAction(step.Action)
                 if !exists {
                     return nil, fmt.Errorf("action not found: %s", step.Action)
                 }
-                
+
                 execStepID := fmt.Sprintf("%s.0", jobID)
                 execStep := ExecutableStep{
                     ID:          execStepID,
@@ -2079,7 +2090,7 @@ func (r *SimpleRunner) buildHierarchicalDAG(steps []Step) (*HierarchicalDAG, err
                 }
                 job.AddStep(execStep)
             }
-            
+
             // Add user dependencies to job
             for _, dep := range step.Require {
                 job.AddDependency(dep, false) // Not a sliding window dependency
@@ -2087,12 +2098,31 @@ func (r *SimpleRunner) buildHierarchicalDAG(steps []Step) (*HierarchicalDAG, err
             for _, dep := range step.DependsOn {
                 job.AddDependency(dep, false)
             }
-            
+
             dag.AddRootJob(job)
             jobCounter++
         }
     }
-    
+
+    // Resolve dependencies: a require: [matrix-step-name] reference on a non-matrix
+    // step must be expanded to the actual numeric job IDs that the matrix produced.
+    // Without this, buildExecutionWaves can never satisfy the dependency and returns
+    // nil, causing the stage to execute with 0 steps.
+    for _, job := range dag.GetAllJobs() {
+        if len(job.Dependencies) == 0 {
+            continue
+        }
+        var resolved []string
+        for _, dep := range job.Dependencies {
+            if matrixJobIDs, ok := matrixStepToJobIDs[dep]; ok {
+                resolved = append(resolved, matrixJobIDs...)
+            } else {
+                resolved = append(resolved, dep)
+            }
+        }
+        job.Dependencies = resolved
+    }
+
     return dag, nil
 }
 

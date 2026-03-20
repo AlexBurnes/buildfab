@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.32.2] - 2026-03-20
+
+### Fixed
+- **Matrix step dependency resolution**: Fixed a bug where a non-matrix step with `require: [matrix-step-name]` caused the entire stage to execute with 0 steps and report SUCCESS in 0.000s
+  - Matrix steps expand into jobs with numeric IDs (`"0"`, `"1"`, `"2"`); subsequent steps referencing the original step name by name in `require:` could never have that dependency satisfied
+  - `buildExecutionWaves` detected "no progress" (the unresolvable name caused an infinite loop guard) and returned `nil`, making the executor run zero waves — silent SUCCESS with nothing executed
+  - Fixed by adding a post-expansion dependency resolution pass in `buildHierarchicalDAG`: after all steps are expanded, any `require:` reference that matches a matrix step name is replaced with the actual numeric job IDs that the matrix expansion produced
+  - File modified: `pkg/buildfab/simple.go` (`buildHierarchicalDAG`)
+
 ## [0.32.1] - 2025-11-06
 
 ### Fixed
