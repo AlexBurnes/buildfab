@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.8
 
 require (
-	github.com/AlexBurnes/version-go v1.6.0
+	github.com/AlexBurnes/version-go v1.6.1
 	github.com/spf13/cobra v1.8.0
 	golang.org/x/term v0.35.0
 	gopkg.in/yaml.v3 v3.0.1

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.1] - 2026-04-01
+
+### Changed
+- **Update version-go dependency to v1.6.1**: Upgraded version-go library from v1.6.0 to v1.6.1
+
 ## [0.33.0] - 2026-04-01
 
 ### Changed
