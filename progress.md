@@ -2,6 +2,10 @@
 
 ## What Works
 
+- **version-go v1.6.0 Update** (v0.33.0 - April 1, 2026): Updated dependency from v1.5.0 to v1.6.0
+  - **API Change** - All git functions now require `dir string` parameter; `""` means current directory
+  - **Files Modified** - `internal/version/version.go` (3 call sites), `cmd/buildfab/main.go` (1 call site)
+
 - **Step Output Order Fix** (v0.32.3 - March 20, 2026): Fixed random step display order in quiet/verbose modes for parallel-eligible steps
   - **Root Cause** - `getJobsInTopologicalOrder` iterated `map[string]*JobNode` — Go map iteration is random — so within-wave step order was non-deterministic
   - **Fix** - Iterate `h.RootJobs` slice instead of map; preserves YAML declaration order within each dependency wave

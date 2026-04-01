@@ -35,7 +35,7 @@ type VersionInfo struct {
 // Uses version.GetVersion() to return version WITHOUT 'v' prefix
 func (d *Detector) DetectCurrentVersion(ctx context.Context) (string, error) {
 	// Use version-go library GetVersion() to get version WITHOUT 'v' prefix
-	if ver, err := version.GetVersion(); err == nil && ver != "" {
+	if ver, err := version.GetVersion(""); err == nil && ver != "" {
 		return ver, nil
 	}
 	
@@ -134,7 +134,7 @@ func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, 
 	
 	// Add Git tag variable using version-go library GetRawTag() (v1.4.2+)
 	// Returns the raw git tag exactly as it appears (e.g., "v0.21.1")
-	if tag, err := version.GetRawTag(); err == nil && tag != "" {
+	if tag, err := version.GetRawTag(""); err == nil && tag != "" {
 		variables["version.tag"] = tag
 	} else {
 		variables["version.tag"] = "unknown"
@@ -142,7 +142,7 @@ func (d *Detector) GetVersionVariables(ctx context.Context) (map[string]string, 
 	
 	// Add raw version variable using version-go library GetRawVersion() (v1.5.0+)
 	// Returns the raw version string exactly as detected (e.g., "v0.22.0-1-g1234abc")
-	if rawVersion, err := version.GetRawVersion(); err == nil && rawVersion != "" {
+	if rawVersion, err := version.GetRawVersion(""); err == nil && rawVersion != "" {
 		variables["version.rawversion"] = rawVersion
 	} else {
 		variables["version.rawversion"] = "unknown"

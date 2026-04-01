@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-04-01
+
+### Changed
+- **Update version-go dependency to v1.6.0**: The version-go library v1.6.0 adds a required `dir string` parameter to all git-related API functions; pass `""` to use the current directory
+  - `version.GetVersion()` → `version.GetVersion("")` (`internal/version/version.go`)
+  - `version.GetRawTag()` → `version.GetRawTag("")` (`internal/version/version.go`)
+  - `version.GetRawVersion()` → `version.GetRawVersion("")` (`internal/version/version.go`)
+  - `versiongo.GetVersion()` → `versiongo.GetVersion("")` (`cmd/buildfab/main.go`)
+
 ## [0.32.3] - 2026-03-20
 
 ### Fixed

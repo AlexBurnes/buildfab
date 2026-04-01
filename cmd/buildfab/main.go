@@ -38,7 +38,7 @@ func getVersion() string {
 func getProjectVersion() string {
 	// Use version-go library GetVersion() to get version WITHOUT 'v' prefix
 	// This is correct for most use cases like Docker tags: buildfab:0.21.1
-	if ver, err := versiongo.GetVersion(); err == nil && ver != "" {
+	if ver, err := versiongo.GetVersion(""); err == nil && ver != "" {
 		return ver
 	}
 	
