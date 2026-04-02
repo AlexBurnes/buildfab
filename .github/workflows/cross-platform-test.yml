@@ -2,9 +2,9 @@ name: Cross-Platform Buildfab Detection Tests
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, main, devel ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, main, devel ]
   workflow_dispatch:
 
 jobs:
