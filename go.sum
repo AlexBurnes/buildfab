@@ -1,7 +1,3 @@
-github.com/AlexBurnes/version-go v1.5.0 h1:PcZpRL5P4biyfAsc0lvlOGppqfNTxFCYhOkEmhW0uyg=
-github.com/AlexBurnes/version-go v1.5.0/go.mod h1:MfcPI9btq3zf9hW6rpM6J8QPVb17ffhhCvx44tMtjFk=
-github.com/AlexBurnes/version-go v1.6.0 h1:mr9e4/C7lDbLp9esm2B500TBAxzRRCjXnB//iej73hA=
-github.com/AlexBurnes/version-go v1.6.0/go.mod h1:MfcPI9btq3zf9hW6rpM6J8QPVb17ffhhCvx44tMtjFk=
 github.com/AlexBurnes/version-go v1.6.1 h1:9FyFe+5nJZsSBNekFitv+r+bS9G4u/MsFXcVy2LOqt4=
 github.com/AlexBurnes/version-go v1.6.1/go.mod h1:MfcPI9btq3zf9hW6rpM6J8QPVb17ffhhCvx44tMtjFk=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=

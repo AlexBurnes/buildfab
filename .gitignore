@@ -23,6 +23,7 @@ scripts/buildfab
 docs/art/
 
 # docs
+DOCUMENTATION_FILES.md
 
 # IDE
 *.geany
