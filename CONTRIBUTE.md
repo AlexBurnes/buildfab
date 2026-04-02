@@ -76,6 +76,12 @@ All PRs are welcome, including:
 - Large refactors
 - Experimental changes
 
+Please open all contribution pull requests against `devel`.
+
+- `main` is protected and reserved for stabilized changes only.
+- New features, fixes, refactors, AI-generated contributions, and experimental changes must target `devel`.
+- If a PR is opened against `main`, maintainers may retarget or close it.
+
 ---
 
 ## Review Process
