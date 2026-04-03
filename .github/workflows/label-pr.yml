@@ -6,6 +6,7 @@ on:
 
 permissions:
   pull-requests: write
+  issues: write
 
 jobs:
   label-pr:
@@ -54,4 +55,86 @@ jobs:
                 issue_number: pr.number,
                 labels
               });
+            }
+
+  label-risk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label by changed paths
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr.number,
+                per_page: 100
+              }
+            );
+
+            const names = files.map(f => f.filename);
+
+            const labels = new Set();
+
+            for (const f of names) {
+              if (f === '.github/CODEOWNERS') {
+                labels.add('high-risk');
+                labels.add('policy-change');
+              }
+              if (f.startsWith('.github/workflows/')) {
+                labels.add('high-risk');
+                labels.add('workflow-change');
+              }
+              if (
+                f.startsWith('buildtools/') ||
+                f.startsWith('installers/') ||
+                f.startsWith('cmake/') ||
+                f === 'CMakeLists.txt' ||
+                f.startsWith('conanfile') ||
+                f.startsWith('scripts/') ||
+                f === '.project.yml' ||
+                f.startsWith('.goreleaser')
+              ) {
+                labels.add('high-risk');
+                labels.add('release-path');
+              }
+            }
+
+            if (labels.size > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: [...labels]
+              });
+            }
+            if (labels.has('high-risk')) {
+               const warningText = 'This PR modifies high-risk paths (workflow/release/install/build pipeline). Manual maintainer review is required.';
+
+               const comments = await github.paginate(
+                 github.rest.issues.listComments,
+                 {
+                   owner: context.repo.owner,
+                   repo: context.repo.repo,
+                   issue_number: pr.number,
+                   per_page: 100
+                 }
+               );
+
+               const alreadyCommented = comments.some(c =>
+                 c.body && c.body.includes('high-risk paths')
+               );
+
+               if (labels.has('high-risk') && !alreadyCommented) {
+                 await github.rest.issues.createComment({
+                   owner: context.repo.owner,
+                   repo: context.repo.repo,
+                   issue_number: pr.number,
+                   body: warningText
+                 });
+               }
             }

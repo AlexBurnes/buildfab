@@ -1,0 +1,15 @@
+# Repository policy and ownership
+.github/CODEOWNERS @AlexBurnes
+
+# GitHub automation
+.github/workflows/* @AlexBurnes
+
+# Release / packaging / install paths
+buildtools/* @AlexBurnes
+installers/* @AlexBurnes
+.goreleaser* @AlexBurnes
+conanfile* @AlexBurnes
+CMakeLists.txt @AlexBurnes
+cmake/* @AlexBurnes
+scripts/* @AlexBurnes
+.project.yml @AlexBurnes
