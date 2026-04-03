@@ -113,10 +113,28 @@ jobs:
               });
             }
             if (labels.has('high-risk')) {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                body: 'This PR modifies high-risk paths (workflow/release/install/build pipeline). Manual maintainer review is required.'
-              });
+               const warningText = 'This PR modifies high-risk paths (workflow/release/install/build pipeline). Manual maintainer review is required.';
+
+               const comments = await github.paginate(
+                 github.rest.issues.listComments,
+                 {
+                   owner: context.repo.owner,
+                   repo: context.repo.repo,
+                   issue_number: pr.number,
+                   per_page: 100
+                 }
+               );
+
+               const alreadyCommented = comments.some(c =>
+                 c.body && c.body.includes('high-risk paths')
+               );
+
+               if (labels.has('high-risk') && !alreadyCommented) {
+                 await github.rest.issues.createComment({
+                   owner: context.repo.owner,
+                   repo: context.repo.repo,
+                   issue_number: pr.number,
+                   body: warningText
+                 });
+               }
             }
