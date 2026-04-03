@@ -82,6 +82,21 @@ Please open all contribution pull requests against `devel`.
 - New features, fixes, refactors, AI-generated contributions, and experimental changes must target `devel`.
 - If a PR is opened against `main`, maintainers may retarget or close it.
 
+### Pull Request Size and Scope
+
+Please keep pull requests small and focused.
+
+PRs should address a single concern and avoid touching too many unrelated files. Large changes are harder to review, increase the risk of errors, and slow down the feedback cycle.
+
+If your change is substantial, consider splitting it into multiple smaller, logically separated pull requests. This makes review and integration significantly easier.
+
+As a general guideline:
+- Prefer incremental changes over large refactors
+- Avoid mixing unrelated changes in a single PR
+- Keep diffs easy to read and reason about
+
+Large or unfocused pull requests may be delayed or closed without review.
+
 ---
 
 ## Review Process
