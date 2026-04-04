@@ -1,0 +1,9 @@
+actions:
+
+  - name: repo-size
+    run: |
+      curl -s https://api.github.com/repos/AlexBurnes/buildfab | jq '.size * 1024' | numfmt --to=iec --suffix=B
+
+  - name: release-size
+    run: |
+      curl -s https://api.github.com/repos/AlexBurnes/buildfab | jq '[.[] | .assets[]?.size] | add' | numfmt --to=iec --suffix=B

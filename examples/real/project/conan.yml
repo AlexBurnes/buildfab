@@ -1,0 +1,67 @@
+actions:
+
+  # Tool check actions
+  - name: check-conan
+    run: |
+      if ! which conan >/dev/null 2>&1; then
+        echo "Conan is not installed. Install with: pip install conan"
+        exit 1
+      fi
+      conan --version
+
+  - name: install-conan
+    variants:
+      - when: ${{ os == "centos" }}
+        run: |
+            [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+            conan config install modules/build/conan/config --type dir
+
+      - when: ${{ os == "debian" }}
+        run: |
+            [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+            conan config install modules/build/conan/config --type dir
+
+      - when: ${{ os == "alpine" }}
+        run: |
+            [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+            conan config install modules/build/conan/config --type dir
+
+
+      - when: ${{ os == "almalinux" }}
+        run: |
+            [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+            conan config install modules/build/conan/config --type dir
+
+      - when: ${{ platform == "linux" }}
+        run: |
+          if [ ! -f $(which conan) ]; then
+            echo "Installing Conan package manager..."
+            if ! which pip3 >/dev/null 2>&1; then
+              echo "pip3 is not installed. Please install Python and pip3 first"
+              exit 1
+            fi
+            if pip3 install conan --break-system-packages 2>/dev/null; then
+              echo "Conan installed successfully with --break-system-packages"
+            elif pip3 install --user conan 2>/dev/null; then
+              echo "Conan installed successfully in user directory"
+              echo "You may need to add ~/.local/bin to your PATH"
+            elif python3 -m pip install conan --break-system-packages 2>/dev/null; then
+              echo "Conan installed successfully with python3 -m pip"
+            else
+              echo "Failed to install Conan via pip3. Please install manually:"
+              echo "  # Option 1: Use system package manager"
+              echo "  sudo apt install conan  # Ubuntu/Debian"
+              echo "  # Option 2: Use pip3"
+              echo "  pip3 install conan"
+              echo "  # Option 3: Use virtual environment"
+              echo "  python3 -m venv venv && source venv/bin/activate && pip3 install conan"
+              exit 1
+            fi
+            conan --version
+          else
+            echo "✅ conan already installed, $(conan --version)"
+          fi

@@ -1,0 +1,9 @@
+actions:
+
+  - name: yaml-ci-lint
+    run: |
+      if [ -e $(which yamllint) ]; then
+        yamllint --no-warnings .gitlab-ci.yml
+      else
+        echo -e "⚠️ for validate gitlab ci yml require install yamllint utility"
+      fi

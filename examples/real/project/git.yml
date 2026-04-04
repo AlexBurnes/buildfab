@@ -1,0 +1,17 @@
+actions:
+  # Version and validation actions
+  - name: version-check
+    run: .tools/version check
+
+  - name: version-greatest
+    run: .tools/version check-greatest
+
+  # Git actions
+  - name: git-untracked
+    uses: git@untracked
+
+  - name: git-uncommitted
+    uses: git@uncommitted
+
+  - name: git-modified
+    uses: git@modified

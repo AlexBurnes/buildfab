@@ -1,0 +1,493 @@
+project:
+  name: "project"
+  modules: ["app"]
+
+include:
+  - "../project/project/buildfab.yml"
+  - "../project/project/git.yml"
+  - "../project/project/gitlab.yml"
+  - "../project/project/conan.yml"
+  - "../project/project/cmake.yml"
+  - "../project/project/clang.yml"
+  - "../project/project/valgrind.yml"
+
+stages:
+  pre-push:
+    steps:
+      - action: version-check
+      - action: version-greatest
+      - action: style-check
+      - action: git-untracked
+      - action: git-uncommitted
+      - action: git-modified
+      - action: yaml-ci-lint
+      - action: yaml-ci-validate
+      - action: yaml-project-lint
+      - action: yaml-project-validate
+
+  ci-pre-install:
+    steps:
+      - action: install-version
+      - action: install-requirements
+        require: [install-version]
+      - action: install-conan
+        require: [install-requirements]
+
+  config:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: conan-install
+        require: [check-conan, check-cmake]
+      - action: cmake-config
+        require: [conan-install]
+
+  build:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: build-cleanup
+      - action: conan-install
+        require: [check-conan, check-cmake, build-cleanup]
+      - action: cmake-config
+        require: [conan-install]
+      - action: cmake-build
+        require: [cmake-config]
+      - action: cmake-test
+        require: [cmake-build]
+
+  build-test:
+    steps:
+      - action: build-test
+      - action: conan-check-version
+        require: [build-test]
+
+  compiler-build:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+            build_type: ["Release", "Debug"]
+          strategy:
+            max_parallel: 1
+
+  compiler-test-build:
+    steps:
+      - stage: build-test
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+            build_type: ["Release", "Debug"]
+          strategy:
+            max_parallel: 1
+
+
+  build-all:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: build-cleanup
+      - action: conan-install
+        require: [check-conan, check-cmake, build-cleanup]
+      - action: cmake-config
+        require: [conan-install]
+      - action: cmake-build
+        require: [cmake-config]
+      - action: cmake-test
+        require: [cmake-build]
+      - action: conan-create
+        require: [cmake-test]
+      - action: build-test
+        require: [conan-create]
+      - action: conan-check-version
+        require: [build-test]
+      - action: conan-list
+        require: [conan-create]
+      - action: conan-upload
+        require: [conan-list]
+      - action: conan-cleanup-cache
+        require: [cmake-build, conan-create, conan-check-version, conan-list]
+
+  compiler-build-all:
+    steps:
+      - stage: build-all
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+            build_type: ["Release", "Debug"]
+          strategy:
+            max_parallel: 1
+
+  create:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: conan-install
+        require: [check-conan, check-cmake]
+      - action: conan-create
+        require: [conan-install]
+
+  compiler-create:
+    steps:
+      - stage: create
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+            build_type: ["Release", "Debug"]
+          strategy:
+            max_parallel: 1
+
+
+  upload:
+    steps:
+      - action: conan-upload
+
+  # Run build in docker containers, check ci build locally
+  images-build:
+    steps:
+      - action: image-build
+        matrix:
+          values:
+            image: [
+              "almalinux:9",
+              "centos:7",
+              "centos:8",
+              "alpine:3.22"
+            ]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+actions:
+
+  - name: yaml-ci-validate
+    run: |
+      . ../project/scripts/colors.sh
+      if [ -f .gitlab_tocken ]; then
+          JSON_YAML=$(jq -n --arg yaml "$(cat .gitlab-ci.yml)" '{content: $yaml}')
+          ERROR=$(curl --header "Content-Type: application/json" -H "PRIVATE-TOKEN: $(cat < .gitlab_tocken)" \
+          -sS 'https://gitlab.example.com/api/v4/projects/common/cpplibs/library/lint?include_merged_yaml=true' \
+          --data "${JSON_YAML}" | jq -r '.errors[]?')
+          if [ -z "${ERROR}" ]; then
+              echo "✅ ci yml syntax is ${green}ok${clre}"
+              exit 0
+          else
+              echo "💥 ci yml syntax ${red}failed, error:\n${ERROR}${clre}"
+              exit 1
+          fi
+      else
+          echo "⚠️ could not check, no gitlab tocken found, add tocken into .gitlab_tocken"
+          exit 0
+      fi
+
+
+  # Install require packages on host
+
+  - name: install-requirements
+    variants:
+      - when: ${{ os == "centos" && os_version == "7" }}
+        run: |
+            exit 0
+
+      - when: ${{ os == "almalinux" && os_version == "8.10" }}
+        run: |
+            exit 0
+
+      - when: ${{ os == "almalinux" && os_version == "9.6" }}
+        run: |
+            exit 0
+
+  # Dependency installation actions
+  - name: conan-install
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      echo "🔍 Matrix compiler is ${{matrix.compiler-"gcc"}}"
+      build_type="${{matrix.build_type-Debug}}"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+      build_dir=".build"
+      if [ "${compiler}" = "gcc" ]; then
+        export CXX=g++; export CC=gcc
+      elif [ "${compiler}" = "clang" ]; then
+        export CXX=clang++; export CC=clang
+      else
+        echo "❌ Unsupported compiler: ${compiler}"; exit 1
+      fi
+
+      echo "🏗️ Conan build require libraries and tools"
+      OS="${{os}}" OS_VERSION="${{os_version}}" conan install . \
+        -of ${build_dir} \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --lockfile-out=${build_dir}/conan.lock \
+        --build=missing
+
+      conan graph info . \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --build never \
+        --lockfile=${build_dir}/conan.lock --format=json > ${build_dir}/packages.json
+
+      conan list --graph ${build_dir}/packages.json --format=json > ${build_dir}/pkglist.json
+
+  # Cleanup actions
+  - name: conan-cleanup
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+      conan remove -c 'svc-*'
+      conan cache clean
+
+  - name: conan-cleanup-cache
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+      echo "🧹 Cleanup conan cache temporary files"
+      conan cache clean -s -b
+
+      echo "🗑️ Remove more than 3 month not used conan cache binary files"
+      conan remove --lru 3M '*' --confirm
+
+  - name: conan-list
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+      conan list "$(.tools/version project)/$(.tools/version version)#*:*#*" --cache
+
+  - name: build-cleanup
+    run: |
+      rm -fr .build
+      rm -f CMakePresets.json
+      rm -f CMakeUserPresets.json
+
+  # Build actions
+  - name: cmake-config
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      conan_preset="conan-$(echo "${{matrix.build_type-Debug}}" | tr '[:upper:]' '[:lower:]')"
+
+      cmake --preset ${conan_preset} --fresh -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+  - name: cmake-build
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      conan_preset="conan-$(echo "${{matrix.build_type-Debug}}" | tr '[:upper:]' '[:lower:]')"
+
+      cmake --build --preset ${conan_preset} --verbose
+
+  - name: conan-create
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      echo "🔍 Matrix compiler is ${{matrix.compiler-"gcc"}}"
+      build_type="${{matrix.build_type-Debug}}"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+
+      echo "🏗️ Conan create package"
+      conan create . \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}"
+
+  - name: conan-check-version
+    run: |
+      . ../project/scripts/colors.sh
+      if [ ! -f .test_build/src/example ]; then
+        echo "${red}.test_build/src/example does not exists${clre}"
+        exit 1
+      fi
+      test_version=$(.test_build/src/example)
+      if [ "${test_version}" != "${{project}}/${{version}}" ]; then
+        echo "${red}test version '${test_version}' not equal expected '${{version}}'${clre}"
+        exit 1
+      fi
+      echo "conan library ${{project}} test version '${test_version}' ${green}ok${clre}"
+      exit 0
+
+  - name: conan-upload
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      conan remote login -p "${ARTIFACTORY_TOCKEN-}" conan-local gitlab
+
+      conan upload -r conan-local ${{project}}/${{version}}
+
+      [ -f .build/pkglist.json ] && conan upload --list=.build/pkglist.json -r conan-local --confirm
+
+      exit 0
+
+  - name: conan-graph
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      echo "🔍 Matrix compiler is ${{matrix.compiler-"gcc"}}"
+      build_type="${{matrix.build_type-Debug}}"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+
+      conan graph info . \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --build never \
+        --format=html > conan-graph.html
+
+  - name: conan-lock
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      echo "🔍 Matrix compiler is ${{matrix.compiler-"gcc"}}"
+      build_type="${{matrix.build_type-Debug}}"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+
+      conan lock create . \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --build never \
+        --lockfile-out=conan.lock
+
+  - name: cmake-test
+    run: |
+      conan_preset="conan-$(echo "${{matrix.build_type-Debug}}" | tr '[:upper:]' '[:lower:]')"
+      ctest --preset $conan_preset -V
+
+  - name: cppcheck
+    run: |
+        set +e
+        cppcheck \
+            --project=.build/build/${{matrix.build_type-Debug}}/compile_commands.json \
+            --enable=all \
+            --suppressions-list=.cppcheck.suppress \
+            --include=.cppcheck.include \
+            --error-exitcode=1 \
+            --check-level=exhaustive \
+            --xml 2> cppcheck.xml
+        rc=$?
+        cppcheck-htmlreport \
+            --file=cppcheck.xml \
+            --report-dir=cppcheck.report \
+            --source-dir=.
+        if [ $rc -ne 0 ]; then
+            echo "cppcheck found troubles, open $PWD/cppcheck.report/index.html to see report"
+        fi
+        exit $rc
+
+  - name: code-checker
+    run: |
+      set +e
+      CodeChecker analyze .build/build/${{matrix.build_type-Debug}}/compile_commands.json --analyzers clangsa --enable=alpha --enable sensitive --output .reports
+      set -e
+      CodeChecker parse .reports
+
+  - name: style-check
+    shell: bash
+    run: |
+        . ../project/scripts/colors.sh
+        ec=0
+        while IFS= read -r file; do
+            if clang-format --output-replacements-xml --style="file:.clang-format.style" \
+                "${file}" | grep -q '<replacement '; then
+                echo "file '${file}' not in style"
+                ec=1
+            fi
+        done < <(find src/ include/ \( -iname "*.cpp" -o -iname "*.hpp" -o -iname "*.c" -o -iname "*.h" \))
+        exit $ec
+
+  - name: style-fix
+    shell: bash
+    run: |
+        while IFS= read -r file; do
+            clang-format -i --style="file:.clang-format.style" "${file}"
+        done < <(find src/ include/ \( -iname "*.cpp" -o -iname "*.hpp" -o -iname "*.c" -o -iname "*.h" \))
+
+  - name: benchmark
+    run: |
+      .build/build/${{matrix.build_type-Debug}}/src/test/bench_svc_log \
+        --benchmark_counters_tabular=true
+
+  - name: mem-test
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      valgrind --tool=memcheck --leak-check=full --track-origins=yes \
+        .build/build/${{matrix.build_type-Debug}}/src/test/test_svc_log
+
+  - name: sanitizer-test
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      build_type="${{matrix.build_type-Debug}}"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+      conan_preset="conan-$(echo "${build_type}" | tr '[:upper:]' '[:lower:]')"
+      san_dir=".build-san"
+      if [ "${compiler}" = "gcc" ]; then
+        export CXX=g++; export CC=gcc
+      elif [ "${compiler}" = "clang" ]; then
+        export CXX=clang++; export CC=clang
+      else
+        echo "❌ Unsupported compiler: ${compiler}"; exit 1
+      fi
+
+      OS="${{os}}" OS_VERSION="${{os_version}}" conan install . \
+        -of ${san_dir} \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --build=missing
+
+      cmake -S . -B ${san_dir}/build/${build_type} \
+        -G Ninja \
+        -DCMAKE_BUILD_TYPE=${build_type} \
+        -DCMAKE_TOOLCHAIN_FILE=${san_dir}/build/${build_type}/generators/conan_toolchain.cmake \
+        -DENABLE_SANITIZERS=ON
+      cmake --build ${san_dir}/build/${build_type}
+      ASAN_OPTIONS=detect_leaks=1 ctest --test-dir ${san_dir}/build/${build_type} -V
+
+  - name: build-test
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      echo "🔍 Matrix compiler is ${{matrix.compiler-"gcc"}}"
+      build_type="${{matrix.build_type-Debug}}"
+      conan_preset="conan-$(echo "${{matrix.build_type-Debug}}" | tr '[:upper:]' '[:lower:]')"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+      build_dir=".test_build"
+      if [ "${compiler}" = "gcc" ]; then
+        export CXX=g++; export CC=gcc
+      elif [ "${compiler}" = "clang" ]; then
+        export CXX=clang++; export CC=clang
+      else
+        echo "❌ Unsupported compiler: ${compiler}"; exit 1
+      fi
+
+      [ -d ${build_dir} ] && rm -fr ${build_dir}
+
+      echo "🏗️ Test build, conan build require libraries and tools"
+      conan install test_build \
+        -of ${build_dir} \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --build=missing
+
+      cmake -S test_build --preset ${conan_preset}
+
+      cd test_build && cmake --build --preset ${conan_preset}
+
+  # Run build in docker containers, check ci build locally
+  - name: image-build
+    container:
+      engine: podman
+      image:
+        from: ${{ matrix.image }}
+      workdir: /project
+      mounts:
+        - type: bind
+          source: .
+          target: /project-src
+          ro: true
+      cache:
+        conan: .cache
+      env:
+        BRANCH: ${{version.branch}}
+      cpu: 8
+      memory: 16G
+      network: host
+      env_file: .docker-env-images
+      run_stage: compiler-build-all

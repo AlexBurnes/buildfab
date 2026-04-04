@@ -70,6 +70,9 @@ buildfab is actively used in production:
 - ✅ **Go projects**: Building buildfab itself locally and in GitHub Actions
 - ✅ **C++ modules**: Compiling complex C++ projects on GitLab CI with multi-distro support
 - ✅ **Container workflows**: Building applications and creating slim optimized images (30x+ smaller)
+- ✅ **Mixed-language pipelines**: Perl service projects where a compiled binary module is built in one container, co-packaged into RPMs for multiple distros, and deployed as a Docker image — all driven by a single `.project.yml`
+
+See [`examples/real/`](examples/real/) for annotated `.project.yml` files from real projects (C++ library, C++ app, Perl+compiled-tool package, metapackage). These are provided for reference only — they will not run inside the buildfab repository itself, as they depend on specific project source trees, toolchains, and infrastructure.
 
 ## 🌍 Project Vision
 

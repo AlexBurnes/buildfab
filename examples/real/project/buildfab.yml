@@ -1,0 +1,272 @@
+stages:
+  buildfab-pre-check:
+    steps:
+      - action: check-version-utility
+      - action: check-pre-push-utility
+
+  buildfab-check-updates:
+    steps:
+      - action: check-buildfab-releases
+        onerror: warn
+      - action: check-pre-push-releases
+        onerror: warn
+      - action: check-version-releases
+        onerror: warn
+
+  buildfab-pre-install:
+    steps:
+      - action: makedir-tools
+      - action: install-version
+      - action: install-pre-push
+
+actions:
+
+  - name: pre-check
+    run: buildfab run buildfab-pre-check
+
+  - name: yaml-project-lint
+    run: |
+      if [ -e $(which yamllint) ]; then
+        yamllint --no-warnings .project.yml
+      else
+        echo "⚠️ for validate project yml require install yamllint utility"
+      fi
+
+  - name: yaml-project-validate
+    run: |
+      buildfab validate
+
+
+  # Platform detection
+  - name: platform-view
+    run: |
+      echo "platform: ${{platform}}"
+      echo "arch: '${{arch}}'"
+      echo "os: '${{os}}'"
+      echo "os_version: '${{os_version}}'"
+      echo "cpu: ${{cpu}}"
+
+  - name: makedir-tools
+    run: |
+      [ ! -d .tools ] && (mkdir .tools || exit 1)
+      exit 0
+
+  - name: check-version-utility
+    run: |
+      if [ ! -f ".tools/version" ]; then
+        echo "Version utility not found in .tools/ directory"
+        echo "To install: buildfab run buildfab-pre-install"
+        exit 1
+      fi
+      .tools/version -V
+
+  - name: check-pre-push-utility
+    run: |
+      if [ ! -f ".tools/pre-push" ]; then
+        echo "Pre-push utility not found in .tools/ directory"
+        echo "To install: buildfab run buildfab-pre-install"
+        exit 1
+      fi
+      .tools/pre-push -V
+
+  # Update checking actions
+
+  - name: check-buildfab-releases
+    run: |
+      echo "Checking for buildfab updates..."
+      CURRENT_VERSION=$(buildfab -V 2>/dev/null || echo "v0.0.0")
+      echo "Current buildfab version: $CURRENT_VERSION"
+      # Get latest release from GitHub API
+      LATEST_RELEASE=$(curl -s "https://api.github.com/repos/AlexBurnes/buildfab/releases/latest" | grep '"tag_name":' | sed 's/.*"tag_name": "\(.*\)".*/\1/' | sed 's/^v//' || echo "")
+      if [ -z "$LATEST_RELEASE" ]; then
+        echo "⚠️ Could not fetch latest buildfab release from GitHub"
+        echo "To check manually: curl -s https://api.github.com/repos/AlexBurnes/buildfab/releases/latest"
+        exit 0
+      fi
+      echo "Latest buildfab release: $LATEST_RELEASE"
+      # Compare versions using sort -V for proper semantic version comparison
+      # Simple version comparison using sort -V
+      if [ "$CURRENT_VERSION" = "$LATEST_RELEASE" ]; then
+        echo "✅ buildfab is up to date: $CURRENT_VERSION"
+      else
+        # Check if current version is older than latest
+        OLDER_VERSION=$(echo "$CURRENT_VERSION\n$LATEST_RELEASE" | sort -V | head -1)
+        if [ "$OLDER_VERSION" = "$CURRENT_VERSION" ]; then
+          echo "⚠️ New buildfab version available: $LATEST_RELEASE (current: $CURRENT_VERSION)"
+          echo "To update buildfab (installed globally):"
+          echo "  # Simple installation using wget"
+          echo "  wget -O - https://github.com/AlexBurnes/buildfab/releases/latest/download/buildfab-${{platform}}-${{arch}}-install.sh | sudo sh"
+          echo "  # Verify installation"
+          echo "  buildfab -V"
+          exit 0
+        else
+          echo "✅️ Installed version $CURRENT_RELASE is newest as latest release $LATEST_RELEASE"
+          exit 0
+        fi
+      fi
+
+  - name: check-pre-push-releases
+    run: |
+      echo "Checking for pre-push utility updates..."
+      if [ -f ".tools/pre-push" ]; then
+        PREPUSH_VERSION=$(.tools/pre-push -V 2>/dev/null || echo "unknown")
+        echo "Current pre-push utility: $PREPUSH_VERSION"
+        # Get latest pre-push release
+        LATEST_RELEASE=$(curl -s "https://api.github.com/repos/AlexBurnes/pre-push/releases/latest" | grep '"tag_name":' | sed 's/.*"tag_name": "\(.*\)".*/\1/' || echo "")
+        if [ -n "$LATEST_RELEASE" ]; then
+          echo "Latest pre-push release: $LATEST_RELEASE"
+          # Strip 'v' prefix from release tag for comparison
+          PREPUSH_CLEAN=$(echo "$LATEST_RELEASE" | sed 's/^v//')
+          # Compare pre-push utility with latest release
+          if [ "$PREPUSH_VERSION" = "$PREPUSH_CLEAN" ]; then
+            echo "✅ pre-push utility is up to date: $PREPUSH_VERSION"
+          else
+            # Check if pre-push version is older than latest
+            OLDER_VERSION=$(echo "$PREPUSH_VERSION\n$PREPUSH_CLEAN" | sort -V | head -1)
+            if [ "$OLDER_VERSION" = "$PREPUSH_VERSION" ]; then
+              echo "⚠️ New pre-push utility available: $LATEST_RELEASE (current: $PREPUSH_VERSION)"
+              echo "To update pre-push utility:"
+              echo "  buildfab run pre-install"
+              exit 1
+            else
+              echo "⚠️ Version comparison error for pre-push utility"
+              exit 1
+            fi
+          fi
+        else
+          echo "⚠️ Could not fetch latest pre-push release from GitHub"
+        fi
+      else
+        echo "⚠️ pre-push utility not found in .tools/ directory"
+        echo "To install pre-push utility:"
+        echo "  buildfab run pre-install"
+        # Don't exit with error when onerror: warn
+        exit 0
+      fi
+
+  - name: check-version-releases
+    run: |
+      echo "Checking version utility updates..."
+      if [ -f ".tools/version" ]; then
+        VERSION_UTIL_VERSION=$(.tools/version -V 2>/dev/null || echo "unknown")
+        echo "Current version utility: $VERSION_UTIL_VERSION"
+        # Get latest version-go release
+        VERSION_GO_LATEST=$(curl -s "https://api.github.com/repos/AlexBurnes/version-go/releases/latest" | grep '"tag_name":' | sed 's/.*"tag_name": "\(.*\)".*/\1/' || echo "")
+        if [ -n "$VERSION_GO_LATEST" ]; then
+          echo "Latest version-go release: $VERSION_GO_LATEST"
+          # Compare version utility with latest version-go (strip 'v' prefix for comparison)
+          VERSION_GO_CLEAN=$(echo "$VERSION_GO_LATEST" | sed 's/^v//')
+          if [ "$VERSION_UTIL_VERSION" = "$VERSION_GO_CLEAN" ]; then
+            echo "✅ version utility is up to date: $VERSION_UTIL_VERSION"
+          else
+            # Check if version utility is older than latest
+            OLDER_VERSION=$(echo "$VERSION_UTIL_VERSION\n$VERSION_GO_CLEAN" | sort -V | head -1)
+            if [ "$OLDER_VERSION" = "$VERSION_UTIL_VERSION" ]; then
+              echo "⚠️ New version utility available: $VERSION_GO_LATEST (current: $VERSION_UTIL_VERSION)"
+              echo "To update version utility:"
+              echo "  buildfab run pre-install"
+              exit 1
+            else
+              echo "⚠️ Version comparison error for version utility"
+              exit 1
+            fi
+          fi
+        else
+          echo "⚠️ Could not fetch latest version-go release from GitHub"
+        fi
+      else
+        echo "⚠️ version utility not found in .tools/ directory"
+        echo "To install version utility:"
+        echo "  buildfab run pre-install"
+        # Don't exit with error when onerror: warn
+        exit 0
+      fi
+
+  # Install actions
+
+  - name: install-version
+    run: |
+      require_install=1
+      if [ -f ".tools/version" ]; then
+        VERSION_UTIL_VERSION=$(.tools/version -V 2>/dev/null || echo "unknown")
+        VERSION_GO_LATEST=$(curl -s "https://api.github.com/repos/AlexBurnes/version-go/releases/latest" | grep '"tag_name":' | sed 's/.*"tag_name": "\(.*\)".*/\1/' | sed 's/^v//' || echo "")
+        if [ "${VERSION_UTIL_VERSION}" = "${VERSION_GO_LATEST}" ]; then
+          echo "✅ version utility already installed latest version: $(.tools/version -V)"
+          require_install=0
+        fi
+      fi
+      if [ $require_install -eq 1 ]; then
+        echo "Installing latest version utility..."
+        echo "Installing version utility to .tools/ directory..."
+        echo "Platform: ${{ platform }}, Architecture: ${{ arch }}"
+        # Use the correct install script URL format from README with buildfab variables
+        wget -O - "https://github.com/AlexBurnes/version-go/releases/latest/download/version-${{ platform }}-${{ arch }}-install.sh" | INSTALL_DIR=.tools sh
+        # Verify installation
+        if [ -f ".tools/version" ]; then
+          echo "✅ version utility installed successfully: $(.tools/version -V)"
+        else
+          echo "❌ version utility installation failed"
+          exit 1
+        fi
+      fi
+
+  - name: install-pre-push
+    run: |
+      require_install=1
+      if [ -f ".tools/pre-push" ]; then
+        VERSION_UTIL_VERSION=$(.tools/pre-push -V 2>/dev/null || echo "unknown")
+        VERSION_GO_LATEST=$(curl -s "https://api.github.com/repos/AlexBurnes/pre-push/releases/latest" | grep '"tag_name":' | sed 's/.*"tag_name": "\(.*\)".*/\1/' | sed 's/^v//' || echo "")
+        if [ "${VERSION_UTIL_VERSION}" = "${VERSION_GO_LATEST}" ]; then
+          echo "✅ pre-push utility already installed latest version: $(.tools/pre-push -V)"
+          require_install=0
+        fi
+      fi
+      if [ $require_install -eq 1 ]; then
+        echo "Installing latest pre-push ..."
+        echo "Installing pre-push to .tools/ directory..."
+        echo "Platform: ${{ platform }}, Architecture: ${{ arch }}"
+        # Use the correct install script URL format from README with pre-push variables
+        wget -O - "https://github.com/AlexBurnes/pre-push/releases/latest/download/pre-push-${{ platform }}-${{ arch }}-install.sh" | INSTALL_DIR=.tools sh
+        # Verify installation
+        if [ -f ".tools/pre-push" ] && .tools/pre-push -V >/dev/null 2>&1; then
+          echo "✅ pre-push installed successfully: $(.tools/pre-push -V)"
+          echo "Note: pre-push functionality is available via 'pre-push run pre-push'"
+        else
+          echo "⚠️ pre-push installation failed"
+          # Don't exit with error as this is optional
+        fi
+      fi
+
+  # Update actions, ⚠️ this will install buildfab and pre-push globally
+
+  - name: update-buildfab
+    run: |
+      echo "Installing latest buildfab ..."
+      echo "Installing buildfab"
+      echo "Platform: ${{ platform }}, Architecture: ${{ arch }}"
+      # Use the correct install script URL format from README with buildfab variables
+      wget -O - "https://github.com/AlexBurnes/buildfab/releases/latest/download/buildfab-${{ platform }}-${{ arch }}-install.sh" | sudo INSTALL_DIR=/opt/buildfab/bin sh
+      # Verify installation
+      if [ -f "$(which buildfab)" ] && buildfab -V >/dev/null 2>&1; then
+        echo "✅ buildfab installed successfully: $(buildfab -V)"
+        echo "Note: buildfab functionality is available via 'buildfab run buildfab'"
+      else
+        echo "⚠️ buildfab installation failed"
+        # Don't exit with error as this is optional
+      fi
+
+  - name: update-pre-push
+    run: |
+      echo "Installing latest pre-push ..."
+      echo "Installing pre-push"
+      echo "Platform: ${{ platform }}, Architecture: ${{ arch }}"
+      # Use the correct install script URL format from README with buildfab variables
+      wget -O - "https://github.com/AlexBurnes/pre-push/releases/latest/download/pre-push-${{ platform }}-${{ arch }}-install.sh" | sudo INSTALL_DIR=/opt/buildfab/bin sh
+      # Verify installation
+      if [ -f "$(which pre-push)" ] && pre-push -V >/dev/null 2>&1; then
+        echo "✅ pre-push installed successfully: $(pre-push -V)"
+        echo "Note: pre-push functionality is available via 'buildfab run pre-push'"
+      else
+        echo "⚠️ pre-push installation failed"
+        # Don't exit with error as this is optional
+      fi

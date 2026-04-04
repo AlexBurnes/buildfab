@@ -1,0 +1,46 @@
+actions:
+
+  - name: check-cppcheck
+    run: |
+      if ! which cppcheck >/dev/null 2>&1; then
+        echo "cppcheck not found"
+        exit 1
+      else
+        cppcheck --version
+      fi
+
+  - name: cppcheck-install
+    shell: bash
+    run: |
+      version="2.16.0"
+      install_prefix="/usr/local"
+      if [ -e ${install_prefix}/bin/cppcheck ]; then
+       installed_version=$(${install_prefix}/bin/cppcheck --version)
+       if [[ ! -z "${installed_version}" && "${installed_version}" =~ "${version}" ]]; then
+         echo "✅ cppcheck ${version} already installed into ${install_prefix}/bin"
+         exit 0
+       fi
+      fi
+      [ -d /tmp/cppcheck-${version} ] && rm -fr /tmp/cppcheck-${version}
+      [ -f /tmp/cppcheck-${version}.zip ] && rm -f /tmp/cppcheck-${version}.zip
+      echo "🌐 download cppcheck-${version}.zip"
+      wget -O "/tmp/cppcheck-${version}.zip" https://github.com/danmar/cppcheck/archive/${version}.zip
+      echo "📦 unpack cppcheck-${version}.zip"
+      unzip -qq /tmp/cppcheck-${version}.zip -d /tmp
+      rm -f /tmp/cppcheck-${version}.zip
+      cd /tmp/cppcheck-${version}
+      echo "🏗️ build cppcheck"
+      cmake -H. -Bbuild -DCMAKE_INSTALL_PREFIX=${install_prefix}
+      cmake --build build
+      cmake --install build
+      rm -fr /tmp/cppcheck-${version}
+      if [ ! -e "${install_prefix}/bin/cppcheck" ]; then
+        echo "⚠️ fail install cppcheck ${version}"
+        exit 1
+      fi
+      installed_version=$(${install_prefix}/bin/cppcheck --version)
+      if [[ -z "${installed_version}" || ! "${installed_version}" =~ "${version}" ]]; then
+        echo "⚠️ fail install cppcheck ${version}, ${install_prefix}/bin/cppcheck --version returns another version ${installed_version}"
+        exit 1
+      fi
+      echo "✅ cppcheck ${version} installed into ${install_prefix}/bin"
