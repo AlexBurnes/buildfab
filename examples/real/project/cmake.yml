@@ -1,0 +1,9 @@
+actions:
+
+  - name: check-cmake
+    run: |
+      if ! which cmake >/dev/null 2>&1; then
+        echo "CMake not found, will use Conan's CMake"
+      else
+        cmake --version
+      fi

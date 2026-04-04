@@ -1,0 +1,28 @@
+actions:
+
+  - name: check-pvs-studio
+    run: |
+      if ! which pvs-studio >/dev/null 2>&1; then
+        echo "pvs-studio is not installed."
+        exit 1
+      fi
+      pvs-studio --version
+
+  - name: install-pvs-studio
+    variants:
+    - when: ${{ platform == 'linux' && (os == "ubuntu" || os == "debian") }}
+      run: |
+       if ! which pvs -studio >/dev/null 2>&1; then
+         echo "pvs-studio is not installed."
+         wget -q -O - https://wcdn.pvs-studio.com/etc/pubkey.txt | apt-key add -
+         wget -O /etc/apt/sources.list.d/viva64.list https://wcdn.pvs-studio.com/etc/viva64.list
+         apt-get update
+         apt-get install pvs-studio
+         if ! which pws-studio >/dev/null 2>&1; then
+             echo "failed install pvs-studio"
+             exit 1
+         fi
+         exit 0
+       fi
+       echo "pvs-studio is already installed."
+       pvs-studio --version

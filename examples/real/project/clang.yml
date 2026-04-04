@@ -1,0 +1,11 @@
+actions:
+
+  - name: check-clang-format
+    run: |
+      if ! which clang-format >/dev/null 2>&1; then
+        echo "clang-format not found"
+        exit 1
+      else
+        clang-format --version
+      fi
+

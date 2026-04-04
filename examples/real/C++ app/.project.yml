@@ -1,0 +1,417 @@
+project:
+  name: "project"
+  modules: ["module"]
+  bin: "bin"
+
+include:
+  - "../project/buildfab.yml"
+  - "../project/project/git.yml"
+  - "../project/project/gitlab.yml"
+  - "../project/project/conan.yml"
+  - "../project/project/cmake.yml"
+  - "../project/project/clang.yml"
+  - "../project/project/valgrind.yml"
+
+stages:
+  pre-push:
+    steps:
+      - action: version-check
+      - action: version-greatest
+      - action: version-module
+      - action: rpm-build
+        require: [version-module]
+      - action: git-untracked
+      - action: git-uncommitted
+      - action: git-modified
+      - action: yaml-ci-lint
+      - action: yaml-ci-validate
+      - action: yaml-project-lint
+      - action: yaml-project-validate
+
+  ci-pre-install:
+    steps:
+      - action: install-version
+      - action: install-requirements
+        require: [install-version]
+      - action: install-conan
+        require: [install-requirements]
+
+  config:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: conan-install
+        require: [check-conan, check-cmake]
+      - action: cmake-config
+        require: [conan-install]
+
+  make:
+    steps:
+      - action: cmake-build
+
+  install:
+    steps:
+      - action: cmake-install
+
+  build:
+    steps:
+      - action: check-conan
+      - action: check-cmake
+      - action: build-cleanup
+      - action: conan-install
+        require: [check-conan, check-cmake, build-cleanup]
+      - action: cmake-config
+        require: [conan-install]
+      - action: cmake-build
+        require: [cmake-config]
+      - action: cmake-test
+        require: [cmake-build]
+      - action: cmake-install
+        require: [cmake-build]
+      - action: conan-list
+        require: [cmake-build]
+      - action: conan-upload
+        require: [conan-list]
+      - action: conan-cleanup-cache
+        require: [conan-upload]
+
+  compiler-build:
+    steps:
+      - stage: build
+        matrix:
+          values:
+            compiler: ["gcc", "clang"]
+            build_type: ["Release", "Debug"]
+          strategy:
+            max_parallel: 1
+
+  rpm-build:
+    steps:
+      - action: install-requirements
+      - action: rpm-build
+        require: [install-requirements]
+
+  # Run build in docker containers, check ci build locally
+  images-build:
+    steps:
+      - action: image-build
+        matrix:
+          values:
+            image: [
+              "centos:8",
+              "centos:9",
+              "centos:7",
+              "alpine:3.22"
+            ]
+          strategy:
+            max_parallel: 2
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+actions:
+
+  - name: version-module
+    run: |
+      if [ -f "build/${{os}}${{os_version}}/env" ]; then
+        source "build/${{os}}${{os_version}}/env"
+      fi
+      for module in $(.tools/version modules); do
+        echo "Checking module: bin/$module"
+        module_version=$(bin/$module -V 2>/dev/null || echo "")
+        if [ -z "$module_version" ]; then
+          echo "Could not get version from bin/$module -V"
+          exit 1
+        fi
+        # Strip 'v' prefix from module version for comparison
+        module_version_clean=$(echo "$module_version" | sed 's/^v//')
+        # Get expected version directly from .tools/version
+        expected_version=$(.tools/version version)
+        if [ "$module_version_clean" != "$expected_version" ]; then
+          echo "Version mismatch: bin/$module reports $module_version, expected $expected_version"
+          echo "To check manually run: bin/$module -V"
+          exit 1
+        fi
+        echo "✓ bin/$module version matches: $module_version"
+      done
+
+
+  - name: yaml-ci-validate
+    run: |
+      . ../project/scripts/colors.sh
+      if [ -f .gitlab_tocken ]; then
+          JSON_YAML=$(jq -n --arg yaml "$(cat .gitlab-ci.yml)" '{content: $yaml}')
+          ERROR=$(curl --header "Content-Type: application/json" -H "PRIVATE-TOKEN: $(cat < .gitlab_tocken)" \
+          -sS 'https://gitlab.example.com/api/v4/projects/Project/Module/ci/lint?include_merged_yaml=true' \
+          --data "${JSON_YAML}" | jq -r '.errors[]?')
+          if [ -z "${ERROR}" ]; then
+              echo "✅ ci yml syntax is ${green}ok${clre}"
+              exit 0
+          else
+              echo "💥 ci yml syntax ${red}failed, error:\n${ERROR}${clre}"
+              exit 1
+          fi
+      else
+          echo "⚠️ could not check, no gitlab tocken found, add tocken into .gitlab_tocken"
+          exit 0
+      fi
+
+
+  # Install require packages on host
+  - name: install-requirements
+    variants:
+      - when: ${{ os == "centos" && os_version == "7" }}
+        run: |
+          yum remove -y oracle-instantclient19.5-basic-19.5.0.0.0
+          yum install -y \
+            oracle-instantclient12.2-basic-12.2.0.1.0 \
+            oracle-instantclient12.2-devel-12.2.0.1.0 \
+            oracle-instantclient12.2-sqlplus-12.2.0.1.0 \
+            oracle-instantclient12.2-tools-12.2.0.1.0
+          ln -s /usr/include/oracle/12.2/client64 /usr/lib/oracle/12.2/client64/include
+          exit 0
+
+      - when: ${{ os == "almalinux" && os_version == "8.10" }}
+        run: |
+          exit 0
+
+      - when: ${{ os == "almalinux" && os_version == "9.6" }}
+        run: |
+          exit 0
+
+      - when: ${{ os == "alpine" && os_version == "3.22.2" }}
+        run: |
+          exit 0
+
+  # Dependency installation actions
+  - name: conan-install
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      echo "🔍 Matrix compiler is ${{matrix.compiler-"gcc"}}"
+      build_type="${{matrix.build_type-Debug}}"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+      build_dir=".build"
+      if [ "${compiler}" = "gcc" ]; then
+        export CXX=g++; export CC=gcc
+      elif [ "${compiler}" = "clang" ]; then
+        export CXX=clang++; export CC=clang
+      else
+        echo "❌ Unsupported compiler: ${compiler}"; exit 1
+      fi
+
+      (
+      set +x;
+      [ -z "${ARTIFACTORY_TOCKEN-}" ] && ARTIFACTORY_TOCKEN=$(cat .artifactory_tocken) || true
+      if [ ! -z "${ARTIFACTORY_TOCKEN-}" ]; then
+          conan remote login -p "${ARTIFACTORY_TOCKEN}" conan-local gitlab
+      fi
+      )
+
+      echo "🏗️ Conan build require libraries and tools"
+      OS="${{os}}" OS_VERSION="${{os_version}}" conan install . \
+        -of ${build_dir} \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --lockfile-out=${build_dir}/conan.lock \
+        --build=missing --update
+
+      conan graph info . \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --build never \
+        --lockfile=${build_dir}/conan.lock --format=json > ${build_dir}/packages.json
+
+      conan list --graph ${build_dir}/packages.json --format=json > ${build_dir}/pkglist.json
+
+  - name: conan-graph
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      echo "🔍 Matrix compiler is ${{matrix.compiler-"gcc"}}"
+      build_type="${{matrix.build_type-Debug}}"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+
+      conan graph info . \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --build never \
+        --format=html > conan-graph.html
+
+  - name: conan-lock
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      compiler=${{matrix.compiler-"gcc"}}
+      echo "🔍 Matrix compiler is ${{matrix.compiler-"gcc"}}"
+      build_type="${{matrix.build_type-Debug}}"
+      conan_profile=${{os}}${os_version}.${compiler}.${build_type}
+
+      conan lock create . \
+        -pr:h "${conan_profile}" \
+        -pr:b "${conan_profile}" \
+        --build never \
+        --lockfile-out=conan.lock
+
+  # Cleanup actions
+  - name: conan-cleanup
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+      conan remove -c 'svc-*'
+      conan cache clean
+
+  - name: conan-cleanup-cache
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+      echo "🧹 Cleanup conan cache temporary files"
+      conan cache clean -s -b
+
+      echo "🗑️ Remove more than 3 month not used conan cache binary files"
+      conan remove --lru 3M '*' --confirm
+
+  - name: conan-list
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+
+      conan list "$(.tools/version project)/$(.tools/version version)#*:*#*" --cache
+
+  - name: build-cleanup
+    run: |
+      rm -fr .build
+      rm -f CMakePresets.json
+      rm -f CMakeUserPresets.json
+
+  # Build actions
+  - name: cmake-config
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      conan_preset="conan-$(echo "${{matrix.build_type-Debug}}" | tr '[:upper:]' '[:lower:]')"
+
+      cmake --preset ${conan_preset} --fresh
+
+  - name: cmake-build
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      conan_preset="conan-$(echo "${{matrix.build_type-Debug}}" | tr '[:upper:]' '[:lower:]')"
+
+      cmake --build --preset ${conan_preset} --verbose
+
+  - name: cmake-install
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      conan_preset="conan-$(echo "${{matrix.build_type-Debug}}" | tr '[:upper:]' '[:lower:]')"
+
+      cmake --build --preset ${conan_preset} --target install
+
+  - name: conan-upload
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      if [ -f .build/pkglist.json ]; then
+        (
+            set +x;
+            [ -z "${ARTIFACTORY_TOCKEN-}" ] && ARTIFACTORY_TOCKEN=$(cat .artifactory_tocken) || true
+            if [ ! -z "${ARTIFACTORY_TOCKEN-}" ]; then
+                conan remote login -p "${ARTIFACTORY_TOCKEN}" conan-local gitlab
+                conan upload --list=.build/pkglist.json -r conan-local --confirm
+            fi
+        )
+      fi
+
+      exit 0
+
+  - name: cmake-test
+    run: |
+      compiler=${{matrix.compiler-"gcc"}}
+
+      ctest --test-dir .build
+
+
+  # RPM Build and upload actions
+  - name: rpm-build
+    shell: bash
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      PACKAGE_NAME="$(.tools/version project)"
+      VERSION="$(.tools/version version)"
+      RELEASE="$(.tools/version release)"
+      [ -d .rpmbuild ] && rm -fR .rpmbuild
+      mkdir -p .rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+      tar -czf .rpmbuild/SOURCES/$PACKAGE_NAME-$VERSION.tar.gz bin etc tests var src
+      if [ -f $PACKAGE_NAME.${{os}}${{os_version}}.spec ]; then
+        cp $PACKAGE_NAME.${{os}}${{os_version}}.spec .rpmbuild/SPECS/$PACKAGE_NAME.spec
+      else
+        cp $PACKAGE_NAME.spec .rpmbuild/SPECS/$PACKAGE_NAME.spec
+      fi
+      #--define "_missing_build_ids_terminate_build 0"
+      #--define "debug_package %{nil}"
+      #--define "_debugsource_template %{nil}"
+
+      rpmbuild -ba --define "_topdir ${PWD}/.rpmbuild" \
+        --define "_sv_version $VERSION" \
+        --define "_sv_release $RELEASE" \
+        .rpmbuild/SPECS/$PACKAGE_NAME.spec
+
+  - name: rpm-upload
+    run: |
+      BUILD_TYPE=$(.tools/version build-type)
+      if [ "${BUILD_TYPE}" == "Release" ]; then
+        BRANCH=stable
+      else
+        BRANCH=testing
+      fi
+
+      for pkg_file in $(find .rpmbuild/RPMS -name *.rpm); do
+        pkg=$(basename $pkg_file)
+        echo upload ${pkg_file} to "http://rpm.example.com/download/index.php?filename=${pkg}&branch=${BRANCH}"
+        curl --upload-file ${pkg_file} "http://rpm.example.com/download/index.php?filename=${pkg}&branch=${BRANCH}"
+      done
+
+  # Build docker container
+  - name: docker-build
+    container:
+      engine: docker
+      image:
+        build:
+          dockerfile: Dockerfile
+          context: .
+          args:
+            VERSION: ${{version}}
+          tags:
+            - ${{project}}:${{version.tag}}
+          network: host
+          progress: plain
+
+  # Make slim version of built docker container
+  - name: docker-slim
+    container:
+      engine: docker
+      image:
+        slim:
+          target: ${{project}}:${{version}}
+          tags:
+            - ${{project}}:${{version}}-slim
+          network: host
+          exec: /usr/local/bin/${{module}} -v
+
+  # Run build in docker containers, check ci build locally
+  - name: image-build
+    container:
+      engine: podman
+      image:
+        from: ${{ matrix.image }}
+      workdir: /module
+      mounts:
+        - type: bind
+          source: .
+          target: /module-src
+          ro: true
+      cache:
+        conan: .cache
+      env:
+        BRANCH: ${{version.branch}}
+      cpu: 8
+      memory: 12G
+      network: host
+      env_file: .docker-env-images
+      run_stage: compiler-build

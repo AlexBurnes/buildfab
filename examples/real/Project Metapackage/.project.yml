@@ -1,0 +1,239 @@
+project:
+  name: project
+  modules: [module]
+
+include:
+  - "../project/update-checking-stages.yml"
+  - "../project/update-checking-actions.yml"
+
+stages:
+  pre-push:
+    steps:
+      - action: version-check
+      - action: version-greatest
+      - action: build
+      - action: rpm-build
+        require: [build]
+      - action: migration-check
+      - action: git-untracked
+      - action: git-uncommitted
+      - action: git-modified
+      - action: yaml-ci-lint
+      - action: yaml-ci-validate
+      - action: yaml-project-lint
+      - action: yaml-project-validate
+
+  build-rpm:
+    steps:
+      - action: install-requirements
+      - action: rpm-cleanup
+      - action: build
+        require: [install-requirements]
+      - action: rpm-build
+        require: [rpm-cleanup, build]
+
+  upload-rpm:
+    steps:
+      - action: install-requirements
+      - action: build
+        require: [install-requirements]
+      - action: rpm-build
+        require: [build]
+      - action: rpm-upload
+        require: [rpm-build]
+
+  # Run build rpm packages locally (without git clone, via bind mount)
+  images-build:
+    steps:
+      - action: image-build-rpm
+        matrix:
+          values:
+            image: [
+              "centos:7",
+              "alma:8",
+              "alma:9"
+            ]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+  # Run build rpm packages in docker containers, check ci build locally
+  images-build-all:
+    steps:
+      - action: version-check
+      - action: version-greatest
+      - action: image-upload-rpm
+        require: [version-check, version-greatest]
+        matrix:
+          values:
+            image: [
+              "centos:7",
+              "alma:8",
+              "alma:9"
+            ]
+          strategy:
+            max_parallel: 1
+            fail_fast: false
+            continue_on_error: false
+            order: "fifo"
+
+actions:
+
+  - name: yaml-ci-lint
+    run: |
+      if [ -e $(which yamllint) ]; then
+        yamllint --no-warnings .gitlab-ci.yml
+      else
+        echo -e "⚠️ for validate gitlab ci yml require install yamllint utility"
+      fi
+
+  - name: yaml-ci-validate
+    run: |
+      . ../project/colors.sh
+      if [ -f .gitlab_tocken ]; then
+          JSON_YAML=$(jq -n --arg yaml "$(cat .gitlab-ci.yml)" '{content: $yaml}')
+          ERROR=$(curl --header "Content-Type: application/json" -H "PRIVATE-TOKEN: $(cat < .gitlab_tocken)" \
+          -sS 'https://gitlab.example.com/api/v4/projects/Projects/Package/ci/lint?include_merged_yaml=true' \
+          --data "${JSON_YAML}" | jq -r '.errors[]?')
+          if [ -z "${ERROR}" ]; then
+              echo "✅ ci yml syntax is ${green}ok${clre}"
+              exit 0
+          else
+              echo "💥 ci yml syntax ${red}failed, error:\n${ERROR}${clre}"
+              exit 1
+          fi
+      else
+          echo "⚠️ could not check, no gitlab tocken found, add tocken into .gitlab_tocken"
+          exit 0
+      fi
+
+  - name: yaml-project-lint
+    run: |
+      if [ -e $(which yamllint) ]; then
+        yamllint --no-warnings .project.yml
+      else
+        echo -e "⚠️ for validate project yml require install yamllint utility"
+      fi
+  - name: yaml-project-validate
+    run: |
+      buildfab validate
+
+  - name: install-requirements
+    variants:
+      - when: ${{ os == "centos" && os_version == "7" }}
+        run: |
+            yum install -y perl-YAML-LibYAML perl-Data-Dumper
+            exit 0
+
+      - when: ${{ os == "almalinux" && os_version == "8.10" }}
+        run: |
+            yum install -y perl-YAML-LibYAML perl-Data-Dumper
+            exit 0
+
+      - when: ${{ os == "almalinux" && os_version == "9.6" }}
+        run: |
+            yum install -y perl-YAML-LibYAML perl-Data-Dumper
+            exit 0
+
+  - name: migration-check
+    run: |
+      scripts/migration check
+
+  - name: build
+    run: |
+      scripts/playbook.pl
+
+  # RPM Build and upload actions
+  - name: rpm-build
+    shell: bash
+    run: |
+      [ -f "build/${{os}}${{os_version}}/env" ] && . "build/${{os}}${{os_version}}/env"
+      [ -d .rpmbuild ] && rm -fR .rpmbuild
+      CWD=$(pwd)
+      MODULE_VERSION=$(cd module && ${CWD}/scripts/version version)
+      SOURCE_VERSION=$(scripts/version version | sed -r 's/\~/\-/')
+      mkdir -p .rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+      tar -czf ${{project}}-${{version}}.tar.gz ${{project}}-${{version}}-1.tbz ${{project}}-${{version}}-1.yml
+      rm -f ${{project}}-${{version}}-1.tbz ${{project}}-${{version}}-1.yml ${{project}}-${{version}}-1.sh
+      mv ${{project}}-${{version}}.tar.gz .rpmbuild/SOURCES/
+      if [ -f ${{project}}.${{os}}${{os_version}}.spec ]; then
+        cp ${{project}}.${{os}}${{os_version}}.spec .rpmbuild/SPECS/${{project}}.spec
+      else
+        cp ${{project}}.spec .rpmbuild/SPECS/${{project}}.spec
+      fi
+      rpmbuild -ba --define "_topdir ${PWD}/.rpmbuild" \
+        --define "debug_package %{nil}" \
+        --define "_sv_version ${{version}}" \
+        --define "_sv_release 1" \
+        --define "_sv_source_version ${{version.rawversion}}" \
+        --define "_module_version $MODULE_VERSION" \
+        .rpmbuild/SPECS/${{project}}.spec
+      set +e
+      for pkg_file in $(find .rpmbuild/RPMS -name *.rpm); do
+        chmod uog+rw $pkg_file
+      done
+      set -e
+
+  - name: rpm-upload
+    run: |
+      BUILD_TYPE=$(scripts/version build-type)
+      if [ "${BUILD_TYPE}" == "Release" ]; then
+        BRANCH=stable
+      else
+        BRANCH=testing
+      fi
+      for pkg_file in $(find .rpmbuild/RPMS -name *.rpm); do
+        pkg=$(basename $pkg_file)
+        echo upload ${pkg_file} to "http://rpm.example.com/download/index.php?filename=${pkg}&branch=${BRANCH}"
+        curl --upload-file ${pkg_file} "http://rpm.example.com/download/index.php?filename=${pkg}&branch=${BRANCH}"
+      done
+
+  # Run build in docker containers, check ci build locally
+  - name: image-build-rpm
+    container:
+      engine: docker
+      image:
+        from: ${{ matrix.image }}
+      workdir: /package
+      mounts:
+        - type: bind
+          source: .
+          target: /package-src
+          ro: true
+      cpu: 2
+      memory: 4G
+      network: host
+      env_file: .docker-rpm-images
+      run_stage: build-rpm
+      artifacts:
+        output: .
+        path:
+          - .rpmbuild/RPMS/*/*.rpm
+
+  - name: image-upload-rpm
+    container:
+      engine: docker
+      image:
+        from: ${{ matrix.image }}
+      workdir: /package
+      mounts:
+        - type: bind
+          source: .
+          target: /package-src
+          ro: true
+      cpu: 2
+      memory: 4G
+      network: host
+      env_file: .docker-rpm-images
+      run_stage: upload-rpm
+      artifacts:
+        output: .
+        path:
+          - .rpmbuild/RPMS/*/*.rpm
+
+  # Cleanup rpm build directory
+  - name: rpm-cleanup
+    run: |
+      rm -fR .rpmbuild/*

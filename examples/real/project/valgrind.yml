@@ -1,0 +1,10 @@
+actions:
+
+  - name: check-valgrind
+    run: |
+      if ! which valgrind >/dev/null 2>&1; then
+        echo "valgrind not found"
+        exit 1
+      else
+        valgrind --version
+      fi
