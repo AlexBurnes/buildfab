@@ -21,7 +21,7 @@ func TestIntegration_CompleteWorkflow(t *testing.T) {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
 	defer os.Chdir(oldDir)
-	
+
 	err = os.Chdir(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to change to temp directory: %v", err)
@@ -129,11 +129,8 @@ stages:
 	defer cancel()
 
 	err = runner.RunStage(ctx, "test-stage")
-	// The DAG execution should now work correctly
-	if err == nil {
-		t.Log("Integration test completed successfully")
-	} else {
-		t.Logf("Integration test returned error: %v", err)
+	if err != nil {
+		t.Fatalf("Valid stage execution should succeed: %v", err)
 	}
 }
 
@@ -145,13 +142,12 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
 	defer os.Chdir(oldDir)
-	
+
 	err = os.Chdir(tempDir)
 	if err != nil {
 		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 
-	// Test with missing VERSION file
 	configContent := `
 project:
   name: test-project
@@ -172,13 +168,11 @@ stages:
 		t.Fatalf("Failed to write project.yml: %v", err)
 	}
 
-	// Load configuration
 	cfg, err := config.Load(configFile)
 	if err != nil {
 		t.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Test simple runner with missing VERSION file
 	opts := &buildfab.SimpleRunOptions{
 		ConfigPath:  configFile,
 		MaxParallel: 2,
@@ -193,16 +187,73 @@ stages:
 	}
 
 	runner := buildfab.NewSimpleRunner(cfg, opts)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err = runner.RunAction(ctx, "version-check")
+	if err == nil {
+		t.Fatal("Expected missing VERSION file to fail, but action succeeded")
+	}
+}
+
+func TestIntegration_FailingCommandReturnsError(t *testing.T) {
+	tempDir := t.TempDir()
+	oldDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(oldDir)
+
+	err = os.Chdir(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
+
+	configContent := `
+project:
+  name: test-project
+
+actions:
+  - name: failing-action
+    run: exit 1
+
+stages:
+  test-stage:
+    steps:
+      - action: failing-action
+`
+
+	configFile := filepath.Join(tempDir, "project.yml")
+	err = os.WriteFile(configFile, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write project.yml: %v", err)
+	}
+
+	cfg, err := config.Load(configFile)
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	runner := buildfab.NewSimpleRunner(cfg, &buildfab.SimpleRunOptions{
+		ConfigPath:  configFile,
+		MaxParallel: 1,
+		VerboseLevel: 0,
+		Debug:       false,
+		Variables:   map[string]string{},
+		WorkingDir:  tempDir,
+		Output:      os.Stdout,
+		ErrorOutput: os.Stderr,
+	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Test action execution (should fail due to missing VERSION file)
-	err = runner.RunAction(ctx, "version-check")
+	err = runner.RunAction(ctx, "failing-action")
 	if err == nil {
-		t.Log("Action execution completed successfully (unexpected)")
-	} else {
-		t.Logf("Action execution returned error (expected): %v", err)
+		t.Fatal("Expected failing shell command to return an error")
+	}
+	if !strings.Contains(err.Error(), "exit status") && !strings.Contains(err.Error(), "failed") {
+		t.Fatalf("Expected command failure in error message, got: %v", err)
 	}
 }
 
@@ -424,39 +475,39 @@ stages:
 func TestIntegration_CLIFlags(t *testing.T) {
 	// Test CLI flags: -h, --help, --version, -V
 	tests := []struct {
-		name        string
-		args        []string
-		expectHelp  bool
+		name          string
+		args          []string
+		expectHelp    bool
 		expectVersion bool
-		expectError bool
+		expectError   bool
 	}{
 		{
-			name:        "short help flag",
-			args:        []string{"-h"},
-			expectHelp:  true,
+			name:          "short help flag",
+			args:          []string{"-h"},
+			expectHelp:    true,
 			expectVersion: false,
-			expectError: false,
+			expectError:   false,
 		},
 		{
-			name:        "long help flag",
-			args:        []string{"--help"},
-			expectHelp:  true,
+			name:          "long help flag",
+			args:          []string{"--help"},
+			expectHelp:    true,
 			expectVersion: false,
-			expectError: false,
+			expectError:   false,
 		},
 		{
-			name:        "version flag",
-			args:        []string{"--version"},
-			expectHelp:  false,
+			name:          "version flag",
+			args:          []string{"--version"},
+			expectHelp:    false,
 			expectVersion: true,
-			expectError: false,
+			expectError:   false,
 		},
 		{
-			name:        "version only flag",
-			args:        []string{"-V"},
-			expectHelp:  false,
+			name:          "version only flag",
+			args:          []string{"-V"},
+			expectHelp:    false,
 			expectVersion: true,
-			expectError: false,
+			expectError:   false,
 		},
 	}
 
@@ -464,7 +515,7 @@ func TestIntegration_CLIFlags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Build the binary path
 			binaryPath := "./bin/buildfab"
-			
+
 			// Check if binary exists
 			if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
 				t.Skip("buildfab binary not found, skipping CLI flag test")
