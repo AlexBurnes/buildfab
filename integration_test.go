@@ -27,6 +27,11 @@ func TestIntegration_CompleteWorkflow(t *testing.T) {
 		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 
+	// The git built-in action needs a repository to inspect.
+	if output, err := exec.Command("git", "init").CombinedOutput(); err != nil {
+		t.Fatalf("Failed to initialize test repository: %v\n%s", err, output)
+	}
+
 	// Create a test VERSION file
 	err = os.WriteFile("VERSION", []byte("v1.0.0"), 0644)
 	if err != nil {
